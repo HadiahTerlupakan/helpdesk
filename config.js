@@ -22,7 +22,10 @@ const config = {
   // Opsi Baileys (jika diperlukan)
   baileysOptions: {
     // Contoh: printQRInTerminal: true (jika ingin QR di terminal lagi)
-  }
+  },
+
+  // Tambahkan versi aplikasi
+  version: '1.0.1'
 };
 
 module.exports = config;

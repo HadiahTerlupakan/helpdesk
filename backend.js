@@ -134,6 +134,7 @@ app.use(session({
 const PORT = config.serverPort || 3000;
 http.listen(PORT, () => {
   console.log(`Server Helpdesk berjalan di http://localhost:${PORT}`);
+  console.log(`Versi Aplikasi: ${config.version}`); // Log versi aplikasi
 });
 
 // --- Koneksi WhatsApp (Baileys) ---

@@ -1327,9 +1327,21 @@
                  setLoginState(false); // Show login page
                  showLoginError(''); // Clear connecting message
              }
+
+            // Set versi aplikasi di footer
+            fetch('/config.json')
+                .then(response => response.json())
+                .then(config => {
+                    document.getElementById('app-version').textContent = config.version;
+                })
+                .catch(err => console.error('Gagal memuat versi aplikasi:', err));
         });
 
     </script>
     <!-- Pastikan tag </script> ini ada dan benar-benar menutup blok JavaScript -->
+
+    <footer style="text-align: center; padding: 10px; background: var(--input-bg); color: var(--text-muted); font-size: 0.9em;">
+        Versi Aplikasi: <span id="app-version"></span>
+    </footer>
 </body>
 </html>
