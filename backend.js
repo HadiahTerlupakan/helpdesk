@@ -269,6 +269,10 @@ async function connectToWhatsApp() {
 io.on('connection', (socket) => {
   console.log(`Admin terhubung: ${socket.id}`);
 
+  // Emit daftar admin terdaftar dan online saat admin terhubung
+  socket.emit('registered_admins', admins); // Emit registered admins
+  socket.emit('update_online_admins', getOnlineAdminUsernames()); // Emit online admins
+
   // Kirim status awal saat admin baru terhubung
   socket.emit('initial_pick_status', pickedChats);
   socket.emit('update_online_admins', getOnlineAdminUsernames());
@@ -323,11 +327,32 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle admin reconnect
+  socket.on('admin_reconnect', ({ username }) => {
+    const adminUser = admins[username];
+    if (adminUser) {
+        if (usernameToSocketId[username]) {
+            console.warn(`Reconnect failed: Admin ${username} already logged in from another socket.`);
+            socket.emit('reconnect_failed');
+            return;
+        }
+        console.log(`Reconnect successful for ${username} (Socket ID: ${socket.id})`);
+        adminSockets[socket.id] = username;
+        usernameToSocketId[username] = socket.id;
+        socket.emit('reconnect_success', { username, currentPicks: pickedChats });
+        io.emit('update_online_admins', getOnlineAdminUsernames()); // Broadcast updated online admins
+    } else {
+        console.warn(`Reconnect failed: Admin ${username} not found.`);
+        socket.emit('reconnect_failed');
+    }
+  });
+
   // Proses logout admin
   socket.on('admin_logout', () => {
     const username = cleanupAdminState(socket.id);
     if (username) {
         console.log(`Admin ${username} logout.`);
+        socket.emit('logout_success'); // Notify the client of successful logout
     }
   });
 

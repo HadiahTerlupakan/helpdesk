@@ -164,6 +164,8 @@
         }
         #pick-chat-button:disabled { background-color: var(--disabled-color); cursor: default; }
         #pick-chat-button:hover:not(:disabled) { background-color: #22b856; } /* Darker green on hover */
+        #delegate-chat-container { display: none; align-items: center; gap: 10px; }
+        #delegate-chat-select { padding: 6px 12px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border-color); }
         #delegate-chat-button {
              padding: 6px 12px;
              font-size: 0.9em;
@@ -370,7 +372,12 @@
                 <div id="chat-status-area">
                     <span id="chat-picked-status"></span>
                     <button id="pick-chat-button" style="display: none;">Ambil Chat Ini</button>
-                    <button id="delegate-chat-button" style="display: none;">Delegasikan</button>
+                    <div id="delegate-chat-container" style="display: none;">
+                        <select id="delegate-chat-select">
+                            <option value="" disabled selected>Pilih Admin</option>
+                        </select>
+                        <button id="delegate-chat-button">Delegasikan</button>
+                    </div>
                 </div>
             </div>
             <div id="messages">
@@ -420,6 +427,8 @@
         const currentChatIdDisplay = document.getElementById('current-chat-id-display');
         const chatPickedStatus = document.getElementById('chat-picked-status');
         const pickChatButton = document.getElementById('pick-chat-button');
+        const delegateChatContainer = document.getElementById('delegate-chat-container');
+        const delegateChatSelect = document.getElementById('delegate-chat-select');
         const delegateChatButton = document.getElementById('delegate-chat-button');
         const mediaModal = document.getElementById('mediaModal');
         const modalMediaContent = document.getElementById('modalMediaContent');
@@ -450,15 +459,7 @@
                 console.log(`Login state set: Logged in as ${username}`);
                 showLoginError(''); // Clear any previous login messages
                 requestNotificationPermission();
-                // Request initial data ONLY if chat list is empty (or explicitly needed)
-                if (Object.keys(chatListItems).length === 0) {
-                     console.log('Requesting initial data...');
-                     socket.emit('request_initial_data');
-                 } else {
-                    // Update UI based on potentially new pickedChatsStatus
-                    updateAllChatListItemsPickStatus();
-                    updateChatAreaForCurrentChat(); // Update header if a chat was selected
-                 }
+                socket.emit('request_initial_data'); // Always request initial data on login
             } else {
                 currentUser = null;
                 localStorage.removeItem('loggedInUsername');
@@ -468,8 +469,7 @@
                 usernameInput.value = '';
                 passwordInput.value = '';
                 console.log('Login state set: Logged out.');
-                 // Show connecting message on initial load/logout
-                showLoginError('Menghubungkan...');
+                showLoginError('Silakan login kembali.');
             }
         }
 
@@ -498,7 +498,7 @@
             currentChatIdDisplay.textContent = 'Pilih percakapan dari daftar';
             chatPickedStatus.textContent = '';
             pickChatButton.style.display = 'none';
-            delegateChatButton.style.display = 'none';
+            delegateChatContainer.style.display = 'none';
             replyInput.disabled = true;
             replyButton.disabled = true;
             replyInput.placeholder = 'Pilih atau ambil chat untuk membalas...';
@@ -541,13 +541,13 @@
                     replyButton.disabled = false;
                     replyInput.placeholder = 'Ketik balasan...';
                     replyInput.focus(); // Auto-focus input when chat is yours
-                    delegateChatButton.style.display = 'inline-block'; // Show delegation button
-                    delegateChatButton.disabled = false;
+                    delegateChatContainer.style.display = 'flex'; // Show delegation dropdown and button
+                    populateDelegateChatSelect(); // Populate the dropdown
                 } else {
                     replyInput.disabled = true;
                     replyButton.disabled = true;
                     replyInput.placeholder = `Ditangani oleh ${pickedBy}`;
-                    delegateChatButton.style.display = 'none'; // Hide delegation button
+                    delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
                 }
             } else {
                 pickChatButton.style.display = 'inline-block';
@@ -557,11 +557,24 @@
                 replyInput.disabled = true;
                 replyButton.disabled = true;
                 replyInput.placeholder = 'Ambil chat ini untuk membalas';
-                delegateChatButton.style.display = 'none'; // Hide delegation button
+                delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
             }
             // Hapus pesan error kirim jika ada (saat ganti chat)
             const existingError = replyBox.querySelector('.send-error-span');
             if(existingError) existingError.remove();
+        }
+
+        function populateDelegateChatSelect() {
+            delegateChatSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>';
+            const onlineAdmins = new Set(socket.onlineAdmins || []);
+            Object.keys(socket.registeredAdmins || {}).forEach(admin => {
+                const isOnline = onlineAdmins.has(admin);
+                const option = document.createElement('option');
+                option.value = admin;
+                option.textContent = `${admin} ${isOnline ? '(Online)' : '(Offline)'}`;
+                option.disabled = admin === currentUser; // Disable current user
+                delegateChatSelect.appendChild(option);
+            });
         }
 
         function updateChatListItemPickStatus(chatId) {
@@ -852,6 +865,10 @@
             showLoginError(data?.message || 'Username atau password salah.');
         });
 
+        socket.on('logout_success', () => {
+            setLoginState(false); // Reset state and show login page
+        });
+
         socket.on('initial_data', (initialHistory) => {
             console.log('Received initial_data with', Object.keys(initialHistory).length, 'chats');
             chatHistory = initialHistory || {};
@@ -1052,6 +1069,16 @@
             }
         });
 
+        socket.on('update_online_admins', (onlineAdmins) => {
+            socket.onlineAdmins = onlineAdmins;
+            populateDelegateChatSelect(); // Update dropdown when online status changes
+        });
+
+        socket.on('registered_admins', (registeredAdmins) => {
+            socket.registeredAdmins = registeredAdmins;
+            populateDelegateChatSelect(); // Update dropdown when registered admins are received
+        });
+
         // --- UI Event Listeners ---
 
         loginButton.addEventListener('click', () => {
@@ -1084,12 +1111,7 @@
             console.log('Logout initiated.');
             if (socket.connected) {
                 socket.emit('admin_logout');
-                socket.disconnect();
-                console.log('Socket disconnected by client.');
             }
-            setLoginState(false); // Reset state and clear localStorage
-             // Consider reload only if necessary, setLoginState should reset UI
-             // window.location.reload();
         });
 
         pickChatButton.addEventListener('click', () => {
@@ -1105,10 +1127,12 @@
         });
 
         delegateChatButton.addEventListener('click', () => {
-            const targetAdminUsername = prompt("Masukkan username admin tujuan:");
+            const targetAdminUsername = delegateChatSelect.value;
             if (targetAdminUsername) {
                 console.log(`Mendelegasikan chat ${currentChatId} ke ${targetAdminUsername}`);
                 socket.emit('delegate_chat', { chatId: currentChatId, targetAdminUsername });
+            } else {
+                alert('Pilih admin tujuan untuk delegasi.');
             }
         });
 
