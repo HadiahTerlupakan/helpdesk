@@ -1,0 +1,23 @@
+# File autentikasi WhatsApp
+auth_info_baileys/
+
+# File history chat
+chat_history.json
+
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+*.log
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
