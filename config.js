@@ -1,17 +1,28 @@
 // config.js
 
 const config = {
+  // Daftar admin. Tambahkan sesuai kebutuhan.
+  // Format: 'username': { password: 'password', initials: 'XX' }
   admins: {
-    // Tambahkan admin sebanyak yang dibutuhkan
-    // Format: 'username': { password: 'password', initials: 'XX' }
-    'admin': { password: 'admin123', initials: 'AD' },
-    'admin2': { password: 'password', initials: 'A2' },
-    // Contoh admin lain:
-    // 'budi': { password: 'password123', initials: 'BU' }
+    'admin': { password: 'admin123', initials: '-AD' },
+    'admin2': { password: 'password', initials: '-A2' },
+    // 'budi': { password: 'rahasia123', initials: 'BU' },
   },
-  // Konfigurasi lain bisa ditambahkan di sini jika perlu
+
+  // Port server Express
   serverPort: 3000,
-  sessionSecret: 'rahasia-helpdesk-super-aman'
+
+  // Waktu (dalam menit) sebelum chat yang diambil dilepas otomatis jika tidak ada balasan
+  // Set ke 0 atau null untuk menonaktifkan fitur ini.
+  chatAutoReleaseTimeoutMinutes: 1,
+
+  // Kunci rahasia untuk sesi Express
+  sessionSecret: 'ganti-dengan-kunci-rahasia-yang-kuat',
+
+  // Opsi Baileys (jika diperlukan)
+  baileysOptions: {
+    // Contoh: printQRInTerminal: true (jika ingin QR di terminal lagi)
+  }
 };
 
 module.exports = config;

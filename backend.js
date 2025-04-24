@@ -1,22 +1,31 @@
-const { makeWASocket, useMultiFileAuthState, downloadMediaMessage } = require('baileys');
+const { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } = require('baileys');
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const qrcode = require('qrcode-terminal');
 const session = require('express-session');
-const fs = require('fs'); // Tambahkan fs untuk file operations
-const path = require('path'); // Tambahkan path
-const config = require('./config'); // Impor konfigurasi
+const fs = require('fs');
+const path = require('path');
+const pino = require('pino'); // Untuk logging Baileys yang lebih detail (opsional)
+const config = require('./config');
 
-// Gunakan konfigurasi dari config.js
+// --- Konfigurasi & State ---
 const admins = config.admins;
-const adminSockets = {}; // Untuk melacak socket ID -> username
-const pickedChats = {}; // Untuk melacak chat mana yang diambil oleh admin mana { chatId: username }
-const chatHistoryFile = path.join(__dirname, 'chat_history.json'); // Path ke file history
-let chatHistory = {}; // Variabel untuk menyimpan history di memori
+const adminSockets = {}; // socket ID -> username
+const usernameToSocketId = {}; // username -> socket ID
+const pickedChats = {}; // chatId -> username
+const chatReleaseTimers = {}; // chatId -> setTimeout ID
+const chatHistoryFile = path.join(__dirname, 'chat_history.json');
+let chatHistory = {}; // { chatId: [messages] }
+let sock; // Variabel global untuk instance socket Baileys
 
-// Fungsi untuk memuat history dari file
+// --- Fungsi Helper ---
+
+// Logger Baileys (opsional, bisa dikomentari jika tidak perlu detail)
+const logger = pino({ level: 'warn' }); // Level: 'trace', 'debug', 'info', 'warn', 'error', 'fatal'
+
+// Memuat history chat dari file
 function loadChatHistory() {
   try {
     if (fs.existsSync(chatHistoryFile)) {
@@ -25,421 +34,493 @@ function loadChatHistory() {
       console.log('Riwayat chat berhasil dimuat.');
     } else {
       console.log('File riwayat chat tidak ditemukan, memulai dengan history kosong.');
+      chatHistory = {};
     }
   } catch (error) {
     console.error('Gagal memuat riwayat chat:', error);
-    chatHistory = {}; // Reset jika ada error
+    chatHistory = {};
   }
 }
 
-// Fungsi untuk menyimpan history ke file
+// Menyimpan history chat ke file
 function saveChatHistory() {
   try {
     fs.writeFileSync(chatHistoryFile, JSON.stringify(chatHistory, null, 2), 'utf-8');
-    // console.log('Riwayat chat berhasil disimpan.'); // Optional: log setiap penyimpanan
   } catch (error) {
     console.error('Gagal menyimpan riwayat chat:', error);
   }
 }
 
-// Muat history saat aplikasi dimulai
-loadChatHistory();
+// Membatalkan timer auto-release
+function clearAutoReleaseTimer(chatId) {
+  if (chatReleaseTimers[chatId]) {
+    clearTimeout(chatReleaseTimers[chatId]);
+    delete chatReleaseTimers[chatId];
+    // console.log(`Timer auto-release untuk chat ${chatId} dibatalkan.`); // Kurangi log
+  }
+}
 
-// Serve static files
-app.use(express.static(__dirname));
+// Memulai timer auto-release
+function startAutoReleaseTimer(chatId, username) {
+  clearAutoReleaseTimer(chatId); // Hapus timer lama jika ada
 
-// Route untuk halaman utama
+  const timeoutMinutes = config.chatAutoReleaseTimeoutMinutes;
+  if (timeoutMinutes && timeoutMinutes > 0) {
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    console.log(`Memulai timer auto-release ${timeoutMinutes} menit untuk chat ${chatId} oleh ${username}.`);
+
+    chatReleaseTimers[chatId] = setTimeout(() => {
+      if (pickedChats[chatId] === username) {
+        console.log(`Timer auto-release habis untuk chat ${chatId} (diambil ${username}). Melepas chat.`);
+        delete pickedChats[chatId];
+        delete chatReleaseTimers[chatId];
+        io.emit('update_pick_status', { chatId, pickedBy: null });
+        const targetSocketId = usernameToSocketId[username];
+        if (targetSocketId) {
+          io.to(targetSocketId).emit('auto_release_notification', { chatId, message: `Chat ${chatId.split('@')[0]} dilepas otomatis (tidak aktif).` });
+        }
+      } else {
+        // console.log(`Timer auto-release habis untuk chat ${chatId}, tapi status pick sudah berubah.`); // Kurangi log
+        delete chatReleaseTimers[chatId];
+      }
+    }, timeoutMs);
+  }
+}
+
+// Mendapatkan daftar username admin yang sedang online
+function getOnlineAdminUsernames() {
+    return Object.values(adminSockets);
+}
+
+// Membersihkan state admin saat disconnect/logout
+function cleanupAdminState(socketId) {
+    const username = adminSockets[socketId];
+    if (username) {
+        console.log(`Membersihkan state untuk admin ${username} (Socket ID: ${socketId})`);
+        // Lepas chat yang sedang diambil dan batalkan timer
+        for (const chatId in pickedChats) {
+            if (pickedChats[chatId] === username) {
+                clearAutoReleaseTimer(chatId);
+                delete pickedChats[chatId];
+                io.emit('update_pick_status', { chatId, pickedBy: null });
+                console.log(`Chat ${chatId} dilepas karena ${username} terputus/logout.`);
+            }
+        }
+        delete adminSockets[socketId];
+        delete usernameToSocketId[username];
+        // Broadcast daftar admin online terbaru
+        io.emit('update_online_admins', getOnlineAdminUsernames());
+        return username;
+    }
+    return null;
+}
+
+// --- Setup Express & Server ---
+loadChatHistory(); // Muat history saat mulai
+
+app.use(express.static(__dirname)); // Sajikan file statis (HTML, CSS, JS Client)
 app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html');
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Konfigurasi session
 app.use(session({
-  secret: config.sessionSecret, // Gunakan secret dari config
+  secret: config.sessionSecret,
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false } // Set secure: true jika menggunakan HTTPS
+  cookie: { secure: false } // Set true jika pakai HTTPS
 }));
 
-// Inisialisasi server
-const PORT = config.serverPort || 3000; // Gunakan port dari config atau default 3000
+const PORT = config.serverPort || 3000;
 http.listen(PORT, () => {
-  console.log(`Server berjalan di port ${PORT}`);
+  console.log(`Server Helpdesk berjalan di http://localhost:${PORT}`);
 });
 
-// Koneksi WhatsApp
+// --- Koneksi WhatsApp (Baileys) ---
 async function connectToWhatsApp() {
+  console.log("Mencoba menghubungkan ke WhatsApp...");
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-  
-  // const pino = require('pino'); // Dikomentari untuk debugging
-// const logger = pino(); // Dikomentari untuk debugging
 
-const sock = makeWASocket({
+  sock = makeWASocket({
     auth: state,
-    printQRInTerminal: false,
-    // logger: logger // Menghapus konfigurasi logger untuk sementara
+    printQRInTerminal: config.baileysOptions?.printQRInTerminal ?? true, // Ambil dari config atau default true
+    browser: Browsers.macOS('Desktop'), // Memberi tahu WA kita adalah browser desktop
+    logger: logger, // Gunakan logger pino
+    // Opsi lain jika diperlukan:
+    // version: [2, 2413, 1], // Contoh pin versi jika ada masalah kompatibilitas
+    // connectTimeoutMs: 60000, // Timeout koneksi lebih lama
+    // keepAliveIntervalMs: 30000 // Interval keep-alive
   });
 
-  // Generate QR code
-  sock.ev.on('connection.update', (update) => {
-    const { qr } = update;
-    if (qr) {
-      qrcode.generate(qr, { small: true });
-    }
-  });
-
-  // Event listener untuk koneksi WhatsApp
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if(connection === 'close') {
-      // Periksa keberadaan error dan output sebelum mengakses statusCode
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== 401;
-      console.log(`Koneksi terputus karena: ${lastDisconnect?.error}, mencoba menyambung kembali: ${shouldReconnect}`);
-      if(shouldReconnect) {
-        connectToWhatsApp();
-      }
-    } else if(connection === 'open') {
-      console.log('Berhasil terhubung ke WhatsApp');
-    }
-  });
-
-  // Event listener untuk pesan masuk
-  sock.ev.on('messages.upsert', async ({ messages }) => {
-    for (const message of messages) {
-      if (!message.key.fromMe) {
-        console.log('Pesan masuk dari:', message.key.remoteJid);
-        
-        let messageContent = message.message?.conversation || message.message?.extendedTextMessage?.text || ''; // Default ke string kosong
-        let mediaData = null;
-        let mediaType = null;
-        let caption = ''; // Variabel untuk caption
-
-        // Cek apakah pesan adalah media
-        const messageType = Object.keys(message.message || {})[0]; // Dapatkan tipe pesan (imageMessage, videoMessage, etc.)
-        if (['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'].includes(messageType)) {
-          try {
-            const buffer = await downloadMediaMessage(message, 'buffer', {});
-            mediaData = buffer.toString('base64');
-            mediaType = messageType; // Simpan tipe media
-            // Coba ekstrak caption dari berbagai tipe media
-            caption = message.message[mediaType]?.caption || '';
-            messageContent = caption; // Gunakan caption sebagai messageContent jika ada media
-            console.log(`Media ${mediaType} (caption: '${caption}') dari ${message.key.remoteJid} berhasil diunduh.`);
-          } catch (error) {
-            console.error('Gagal mengunduh media:', error);
-            messageContent = 'Gagal memuat media'; // Pesan error jika unduhan gagal
-          }
-        } else if (!messageContent) {
-            // Handle other message types if necessary, or set default text
-            messageContent = 'Pesan tidak didukung';
-        }
-
-        // Buat objek data pesan
-        const messageData = {
-          from: message.key.remoteJid,
-          text: messageContent, // Ini akan berisi caption jika ada media, atau teks biasa
-          mediaData: mediaData, // Kirim data media base64
-          mediaType: mediaType, // Kirim tipe media
-          timestamp: new Date().toISOString(),
-          unread: true,
-          type: 'incoming' // Tambahkan tipe pesan
-        };
-
-        // Simpan pesan ke history
-        const chatId = message.key.remoteJid;
-        if (!chatHistory[chatId]) {
-          chatHistory[chatId] = [];
-        }
-        chatHistory[chatId].push(messageData); // Gunakan messageData yang sudah didefinisikan
-        saveChatHistory(); // Simpan perubahan ke file
-
-        // Kirim pesan ke semua admin melalui Socket.IO
-        io.emit('new_message', messageData); // Gunakan messageData yang sudah didefinisikan
-        
-        // Tambahkan notifikasi browser
-        io.emit('notification', {
-          title: 'Pesan Baru',
-          body: `Pesan dari ${message.key.remoteJid}`,
-          icon: '/whatsapp-icon.png'
-        });
-      }
-    }
-  });
-
-  // Simpan kredensial saat diperbarui
+  // Event handler Baileys
   sock.ev.on('creds.update', saveCreds);
 
-  // Socket.IO untuk menerima balasan dari admin
-  io.on('connection', (socket) => {
-    console.log('Admin terhubung:', socket.id);
-
-    // Kirim status pick awal saat admin terhubung
-    socket.emit('initial_pick_status', pickedChats);
-
-    // Event untuk mengirim data awal (semua history chat)
-    socket.on('request_initial_data', () => {
-      const username = adminSockets[socket.id];
-      if (username) {
-        console.log(`Admin ${username} meminta data awal.`);
-        // Kirim seluruh history chat yang tersimpan
-        // Format: { chatId1: [msg1, msg2], chatId2: [msg3] }
-        socket.emit('initial_data', chatHistory);
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
+    if (qr) {
+      console.log('QR Code diterima, pindai dengan WhatsApp Anda:');
+      qrcode.generate(qr, { small: true });
+    }
+    if (connection === 'close') {
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = ![401, 403, 411, 419, 500].includes(statusCode); // Kode error yg tidak perlu reconnect otomatis
+      console.error(`Koneksi WhatsApp terputus: ${lastDisconnect?.error?.message || 'Alasan tidak diketahui'} (Code: ${statusCode}), Mencoba menyambung kembali: ${shouldReconnect}`);
+      if (shouldReconnect) {
+        setTimeout(connectToWhatsApp, 15000); // Coba sambung lagi setelah 15 detik
       } else {
-        console.log(`Socket ${socket.id} meminta data awal tetapi tidak terautentikasi.`);
-        // Mungkin kirim error atau abaikan
+        console.error("Tidak dapat menyambung kembali secara otomatis. Periksa folder auth_info_baileys atau scan ulang QR.");
+        // Mungkin perlu membersihkan sesi atau memberi tahu admin
       }
-    });
-
-    // Event untuk meminta history chat TERTENTU (jika diperlukan, misal saat klik chat)
-    // Sebaiknya gunakan initial_data untuk pemuatan awal
-    socket.on('get_chat_history', (chatId) => {
-      console.log(`Admin ${adminSockets[socket.id] || socket.id} meminta history untuk ${chatId}`);
-      const history = chatHistory[chatId] || [];
-      socket.emit('chat_history', { chatId, messages: history });
-    });
-    // Verifikasi login admin
-    socket.on('admin_login', ({ username, password }) => {
-      console.log(`Received admin_login event from socket ${socket.id} for username: ${username}`); // Logging
-      // Gunakan data dari config.js untuk verifikasi
-      const adminUser = admins[username];
-      console.log(`Checking credentials: User found in config? ${!!adminUser}, Password match? ${adminUser ? adminUser.password === password : 'N/A'}`); // Logging
-      if (adminUser && adminUser.password === password) {
-        console.log(`Login successful for ${username}. Emitting login_success.`); // Logging
-        adminSockets[socket.id] = username; // Simpan username berdasarkan socket ID
-        socket.emit('login_success', { username, initials: adminUser.initials }); // Kirim juga inisial
-        // Kirim status pick awal ke admin yang baru login
-        socket.emit('initial_pick_status', pickedChats);
-
-    // Event untuk mengirim data awal (semua history chat)
-    socket.on('request_initial_data', () => {
-      const username = adminSockets[socket.id];
-      if (username) {
-        console.log(`Admin ${username} meminta data awal.`);
-        // Kirim seluruh history chat yang tersimpan
-        // Format: { chatId1: [msg1, msg2], chatId2: [msg3] }
-        socket.emit('initial_data', chatHistory);
-      } else {
-        console.log(`Socket ${socket.id} meminta data awal tetapi tidak terautentikasi.`);
-        // Mungkin kirim error atau abaikan
-      }
-    });
-      } else {
-        console.log(`Login failed for username: ${username}. Emitting login_failed.`); // Logging
-        socket.emit('login_failed');
-      }
-    });
-
-    // Logout admin
-    socket.on('admin_logout', () => {
-      const username = adminSockets[socket.id];
-      if (username) {
-        console.log(`Admin ${username} logout.`);
-        // Hapus chat yang sedang diambil oleh admin ini
-        for (const chatId in pickedChats) {
-          if (pickedChats[chatId] === username) {
-            delete pickedChats[chatId];
-            // Broadcast perubahan status pick
-            io.emit('update_pick_status', { chatId, pickedBy: null });
-            console.log(`Chat ${chatId} dilepas karena ${username} logout.`);
-          }
-        }
-        delete adminSockets[socket.id];
-      }
-    });
-
-    // Event untuk mengambil chat
-    socket.on('pick_chat', ({ chatId }) => {
-      const username = adminSockets[socket.id];
-      if (!username) {
-        socket.emit('pick_error', { chatId, message: 'Anda harus login untuk mengambil chat.' });
-        return;
-      }
-      if (pickedChats[chatId] && pickedChats[chatId] !== username) {
-        socket.emit('pick_error', { chatId, message: `Chat sudah diambil oleh ${pickedChats[chatId]}.` });
-      } else if (!pickedChats[chatId]) {
-        pickedChats[chatId] = username;
-        console.log(`Admin ${username} mengambil chat ${chatId}`);
-        // Broadcast perubahan status pick ke semua admin
-        io.emit('update_pick_status', { chatId, pickedBy: username });
-        // Tandai chat sebagai sudah dibaca oleh admin yang mengambil
-        // (Opsional: bisa juga dilakukan di frontend saat loadChatMessages)
-        // io.emit('update_chat_status', { chatId, unread: false });
-      } else {
-        // Admin yang sama mengklik pick lagi (tidak perlu aksi khusus, atau bisa dianggap error)
-        // socket.emit('pick_error', { chatId, message: 'Anda sudah mengambil chat ini.' });
-        console.log(`Admin ${username} sudah mengambil chat ${chatId}`);
-      }
-    });
-
-    // Event untuk melepas chat (opsional)
-    socket.on('unpick_chat', ({ chatId }) => {
-      const username = adminSockets[socket.id];
-      if (pickedChats[chatId] === username) {
-        delete pickedChats[chatId];
-        console.log(`Admin ${username} melepas chat ${chatId}`);
-        io.emit('update_pick_status', { chatId, pickedBy: null });
-      } else if (pickedChats[chatId]) {
-         socket.emit('pick_error', { chatId, message: `Anda tidak bisa melepas chat yang diambil oleh ${pickedChats[chatId]}.` });
-      } else {
-         socket.emit('pick_error', { chatId, message: 'Chat ini belum diambil.' });
-      }
-    });
-    // Event untuk melepas chat (opsional, tapi berguna)
-    socket.on('unpick_chat', ({ chatId }) => {
-      const username = adminSockets[socket.id];
-      if (!username) {
-        socket.emit('pick_error', { chatId, message: 'Anda harus login.' });
-        return;
-      }
-      if (pickedChats[chatId] === username) {
-        delete pickedChats[chatId];
-        console.log(`Admin ${username} melepas chat ${chatId}`);
-        io.emit('update_pick_status', { chatId, pickedBy: null });
-      } else if (pickedChats[chatId]) {
-         socket.emit('pick_error', { chatId, message: `Anda tidak bisa melepas chat yang diambil oleh ${pickedChats[chatId]}.` });
-      } else {
-         // Chat memang tidak sedang diambil, tidak perlu error
-         console.log(`Admin ${username} mencoba melepas chat ${chatId} yang tidak diambil.`);
-         // socket.emit('pick_error', { chatId, message: 'Chat ini belum diambil.' });
-      }
-    });
-
-    socket.on('reply_message', async ({ to, text }) => {
-      const username = adminSockets[socket.id];
-      if (!username) {
-        socket.emit('send_error', { to, text, message: 'Login diperlukan untuk mengirim balasan.' });
-        return;
-      }
-
-      // Cek apakah chat sudah diambil dan oleh siapa
-      if (!pickedChats[to]) {
-          socket.emit('send_error', { to, text, message: 'Anda harus mengambil chat ini terlebih dahulu sebelum membalas.' });
-          console.log(`Admin ${username} mencoba membalas chat ${to} yang belum diambil.`);
-          return;
-      }
-
-      if (pickedChats[to] !== username) {
-        socket.emit('send_error', { to, text, message: `Chat ini sedang ditangani oleh ${pickedChats[to]}.` });
-        console.log(`Admin ${username} mencoba membalas chat ${to} yang diambil oleh ${pickedChats[to]}.`);
-        return;
-      }
-
-      // Jika chat diambil oleh admin yang benar, lanjutkan mengirim
-      try {
-        const adminInitials = admins[username]?.initials || '??'; // Dapatkan inisial admin
-        const replyTextWithInitials = `${text}\n\n-${adminInitials}`; // Tambahkan inisial ke teks balasan dengan format baru
-
-        console.log(`Admin ${username} (${adminInitials}) mengirim balasan ke: ${to}, Pesan: ${replyTextWithInitials}`);
-        const sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
-        console.log(`Pesan dari ${username} berhasil dikirim ke WhatsApp: ${sentMsg.key.id}`);
-        // Logging tambahan untuk verifikasi
-        console.log('Detail pesan terkirim:', {
-          to: to,
-          text: replyTextWithInitials,
-          id: sentMsg.key.id,
-          timestamp: new Date().toISOString()
-        });
-
-        // Buat data pesan keluar untuk history dan konfirmasi
-        const outgoingMessageData = {
-          from: username, // Gunakan username admin
-          to: to,
-          text: text, // Simpan teks asli tanpa inisial di history internal
-          initials: adminInitials, // Simpan inisial
-          timestamp: new Date(sentMsg.messageTimestamp * 1000).toISOString(), // Gunakan timestamp dari Baileys
-          type: 'outgoing',
-          id: sentMsg.key.id // Sertakan ID pesan untuk referensi
-        };
-
-        // Kirim konfirmasi ke klien yang mengirim (termasuk inisial)
-        socket.emit('reply_sent_confirmation', outgoingMessageData);
-
-        // Simpan pesan keluar ke history (gunakan data yang sudah dibuat)
-        if (!chatHistory[to]) {
-          chatHistory[to] = [];
-        }
-        chatHistory[to].push(outgoingMessageData);
-        saveChatHistory(); // Simpan perubahan ke file
-
-      } catch (error) {
-        console.error('Gagal mengirim pesan:', error);
-        // Kirim error ke klien yang mengirim
-        socket.emit('send_error', {
-          to: to,
-          text: text,
-          message: 'Gagal mengirim pesan ke WhatsApp: ' + error.message
-        });
-      }
-    });
-
-    // Handle mark as read
-    socket.on('mark_as_read', ({ chatId }) => {
-      const username = adminSockets[socket.id];
-      const pickedBy = pickedChats[chatId];
-
-      // Hanya proses jika chat belum diambil atau diambil oleh admin yang mengirim event
-      if (!pickedBy || pickedBy === username) {
-          console.log(`Chat ${chatId} ditandai terbaca oleh ${username || 'sistem'}`);
-          // Broadcast status unread=false ke semua admin
-          // Frontend akan mengabaikan ini jika chat diambil oleh admin lain
-          io.emit('update_chat_status', {
-            chatId,
-            unread: false
-          });
-          // Update status unread di history (jika perlu)
-          // if (chatHistory[chatId]) {
-          //     const lastMessage = chatHistory[chatId][chatHistory[chatId].length - 1];
-          //     if (lastMessage) lastMessage.unread = false;
-          //     saveChatHistory();
-          // }
-      } else {
-          console.log(`Event mark_as_read untuk ${chatId} diabaikan karena diambil oleh ${pickedBy}`);
-      }
-    });
-
-    // Event untuk meminta status pick awal (dipanggil dari frontend setelah login)
-    // Sebenarnya sudah dikirim saat 'login_success', tapi bisa jadi fallback
-    socket.on('request_initial_pick_status', () => {
-        socket.emit('initial_pick_status', pickedChats);
-
-    // Event untuk mengirim data awal (semua history chat)
-    socket.on('request_initial_data', () => {
-      const username = adminSockets[socket.id];
-      if (username) {
-        console.log(`Admin ${username} meminta data awal.`);
-        // Kirim seluruh history chat yang tersimpan
-        // Format: { chatId1: [msg1, msg2], chatId2: [msg3] }
-        socket.emit('initial_data', chatHistory);
-      } else {
-        console.log(`Socket ${socket.id} meminta data awal tetapi tidak terautentikasi.`);
-        // Mungkin kirim error atau abaikan
-      }
-    });
-    });
-
-
-
-    socket.on('disconnect', () => {
-      const username = adminSockets[socket.id];
-      if (username) {
-        console.log(`Admin ${username} terputus (${socket.id})`);
-        // Otomatis unpick chat yang sedang ditangani saat disconnect
-        for (const chatId in pickedChats) {
-          if (pickedChats[chatId] === username) {
-            delete pickedChats[chatId];
-            // Broadcast perubahan status pick
-            io.emit('update_pick_status', { chatId, pickedBy: null });
-            console.log(`Chat ${chatId} dilepas karena ${username} terputus.`);
-          }
-        }
-        delete adminSockets[socket.id]; // Hapus dari daftar admin aktif
-      } else {
-         console.log('Koneksi socket terputus (belum login):', socket.id);
-      }
-    });
+    } else if (connection === 'open') {
+      console.log('Berhasil terhubung ke WhatsApp!');
+      io.emit('whatsapp_connected'); // Beri tahu frontend bahwa WA terhubung
+    }
   });
+
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    for (const message of messages) {
+      // Abaikan notifikasi status, pesan dari diri sendiri, atau pesan tanpa konten
+      if (message.key.remoteJid === 'status@broadcast' || message.key.fromMe || !message.message) {
+          continue;
+      }
+
+      console.log('Pesan masuk dari:', message.key.remoteJid);
+      const chatId = message.key.remoteJid;
+      let messageContent = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
+      let mediaData = null;
+      let mediaType = null;
+      let caption = '';
+      let fileName = null;
+
+      // Cek tipe pesan dan unduh media jika ada
+      const messageType = Object.keys(message.message)[0];
+      const isMedia = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'].includes(messageType);
+
+      if (isMedia) {
+          try {
+              // Hati-hati: downloadMediaMessage bisa memakan waktu & resource
+              const buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
+              mediaData = buffer.toString('base64');
+              mediaType = messageType;
+              caption = message.message[mediaType]?.caption || '';
+              if (mediaType === 'documentMessage') {
+                  fileName = message.message[mediaType]?.fileName || 'Dokumen';
+              }
+              // Prioritaskan caption, lalu nama file untuk konten teks jika media
+              messageContent = caption || (mediaType === 'documentMessage' ? fileName : '');
+              // console.log(`Media ${mediaType} dari ${chatId} diterima.`); // Kurangi log
+          } catch (error) {
+              console.error(`Gagal mengunduh media dari ${chatId}:`, error);
+              messageContent = '[Gagal memuat media]';
+          }
+      } else if (!messageContent && messageType !== 'protocolMessage' && messageType !== 'senderKeyDistributionMessage') {
+          // Handle pesan tanpa teks (misal: lokasi, kontak, polling - belum didukung)
+          console.log(`Tipe pesan tidak didukung atau kosong: ${messageType} dari ${chatId}`);
+          messageContent = `[Tipe Pesan: ${messageType}]`; // Beri indikasi tipe pesan
+      }
+
+      // Hanya proses jika ada konten yang relevan atau merupakan media
+      if (messageContent || mediaData) {
+          const messageData = {
+              id: message.key.id,
+              from: chatId,
+              text: messageContent,
+              mediaData: mediaData,
+              mediaType: mediaType,
+              fileName: fileName,
+              timestamp: message.messageTimestamp ? new Date(parseInt(message.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
+              unread: true,
+              type: 'incoming'
+          };
+
+          // Simpan ke history
+          if (!chatHistory[chatId]) {
+              chatHistory[chatId] = [];
+          }
+          // Hindari duplikasi sederhana (cek ID jika ada)
+          if (!chatHistory[chatId].some(m => m.id === messageData.id)) {
+              chatHistory[chatId].push(messageData);
+              saveChatHistory(); // Simpan setelah menambahkan
+          } else {
+              console.warn(`Pesan duplikat terdeteksi (ID: ${messageData.id}), diabaikan.`);
+              continue; // Jangan proses lebih lanjut jika duplikat
+          }
+
+
+          // Kirim ke semua admin yang terhubung
+          io.emit('new_message', messageData);
+
+          // Notifikasi browser (hanya jika chat tidak sedang di-pick oleh siapapun ATAU di-pick oleh admin lain)
+          const pickedBy = pickedChats[chatId];
+          // Kita tidak tahu siapa yang menerima notif, jadi kirim saja, frontend yg filter
+           io.emit('notification', {
+               title: `Pesan Baru (${chatId.split('@')[0]})`,
+               body: messageContent || `[${mediaType || 'Media'}]`,
+               icon: '/favicon.ico', // Ganti jika perlu
+               chatId: chatId // Sertakan chatId agar frontend bisa filter
+           });
+      }
+    }
+  });
+
 }
 
-// Mulai koneksi WhatsApp
-connectToWhatsApp();
+// --- Logika Socket.IO (Komunikasi dengan Frontend Admin) ---
+io.on('connection', (socket) => {
+  console.log(`Admin terhubung: ${socket.id}`);
+
+  // Kirim status awal saat admin baru terhubung
+  socket.emit('initial_pick_status', pickedChats);
+  socket.emit('update_online_admins', getOnlineAdminUsernames());
+  if (sock?.user) { // Kirim status koneksi WA jika sudah terhubung
+      socket.emit('whatsapp_connected');
+  }
+
+  // Meminta data awal (history & picks) setelah login/reconnect
+  socket.on('request_initial_data', () => {
+    const username = adminSockets[socket.id];
+    if (username) {
+      console.log(`Admin ${username} meminta data awal.`);
+      socket.emit('initial_data', chatHistory);
+      socket.emit('initial_pick_status', pickedChats); // Kirim lagi pick status
+      socket.emit('update_online_admins', getOnlineAdminUsernames()); // Kirim lagi admin online
+    } else {
+      console.warn(`Socket ${socket.id} meminta data awal sebelum login.`);
+      socket.emit('request_login'); // Minta klien untuk login
+    }
+  });
+
+  // Meminta history chat spesifik
+  socket.on('get_chat_history', (chatId) => {
+    const username = adminSockets[socket.id];
+    if (username && chatId) {
+        // console.log(`Admin ${username} meminta history untuk ${chatId}`); // Kurangi log
+        const history = chatHistory[chatId] || [];
+        socket.emit('chat_history', { chatId, messages: history });
+     }
+  });
+
+  // Proses login admin
+  socket.on('admin_login', ({ username, password }) => {
+    const adminUser = admins[username];
+    if (adminUser && adminUser.password === password) {
+      if (usernameToSocketId[username]) {
+         console.warn(`Login gagal: Admin ${username} sudah login dari socket ${usernameToSocketId[username]}.`);
+         socket.emit('login_failed', { message: 'Akun ini sudah login di tempat lain.' });
+         return;
+      }
+      console.log(`Login berhasil: ${username} (Socket ID: ${socket.id})`);
+      adminSockets[socket.id] = username;
+      usernameToSocketId[username] = socket.id;
+      socket.emit('login_success', { username, initials: adminUser.initials });
+      // Kirim data awal setelah login berhasil
+      socket.emit('initial_data', chatHistory);
+      socket.emit('initial_pick_status', pickedChats);
+      io.emit('update_online_admins', getOnlineAdminUsernames()); // Broadcast update admin online
+    } else {
+      console.log(`Login gagal untuk username: ${username}.`);
+      socket.emit('login_failed', { message: 'Username atau password salah.' });
+    }
+  });
+
+  // Proses logout admin
+  socket.on('admin_logout', () => {
+    const username = cleanupAdminState(socket.id);
+    if (username) {
+        console.log(`Admin ${username} logout.`);
+    }
+  });
+
+  // Mengambil chat
+  socket.on('pick_chat', ({ chatId }) => {
+    const username = adminSockets[socket.id];
+    if (!username) return socket.emit('pick_error', { chatId, message: 'Login diperlukan.' });
+    if (!chatId) return socket.emit('pick_error', { chatId, message: 'Chat ID tidak valid.' });
+
+    if (pickedChats[chatId] && pickedChats[chatId] !== username) {
+      socket.emit('pick_error', { chatId, message: `Sudah diambil oleh ${pickedChats[chatId]}.` });
+    } else if (!pickedChats[chatId]) {
+      pickedChats[chatId] = username;
+      console.log(`Admin ${username} mengambil chat ${chatId}`);
+      io.emit('update_pick_status', { chatId, pickedBy: username });
+      startAutoReleaseTimer(chatId, username); // Mulai timer
+      // Tandai pesan terakhir sebagai terbaca oleh sistem (opsional)
+       if (chatHistory[chatId]) {
+           const lastMsg = chatHistory[chatId][chatHistory[chatId].length - 1];
+           if (lastMsg && lastMsg.type === 'incoming' && lastMsg.unread) {
+               lastMsg.unread = false;
+               saveChatHistory();
+               // Beri tahu semua klien bahwa status baca berubah (frontend akan handle indikator)
+               io.emit('update_chat_read_status', { chatId });
+           }
+       }
+    } else {
+      // Admin yang sama mengklik pick lagi -> restart timer
+      console.log(`Admin ${username} mengklik pick lagi untuk ${chatId}, restart timer.`);
+      startAutoReleaseTimer(chatId, username);
+      socket.emit('pick_info', { chatId, message: 'Timer direset.' }); // Info opsional
+    }
+  });
+
+  // Melepas chat
+  socket.on('unpick_chat', ({ chatId }) => {
+    const username = adminSockets[socket.id];
+    if (!username) return socket.emit('pick_error', { chatId, message: 'Login diperlukan.' });
+    if (!chatId) return socket.emit('pick_error', { chatId, message: 'Chat ID tidak valid.' });
+
+    if (pickedChats[chatId] === username) {
+      clearAutoReleaseTimer(chatId); // Batalkan timer
+      delete pickedChats[chatId];
+      console.log(`Admin ${username} melepas chat ${chatId}`);
+      io.emit('update_pick_status', { chatId, pickedBy: null });
+    } else if (pickedChats[chatId]) {
+       socket.emit('pick_error', { chatId, message: `Hanya ${pickedChats[chatId]} yang bisa melepas chat ini.` });
+    } else {
+       socket.emit('pick_error', { chatId, message: 'Chat ini tidak sedang diambil.' });
+    }
+  });
+
+  // Mendelegasikan chat
+  socket.on('delegate_chat', ({ chatId, targetAdminUsername }) => {
+      const senderAdminUsername = adminSockets[socket.id];
+
+      // Validasi
+      if (!senderAdminUsername) return socket.emit('delegate_error', { chatId, message: 'Login diperlukan.' });
+      if (!chatId || !targetAdminUsername) return socket.emit('delegate_error', { chatId, message: 'Data tidak lengkap.' });
+      if (pickedChats[chatId] !== senderAdminUsername) return socket.emit('delegate_error', { chatId, message: 'Anda tidak memegang chat ini.' });
+      if (senderAdminUsername === targetAdminUsername) return socket.emit('delegate_error', { chatId, message: 'Tidak bisa mendelegasikan ke diri sendiri.' });
+      if (!usernameToSocketId[targetAdminUsername]) return socket.emit('delegate_error', { chatId, message: `Admin ${targetAdminUsername} tidak online.` });
+
+      // Proses Delegasi
+      console.log(`Admin ${senderAdminUsername} mendelegasikan chat ${chatId} ke ${targetAdminUsername}`);
+      clearAutoReleaseTimer(chatId); // Batalkan timer lama
+      pickedChats[chatId] = targetAdminUsername; // Update pemilik chat
+      startAutoReleaseTimer(chatId, targetAdminUsername); // Mulai timer baru untuk target
+
+      io.emit('update_pick_status', { chatId, pickedBy: targetAdminUsername }); // Broadcast perubahan
+
+      // Notifikasi ke target
+      const targetSocketId = usernameToSocketId[targetAdminUsername];
+      io.to(targetSocketId).emit('chat_delegated_to_you', {
+          chatId,
+          fromAdmin: senderAdminUsername,
+          message: `Chat ${chatId.split('@')[0]} didelegasikan kepada Anda oleh ${senderAdminUsername}.`
+      });
+
+      // Konfirmasi ke pengirim
+      socket.emit('delegate_success', { chatId, targetAdminUsername });
+  });
+
+  // Mengirim balasan
+  socket.on('reply_message', async ({ to, text }) => {
+    const username = adminSockets[socket.id];
+    if (!username) return socket.emit('send_error', { to, text, message: 'Login diperlukan.' });
+    if (!to || !text) return socket.emit('send_error', { to, text, message: 'Data tidak lengkap.' });
+    if (!sock) return socket.emit('send_error', { to, text, message: 'Koneksi WhatsApp belum siap.' });
+
+    if (!pickedChats[to]) {
+        return socket.emit('send_error', { to, text, message: 'Ambil chat ini terlebih dahulu.' });
+    }
+    if (pickedChats[to] !== username) {
+      return socket.emit('send_error', { to, text, message: `Sedang ditangani oleh ${pickedChats[to]}.` });
+    }
+
+    try {
+      const adminInfo = admins[username];
+      const adminInitials = adminInfo?.initials || username.substring(0, 2).toUpperCase();
+      const replyTextWithInitials = `${text.trim()}\n\n_${adminInitials}_`; // Italic initials
+
+      // console.log(`Admin ${username} mengirim balasan ke: ${to}`); // Kurangi log
+      const sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
+      // console.log(`Pesan dari ${username} berhasil dikirim: ${sentMsg.key.id}`); // Kurangi log
+
+      clearAutoReleaseTimer(to); // Batalkan timer karena ada balasan
+
+      const outgoingMessageData = {
+        id: sentMsg.key.id,
+        from: username, // Nama admin pengirim
+        to: to,
+        text: text.trim(), // Teks asli
+        initials: adminInitials,
+        timestamp: sentMsg.messageTimestamp ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
+        type: 'outgoing'
+      };
+
+      socket.emit('reply_sent_confirmation', outgoingMessageData); // Konfirmasi ke pengirim
+
+      // Simpan ke history
+      if (!chatHistory[to]) chatHistory[to] = [];
+      chatHistory[to].push(outgoingMessageData);
+      saveChatHistory();
+
+      // Broadcast ke admin lain (opsional, agar mereka lihat balasannya juga)
+      // socket.broadcast.emit('new_outgoing_message', outgoingMessageData);
+
+    } catch (error) {
+      console.error(`Gagal mengirim pesan ke ${to} oleh ${username}:`, error);
+      socket.emit('send_error', { to, text, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
+    }
+  });
+
+  // Menandai chat sebagai sudah dibaca
+  socket.on('mark_as_read', ({ chatId }) => {
+     const username = adminSockets[socket.id];
+     if (!username || !chatId) return; // Abaikan jika tidak login atau chatId kosong
+
+     const pickedBy = pickedChats[chatId];
+
+     // Hanya proses jika chat belum diambil ATAU diambil oleh admin yang mengirim event
+     if (!pickedBy || pickedBy === username) {
+          // console.log(`Chat ${chatId} ditandai terbaca oleh ${username}.`); // Kurangi log
+         if (chatHistory[chatId]) {
+              let changed = false;
+              // Tandai semua pesan masuk terakhir sebagai sudah dibaca
+              for (let i = chatHistory[chatId].length - 1; i >= 0; i--) {
+                   if (chatHistory[chatId][i].type === 'incoming' && chatHistory[chatId][i].unread) {
+                       chatHistory[chatId][i].unread = false;
+                       changed = true;
+                   } else if (chatHistory[chatId][i].type === 'outgoing') {
+                       // Berhenti jika sudah mencapai pesan keluar terakhir (asumsi sudah dibaca)
+                       break;
+                   }
+              }
+              if (changed) {
+                  saveChatHistory(); // Simpan jika ada perubahan
+                  io.emit('update_chat_read_status', { chatId }); // Broadcast status baca
+              }
+         }
+     } else {
+          // console.log(`Event mark_as_read untuk ${chatId} dari ${username} diabaikan (diambil ${pickedBy}).`); // Kurangi log
+     }
+   });
+
+  // Handle disconnect
+  socket.on('disconnect', (reason) => {
+    const username = adminSockets[socket.id]; // Ambil username SEBELUM dihapus
+    const cleanedUsername = cleanupAdminState(socket.id); // Hapus dari state
+    if (cleanedUsername) {
+      console.log(`Admin ${cleanedUsername} terputus (${socket.id}). Alasan: ${reason}`);
+    } else {
+       console.log(`Koneksi socket ${socket.id} terputus (belum login). Alasan: ${reason}`);
+    }
+  });
+});
+
+// --- Mulai Koneksi WhatsApp ---
+connectToWhatsApp().catch(err => {
+  console.error("Gagal memulai koneksi WhatsApp awal:", err);
+  // Mungkin perlu keluar atau mencoba lagi dengan strategi berbeda
+});
+
+// --- Graceful Shutdown (opsional tapi bagus) ---
+process.on('SIGINT', async () => {
+  console.log('Menerima SIGINT (Ctrl+C). Membersihkan...');
+  if (sock) {
+    // await sock.logout(); // Logout dari sesi WA jika memungkinkan
+    console.log('Menutup koneksi WhatsApp...');
+    // sock.ws.close(); // Tutup websocket jika perlu
+  }
+  saveChatHistory(); // Pastikan history tersimpan
+  console.log('Server dimatikan.');
+  process.exit(0);
+});

@@ -12,6 +12,7 @@ node_modules/
 
 # Logs
 *.log
+logs/
 
 # Editor directories and files
 .idea/
@@ -21,3 +22,22 @@ node_modules/
 *.njsproj
 *.sln
 *.sw?
+
+# File cache
+.DS_Store
+*.tmp
+*.temp
+
+# Package lock
+yarn.lock
+package-lock.json
+
+# Build directories
+dist/
+build/
+
+# Debug logs
+npm-debug.log*
+
+# Sistem operasi
+Thumbs.db
