@@ -414,7 +414,6 @@ io.on('connection', (socket) => {
       if (!chatId || !targetAdminUsername) return socket.emit('delegate_error', { chatId, message: 'Data tidak lengkap.' });
       if (pickedChats[chatId] !== senderAdminUsername) return socket.emit('delegate_error', { chatId, message: 'Anda tidak memegang chat ini.' });
       if (senderAdminUsername === targetAdminUsername) return socket.emit('delegate_error', { chatId, message: 'Tidak bisa mendelegasikan ke diri sendiri.' });
-      if (!usernameToSocketId[targetAdminUsername]) return socket.emit('delegate_error', { chatId, message: `Admin ${targetAdminUsername} tidak online.` });
 
       // Proses Delegasi
       console.log(`Admin ${senderAdminUsername} mendelegasikan chat ${chatId} ke ${targetAdminUsername}`);
@@ -424,66 +423,87 @@ io.on('connection', (socket) => {
 
       io.emit('update_pick_status', { chatId, pickedBy: targetAdminUsername }); // Broadcast perubahan
 
-      // Notifikasi ke target
+      // Notifikasi ke target jika online
       const targetSocketId = usernameToSocketId[targetAdminUsername];
-      io.to(targetSocketId).emit('chat_delegated_to_you', {
-          chatId,
-          fromAdmin: senderAdminUsername,
-          message: `Chat ${chatId.split('@')[0]} didelegasikan kepada Anda oleh ${senderAdminUsername}.`
-      });
+      if (targetSocketId) {
+          io.to(targetSocketId).emit('chat_delegated_to_you', {
+              chatId,
+              fromAdmin: senderAdminUsername,
+              message: `Chat ${chatId.split('@')[0]} didelegasikan kepada Anda oleh ${senderAdminUsername}.`
+          });
+      }
 
       // Konfirmasi ke pengirim
       socket.emit('delegate_success', { chatId, targetAdminUsername });
   });
 
   // Mengirim balasan
-  socket.on('reply_message', async ({ to, text }) => {
+  socket.on('reply_message', async ({ to, text, media }) => {
     const username = adminSockets[socket.id];
     if (!username) return socket.emit('send_error', { to, text, message: 'Login diperlukan.' });
-    if (!to || !text) return socket.emit('send_error', { to, text, message: 'Data tidak lengkap.' });
+    if (!to || (!text && !media)) return socket.emit('send_error', { to, text, message: 'Data tidak lengkap.' });
     if (!sock) return socket.emit('send_error', { to, text, message: 'Koneksi WhatsApp belum siap.' });
 
     if (!pickedChats[to]) {
         return socket.emit('send_error', { to, text, message: 'Ambil chat ini terlebih dahulu.' });
     }
     if (pickedChats[to] !== username) {
-      return socket.emit('send_error', { to, text, message: `Sedang ditangani oleh ${pickedChats[to]}.` });
+        return socket.emit('send_error', { to, text, message: `Sedang ditangani oleh ${pickedChats[to]}.` });
     }
 
     try {
-      const adminInfo = admins[username];
-      const adminInitials = adminInfo?.initials || username.substring(0, 2).toUpperCase();
-      const replyTextWithInitials = `${text.trim()}\n\n_${adminInitials}_`; // Italic initials
+        const adminInfo = admins[username];
+        const adminInitials = adminInfo?.initials || username.substring(0, 2).toUpperCase();
+        const replyTextWithInitials = text ? `${text.trim()}\n\n_${adminInitials}_` : null; // Italic initials
 
-      // console.log(`Admin ${username} mengirim balasan ke: ${to}`); // Kurangi log
-      const sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
-      // console.log(`Pesan dari ${username} berhasil dikirim: ${sentMsg.key.id}`); // Kurangi log
+        let sentMsg;
+        if (media) {
+            const mediaBuffer = Buffer.from(media.data, 'base64');
+            const mediaOptions = {
+                caption: replyTextWithInitials,
+                mimetype: media.type,
+                fileName: media.name
+            };
 
-      clearAutoReleaseTimer(to); // Batalkan timer karena ada balasan
+            if (media.type.startsWith('image/')) {
+                sentMsg = await sock.sendMessage(to, { image: mediaBuffer, ...mediaOptions });
+            } else if (media.type.startsWith('video/')) {
+                sentMsg = await sock.sendMessage(to, { video: mediaBuffer, ...mediaOptions });
+            } else if (media.type.startsWith('audio/')) {
+                sentMsg = await sock.sendMessage(to, { audio: mediaBuffer, mimetype: media.type });
+            } else if (media.type === 'application/pdf') {
+                sentMsg = await sock.sendMessage(to, { document: mediaBuffer, ...mediaOptions });
+            } else {
+                throw new Error('Tipe media tidak didukung.');
+            }
+        } else {
+            sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
+        }
 
-      const outgoingMessageData = {
-        id: sentMsg.key.id,
-        from: username, // Nama admin pengirim
-        to: to,
-        text: text.trim(), // Teks asli
-        initials: adminInitials,
-        timestamp: sentMsg.messageTimestamp ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
-        type: 'outgoing'
-      };
+        clearAutoReleaseTimer(to); // Batalkan timer karena ada balasan
 
-      socket.emit('reply_sent_confirmation', outgoingMessageData); // Konfirmasi ke pengirim
+        const outgoingMessageData = {
+            id: sentMsg.key.id,
+            from: username, // Nama admin pengirim
+            to: to,
+            text: text?.trim() || null, // Teks asli
+            mediaType: media?.type || null,
+            fileName: media?.name || null,
+            initials: adminInitials,
+            timestamp: sentMsg.messageTimestamp ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
+            type: 'outgoing'
+        };
 
-      // Simpan ke history
-      if (!chatHistory[to]) chatHistory[to] = [];
-      chatHistory[to].push(outgoingMessageData);
-      saveChatHistory();
+        socket.emit('reply_sent_confirmation', outgoingMessageData); // Konfirmasi ke pengirim
 
-      // Broadcast ke admin lain (opsional, agar mereka lihat balasannya juga)
-      // socket.broadcast.emit('new_outgoing_message', outgoingMessageData);
+        // Simpan ke history
+        if (!chatHistory[to]) chatHistory[to] = [];
+        chatHistory[to].push(outgoingMessageData);
+        saveChatHistory();
 
     } catch (error) {
-      console.error(`Gagal mengirim pesan ke ${to} oleh ${username}:`, error);
-      socket.emit('send_error', { to, text, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
+        console.error(`Gagal mengirim pesan ke ${to} oleh ${username}:`, error);
+        socket.emit('send_error', { to, text, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
     }
   });
 
