@@ -40,14 +40,14 @@ import { getDatabase, ref, child, get, set } from 'firebase/database';
 import { app as firebaseApp, database } from './firebaseConfig.js';
 
 function loadChatHistory() {
-  const dbRef = ref(database);
-  get(child(dbRef, 'chatHistory'))
+  const dbRef = ref(database, 'chatHistory'); // Pastikan referensi ke 'chatHistory' benar
+  get(dbRef)
     .then((snapshot) => {
       if (snapshot.exists()) {
         const encodedChatHistory = snapshot.val();
         chatHistory = {};
         for (const encodedKey in encodedChatHistory) {
-          const decodedKey = decodeFirebaseKey(encodedKey); // Decode hanya saat membaca
+          const decodedKey = decodeFirebaseKey(encodedKey); // Decode kunci saat membaca
           chatHistory[decodedKey] = encodedChatHistory[encodedKey];
         }
         console.log('Riwayat chat berhasil dimuat dari Firebase.');
@@ -61,24 +61,10 @@ function loadChatHistory() {
     });
 }
 
-// Fungsi untuk meng-encode kunci agar valid di Firebase
-function encodeFirebaseKey(key) {
-  return key.replace(/\./g, '_dot_').replace(/@/g, '_at_').replace(/\$/g, '_dollar_')
-            .replace(/\//g, '_slash_').replace(/\[/g, '_openbracket_').replace(/\]/g, '_closebracket_');
-}
-
-// Fungsi untuk decode kunci jika diperlukan (opsional)
-function decodeFirebaseKey(encodedKey) {
-  return encodedKey.replace(/_dot_/g, '.').replace(/_at_/g, '@').replace(/_dollar_/g, '$')
-                   .replace(/_slash_/g, '/').replace(/_openbracket_/g, '[').replace(/_closebracket_/g, ']');
-}
-
-// Menyimpan history chat ke file
-
 function saveChatHistory() {
   const encodedChatHistory = {};
   for (const chatId in chatHistory) {
-    const encodedKey = encodeFirebaseKey(chatId); // Encode hanya saat menyimpan
+    const encodedKey = encodeFirebaseKey(chatId); // Encode kunci saat menyimpan
     encodedChatHistory[encodedKey] = chatHistory[chatId];
   }
 
@@ -164,6 +150,28 @@ function normalizeChatId(chatId) {
   return chatId;
 }
 
+// Fungsi untuk decode kunci jika diperlukan (opsional)
+function decodeFirebaseKey(encodedKey) {
+  return encodedKey
+    .replace(/_dot_/g, '.')
+    .replace(/_at_/g, '@')
+    .replace(/_dollar_/g, '$')
+    .replace(/_slash_/g, '/')
+    .replace(/_openbracket_/g, '[')
+    .replace(/_closebracket_/g, ']');
+}
+
+// Fungsi untuk meng-encode kunci agar valid di Firebase
+function encodeFirebaseKey(key) {
+  return key
+    .replace(/\./g, '_dot_')
+    .replace(/@/g, '_at_')
+    .replace(/\$/g, '_dollar_')
+    .replace(/\//g, '_slash_')
+    .replace(/\[/g, '_openbracket_')
+    .replace(/\]/g, '_closebracket_');
+}
+
 // --- Setup Express & Server ---
 loadChatHistory(); // Muat history saat mulai
 
@@ -235,10 +243,10 @@ async function connectToWhatsApp() {
     for (const message of messages) {
       const chatId = normalizeChatId(message.key.remoteJid); // Pastikan format asli
 
-      // Abaikan pesan keluar yang sudah ditangani
+      // Abaikan pesan keluar
       if (message.key.fromMe) {
         console.log(`Pesan keluar dengan ID ${message.key.id} diabaikan dalam upsert.`);
-        continue; // Abaikan pesan keluar
+        continue;
       }
 
       // Inisialisasi variabel untuk konten pesan
@@ -285,7 +293,7 @@ async function connectToWhatsApp() {
         type: 'incoming' // Pastikan hanya pesan masuk yang diberi tipe 'incoming'
       };
 
-      const encodedChatId = encodeFirebaseKey(chatId); // Encode hanya untuk penyimpanan
+      const encodedChatId = encodeFirebaseKey(chatId); // Encode kunci untuk penyimpanan
       if (!chatHistory[encodedChatId]) {
         chatHistory[encodedChatId] = [];
       }
@@ -293,7 +301,7 @@ async function connectToWhatsApp() {
       // Hindari duplikasi sederhana (cek ID jika ada)
       if (!chatHistory[encodedChatId].some(m => m.id === messageData.id)) {
         chatHistory[encodedChatId].push(messageData);
-        saveChatHistory();
+        saveChatHistory(); // Simpan setelah menambahkan pesan baru
       } else {
         console.warn(`Pesan duplikat terdeteksi (ID: ${messageData.id}), diabaikan.`);
         continue;
@@ -343,7 +351,10 @@ io.on('connection', (socket) => {
       const decodedChatHistory = {};
       for (const encodedKey in chatHistory) {
         const decodedKey = decodeFirebaseKey(encodedKey); // Decode chatId sebelum mengirim ke frontend
-        decodedChatHistory[decodedKey] = chatHistory[encodedKey];
+        decodedChatHistory[decodedKey] = chatHistory[encodedKey].map((message) => ({
+          ...message,
+          chatId: decodedKey // Tambahkan chatId ke setiap pesan untuk konsistensi
+        }));
       }
       socket.emit('initial_data', decodedChatHistory); // Kirim data histori yang sudah di-decode
       socket.emit('initial_pick_status', pickedChats); // Kirim lagi pick status
@@ -359,7 +370,10 @@ io.on('connection', (socket) => {
     const username = adminSockets[socket.id];
     if (username && chatId) {
       const encodedChatId = encodeFirebaseKey(chatId); // Encode untuk pencarian
-      const history = chatHistory[encodedChatId] || [];
+      const history = chatHistory[encodedChatId]?.map((message) => ({
+        ...message,
+        chatId // Tambahkan chatId ke setiap pesan untuk konsistensi
+      })) || [];
       socket.emit('chat_history', { chatId, messages: history }); // Kirim format asli ke frontend
     }
   });
@@ -548,9 +562,6 @@ _${adminInitials}_` : null;
         sentMsg = await sock.sendMessage(chatId, { text: replyTextWithInitials });
       }
 
-      // Tambahkan ID pesan keluar ke set untuk mencegah duplikasi
-      outgoingMessageIds.add(sentMsg.key.id);
-
       const outgoingMessageData = {
         id: sentMsg.key.id,
         from: username,
@@ -571,8 +582,12 @@ _${adminInitials}_` : null;
       if (!chatHistory[encodedChatId]) {
         chatHistory[encodedChatId] = [];
       }
-      chatHistory[encodedChatId].push(outgoingMessageData);
-      saveChatHistory();
+
+      // Hindari duplikasi sebelum menyimpan
+      if (!chatHistory[encodedChatId].some(m => m.id === outgoingMessageData.id)) {
+        chatHistory[encodedChatId].push(outgoingMessageData);
+        saveChatHistory();
+      }
 
       // Kirim pesan keluar ke semua admin yang terhubung
       io.emit('new_message', { ...outgoingMessageData, chatId });
@@ -640,11 +655,9 @@ connectToWhatsApp().catch(err => {
 process.on('SIGINT', async () => {
   console.log('Menerima SIGINT (Ctrl+C). Membersihkan...');
   if (sock) {
-    // await sock.logout(); // Logout dari sesi WA jika memungkinkan
     console.log('Menutup koneksi WhatsApp...');
-    // sock.ws.close(); // Tutup websocket jika perlu
   }
-  saveChatHistory(); // Pastikan history tersimpan
+  saveChatHistory(); // Pastikan history tersimpan sebelum aplikasi dimatikan
   console.log('Server dimatikan.');
   process.exit(0);
 });

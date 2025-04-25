@@ -1116,11 +1116,6 @@
           const chatId = data.chatId; // Gunakan format asli
 
           // Hindari duplikasi di frontend
-          if (messagesDiv.querySelector(`[data-message-id="${data.id}"]`)) {
-            console.warn(`Pesan dengan ID ${data.id} sudah ditampilkan, diabaikan.`);
-            return; // Abaikan pesan yang sudah ada
-          }
-
           if (!chatHistory[chatId]) {
             chatHistory[chatId] = [];
           }
@@ -1335,7 +1330,15 @@
               fileName: selectedMedia?.name || null,
               timestamp: new Date().toISOString()
             };
-            appendMessage(tempOutgoingMsg); // Tampilkan pesan sementara di UI
+
+            // Hindari duplikasi di frontend
+            if (!chatHistory[currentChatId]) {
+              chatHistory[currentChatId] = [];
+            }
+            if (!chatHistory[currentChatId].some(msg => msg.id === tempOutgoingMsg.id)) {
+              chatHistory[currentChatId].push(tempOutgoingMsg);
+              appendMessage(tempOutgoingMsg); // Tampilkan pesan sementara di UI
+            }
 
             replyInput.value = '';
             selectedMedia = null;
