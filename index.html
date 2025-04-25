@@ -1796,7 +1796,7 @@
            const placeholder = messagesDiv.querySelector('.placeholder');
            if (placeholder) placeholder.remove();
 
-           // Append the new message div and keep the chat scrolled to the bottom
+           // Append the new message div
            // Insert messages in chronological order based on timestamp
            const messages = Array.from(messagesDiv.children);
            let inserted = false;
@@ -1820,23 +1820,29 @@
                messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
            }
 
+           // --- START: Logika Scroll Otomatis yang ditambahkan ---
+           // Hanya lakukan scroll jika pesan ini untuk chat yang sedang aktif
+           if (chatId === currentChatId) {
+                const scrollThreshold = 50; // Scroll jika kurang dari 50px dari bawah
+                // Periksa apakah pengguna saat ini berada di dekat bagian bawah
+                // messagesDiv.scrollHeight - messagesDiv.scrollTop adalah jarak dari posisi scroll ke bagian bawah konten
+                // messagesDiv.clientHeight adalah tinggi area yang terlihat
+                // Jika jarak ke bawah konten <= tinggi area terlihat + ambang batas, artinya pengguna dekat bawah.
+                const isNearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop <= messagesDiv.clientHeight + scrollThreshold;
 
-           // Scroll to the bottom if the user is near the bottom, or if it's an outgoing message
-           // Check if the last message added is the one we just inserted
-            const isLastMessage = messagesDiv.lastChild === messageDiv;
-           const isNearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 50; // Threshold 50px
-           // Only scroll if the message is the last one OR if the user is already near the bottom
-           if (isLastMessage && (isNearBottom || type === 'outgoing')) {
-                // Use a slight delay to ensure images/media load and scrollHeight is accurate
-               setTimeout(() => {
-                   messagesDiv.scrollTop = messagesDiv.scrollHeight;
-               }, 50); // Reduced delay slightly
-
-           } else if (!isLastMessage) {
-               // If not the last message (inserted somewhere in the middle), ensure it's visible?
-               // For simplicity, we'll just ensure the latest *appended* message (if it's the very last one) triggers scroll.
-               // If messages come out of order and are inserted earlier, we don't auto-scroll.
+                // Gulir ke bawah jika:
+                // 1. Pesan yang baru saja ditambahkan adalah pesan *keluar* (outgoing).
+                // 2. ATAU Pesan yang baru saja ditambahkan adalah pesan *masuk* (incoming), tetapi pengguna sudah berada di dekat bagian bawah.
+                // Menggunakan setTimeout memberikan browser waktu untuk merender elemen baru (terutama jika berisi gambar/media)
+                // sebelum menghitung scrollHeight yang benar dan melakukan scroll.
+                if (type === 'outgoing' || isNearBottom) {
+                    setTimeout(() => {
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    }, 50); // Delay 50 milidetik
+                }
            }
+           // --- END: Logika Scroll Otomatis ---
+
         }
 
 
@@ -2218,11 +2224,15 @@
                 appendMessage(msg);
               });
             }
-            // Scroll to the bottom after loading history
-             // Use a slight delay to ensure images/media load and scrollHeight is accurate
-            setTimeout(() => {
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            }, 100);
+            // --- START: Scroll Setelah History Diload ---
+            // Gulir ke bawah setelah memuat seluruh riwayat
+             // Gunakan penundaan singkat untuk memastikan semua gambar/media dimuat dan scrollHeight akurat
+            if (chatHistory[chatId].messages.length > 0) { // Pastikan hanya scroll jika ada pesan
+                 setTimeout(() => {
+                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                 }, 100); // Delay 100ms
+            }
+            // --- END: Scroll Setelah History Diload ---
 
 
              // Ensure the chat area header and buttons are updated based on the loaded chat's state
@@ -2282,7 +2292,8 @@
                  if (!data.id) data.id = `${data.timestamp}-${data.from}-${Math.random().toString(36).substring(7)}`; // Generate fallback ID
                  if (!data.timestamp) data.timestamp = new Date().toISOString(); // Fallback timestamp
 
-                appendMessage(data);
+                appendMessage(data); // <--- appendMessage will now handle the scroll internally
+
                  // If it's an incoming message for the chat currently picked by THIS user, mark as read immediately
                  const pickedBy = pickedChatsStatus[chatId];
                  if (data.type === 'incoming' && pickedBy === currentUser) {
@@ -2309,7 +2320,7 @@
                   if (!data.id) data.id = `${data.timestamp}-${data.from}-${Math.random().toString(36).substring(7)}`; // Generate fallback ID
                   if (!data.timestamp) data.timestamp = new Date().toISOString(); // Fallback timestamp
 
-                 appendMessage(data);
+                 appendMessage(data); // <--- Append duplicate if missing in UI, scroll logic inside
              } else {
                 // console.log(`Duplicate message ${messageId} for chat ${chatId} already in history and UI, ignoring.`);
              }
