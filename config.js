@@ -33,6 +33,15 @@ const config = {
   // Set ke 0 atau null untuk menonaktifkan fitur ini.
   chatAutoReleaseTimeoutMinutes: 15, // Diubah menjadi 15 menit sebagai contoh
 
+  // Waktu (dalam menit) sebelum admin otomatis logout karena tidak ada aktivitas (AFK)
+  // Set ke 0 atau null untuk menonaktifkan fitur ini.
+  adminAfkTimeoutMinutes: 2, // <-- Tambahkan ini (contoh: 30 menit)
+
+  // Waktu (dalam menit) sebelum timeout AFK, admin akan menerima peringatan
+  // Set ke 0 atau null untuk menonaktifkan peringatan.
+  adminAfkWarningMinutes: 1, // <-- Tambahkan ini (contoh: 2 menit sebelum logout)
+
+
   // Kunci rahasia untuk sesi Express. GANTI INI dengan string acak yang panjang dan sulit ditebak.
   sessionSecret: 'ganti-dengan-string-acak-yang-panjang-dan-kuat', // <--- GANTI INI !!!
 
@@ -47,7 +56,7 @@ const config = {
   },
 
   // Versi aplikasi (ditampilkan di footer frontend)
-  version: '1.0.2', // Tingkatkan nomor versi
+  version: '1.0.3', // Tingkatkan nomor versi
 
   // Konfigurasi lain bisa ditambahkan di sini
 };
