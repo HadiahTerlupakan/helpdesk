@@ -27,6 +27,20 @@
             --disabled-color: #aaa;
         }
 
+        /* Reset default styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            background-color: var(--background-grey);
+        }
+
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
             margin: 0;
@@ -75,7 +89,7 @@
             background: rgba(255,255,255,0.1);
             border-radius: 8px;
             cursor: pointer;
-            transition: background 0.2s, border-left 0.2s; /* Added border transition */
+            transition: background 0.2s, border-left 0.2s;
             border-left: 4px solid transparent;
         }
 
@@ -304,10 +318,18 @@
             color: var(--text-dark);
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
-        #login-box h2 { margin-top: 0; margin-bottom: 25px; color: var(--primary-color); } /* Added margin */
+        #login-box h2 {
+            margin-top: 0;
+            margin-bottom: 25px;
+            color: var(--primary-color);
+        }
         #login-box input {
-            margin-bottom: 15px; padding: 12px; width: 250px;
-            border: 1px solid var(--border-color); border-radius: 4px; font-size: 1em;
+            margin-bottom: 15px;
+            padding: 12px;
+            width: 250px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 1em;
         }
         #login-box button {
             padding: 12px 25px; background: var(--primary-color); border: none;
@@ -535,6 +557,55 @@
 
         // Open file picker when media button is clicked
         mediaButton.addEventListener('click', () => {
+            // Cek apakah ada chat yang dipilih
+            if (!currentChatId) {
+                // Tampilkan modal peringatan
+                const warningModal = document.createElement('div');
+                warningModal.id = 'media-warning-modal';
+                warningModal.style.position = 'fixed';
+                warningModal.style.top = '0';
+                warningModal.style.left = '0';
+                warningModal.style.width = '100%';
+                warningModal.style.height = '100%';
+                warningModal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                warningModal.style.display = 'flex';
+                warningModal.style.justifyContent = 'center';
+                warningModal.style.alignItems = 'center';
+                warningModal.style.zIndex = '1000';
+                
+                const modalContent = document.createElement('div');
+                modalContent.style.backgroundColor = 'white';
+                modalContent.style.padding = '20px';
+                modalContent.style.borderRadius = '8px';
+                modalContent.style.maxWidth = '400px';
+                modalContent.style.textAlign = 'center';
+                
+                const warningText = document.createElement('p');
+                warningText.textContent = 'Silakan pilih dan ambil chat terlebih dahulu sebelum mengirim media';
+                warningText.style.marginBottom = '20px';
+                
+                const okButton = document.createElement('button');
+                okButton.textContent = 'OK';
+                okButton.style.padding = '8px 16px';
+                okButton.style.backgroundColor = 'var(--primary-color)';
+                okButton.style.color = 'white';
+                okButton.style.border = 'none';
+                okButton.style.borderRadius = '4px';
+                okButton.style.cursor = 'pointer';
+                okButton.addEventListener('click', () => {
+                    document.body.removeChild(warningModal);
+                });
+                
+                modalContent.appendChild(warningText);
+                modalContent.appendChild(okButton);
+                warningModal.appendChild(modalContent);
+                document.body.appendChild(warningModal);
+                return;
+            }
+            if (!currentChatId || pickedChatsStatus[currentChatId] !== currentUser) {
+                alert('Silakan pilih dan ambil chat terlebih dahulu sebelum mengirim media');
+                return;
+            }
             mediaInput.click();
         });
 
@@ -650,11 +721,13 @@
                     replyInput.focus(); // Auto-focus input when chat is yours
                     delegateChatContainer.style.display = 'flex'; // Show delegation dropdown and button
                     populateDelegateChatSelect(); // Populate the dropdown
+                    mediaButton.disabled = false;
                 } else {
                     replyInput.disabled = true;
                     replyButton.disabled = true;
                     replyInput.placeholder = `Ditangani oleh ${pickedBy}`;
                     delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
+                    mediaButton.disabled = true;
                 }
             } else {
                 pickChatButton.style.display = 'inline-block';
@@ -665,6 +738,7 @@
                 replyButton.disabled = true;
                 replyInput.placeholder = 'Ambil chat ini untuk membalas';
                 delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
+                mediaButton.disabled = true;
             }
             // Hapus pesan error kirim jika ada (saat ganti chat)
             const existingError = replyBox.querySelector('.send-error-span');
@@ -857,10 +931,14 @@
             messageDiv.className = `message ${type}`;
             const senderName = type === 'incoming' ? (from ? from.split('@')[0] : 'Unknown') : 'Anda';
             let contentHTML = `<strong>${senderName}</strong>`;
-
+            
             if (mediaData && mediaType) {
-                const mimeType = getMimeType(mediaType, mediaData);
-                const dataUrl = mediaData.startsWith('data:') ? mediaData : `data:${mimeType};base64,${mediaData}`;
+                let dataUrl = mediaData;
+                // Jika mediaData belum dalam format data URL, konversi dari base64
+                if (!mediaData.startsWith('data:')) {
+                    const mimeType = getMimeType(mediaType, mediaData);
+                    dataUrl = `data:${mimeType};base64,${mediaData}`;
+                }
 
                 if (mediaType === 'imageMessage') {
                     contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 150px; max-height: 150px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
@@ -874,10 +952,15 @@
                 } else {
                     contentHTML += `<br>[Media tidak didukung: ${mediaType}]`;
                 }
+                
+                if (text) {
+                    const textClass = 'caption';
+                    contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
+                }
             }
 
-            if (text) {
-                const textClass = (mediaData && mediaType) ? 'caption' : 'text-content';
+            if (text && (!mediaData || !mediaType)) {
+                const textClass = 'text-content';
                 contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
             } else if (!mediaData && type === 'incoming') {
                 contentHTML += `<div class="text-content">[Pesan Kosong]</div>`;
@@ -889,11 +972,7 @@
             if (placeholder) placeholder.remove();
 
             messagesDiv.appendChild(messageDiv);
-
-            const isScrolledToBottom = messagesDiv.scrollHeight - messagesDiv.clientHeight <= messagesDiv.scrollTop + 150;
-            if (isScrolledToBottom || type === 'outgoing') {
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            }
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         function openMediaModal(src, type) {
