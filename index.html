@@ -39,16 +39,8 @@
             display: flex;
             height: 100vh;
             background-color: var(--background-grey);
-        }
-
-        body {
             font-family: 'Segoe UI', Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            height: 100vh;
-            background-color: var(--background-grey);
-            overflow: hidden;
+            overflow: hidden; /* Mencegah scroll body */
         }
 
         #app-container { display: flex; width: 100%; height: 100%; }
@@ -61,21 +53,30 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            flex-shrink: 0; /* Mencegah sidebar menyusut */
         }
 
         #sidebar-header {
             padding: 20px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
         }
-        #sidebar-header h2 { margin: 0 0 10px 0; font-size: 1.3em;}
-        #sidebar-header h3 { margin: 5px 0 5px 0; font-size: 1em; color: #eee; } /* Adjusted margin */
-        #admin-username-display { font-weight: normal; font-size: 0.9em; color: #ddd; } /* Style for admin name */
+        #sidebar-header h2 { margin: 0 0 5px 0; font-size: 1.3em;}
+        #sidebar-header h3 { margin: 5px 0 5px 0; font-size: 1em; color: #eee; }
+        #admin-username-display { font-weight: normal; font-size: 0.9em; color: #ddd; }
+        #whatsapp-status { font-size: 0.8em; color: rgba(255,255,255,0.7); margin-top: 5px;}
 
         #active-chats {
-            flex: 1;
-            overflow-y: auto;
+            flex: 1; /* Memenuhi sisa ruang vertikal */
+            overflow-y: auto; /* Scrollable */
             padding: 0 10px 10px 10px;
         }
+         /* Style scrollbar */
+        #active-chats::-webkit-scrollbar { width: 8px; }
+        #active-chats::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        #active-chats::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 10px; }
+        #active-chats::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.5); }
+
 
         #chat-list {
             list-style: none;
@@ -109,9 +110,9 @@
             margin-bottom: 4px;
             font-weight: 500;
         }
-        .chat-info i { margin-right: 8px; color: #eee; } /* Icon style */
-        .chat-info .chat-name { flex-grow: 1; }
-        .chat-info .timestamp { font-size: 0.8em; color: #ccc; }
+        .chat-info i { margin-right: 8px; color: #eee; }
+        .chat-info .chat-name { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* Truncate long names */
+        .chat-info .timestamp { font-size: 0.8em; color: #ccc; flex-shrink: 0; margin-left: 10px; }
 
         .message-snippet {
             font-size: 0.9em;
@@ -119,10 +120,10 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            padding-left: 26px; /* Align with icon + margin */
+            padding-left: 26px;
             display: flex;
             align-items: center;
-            min-height: 1.2em; /* Ensure space even if empty */
+            min-height: 1.2em;
         }
         .message-snippet .last-message {
             flex-grow: 1;
@@ -130,8 +131,8 @@
             text-overflow: ellipsis;
             margin-right: 5px;
         }
-        .unread-indicator { color: yellow; margin-left: 5px; font-weight: bold; display: none; }
-        .chat-item-picked-by { font-size: 0.8em; color: #ccc; margin-left: 5px; font-style: italic; display: none; white-space: nowrap; }
+        .unread-indicator { color: yellow; margin-left: 5px; font-weight: bold; display: none; flex-shrink: 0; }
+        .chat-item-picked-by { font-size: 0.8em; color: #ccc; margin-left: 5px; font-style: italic; display: none; white-space: nowrap; flex-shrink: 0; }
 
         #logout-button {
             padding: 12px 15px;
@@ -142,12 +143,13 @@
             cursor: pointer;
             margin: 15px;
             text-align: center;
+            flex-shrink: 0;
         }
         #logout-button:hover { background: var(--button-danger-hover); }
 
 
         #chat-area {
-            flex: 1;
+            flex: 1; /* Memenuhi sisa ruang horizontal */
             display: flex;
             flex-direction: column;
             height: 100vh;
@@ -161,11 +163,12 @@
              display: flex;
              justify-content: space-between;
              align-items: center;
-             min-height: 40px;
+             min-height: 50px; /* Sedikit lebih tinggi */
+             flex-shrink: 0;
         }
-        #current-chat-id-display { font-weight: bold; color: var(--text-dark); }
-        #chat-status-area { display: flex; align-items: center; } /* Container for status and button */
-        #chat-picked-status { font-size: 0.9em; color: var(--text-muted); margin-right: 10px; }
+        #current-chat-id-display { font-weight: bold; color: var(--text-dark); flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px;}
+        #chat-status-area { display: flex; align-items: center; flex-shrink: 0; }
+        #chat-picked-status { font-size: 0.9em; color: var(--text-muted); margin-right: 10px; flex-shrink: 0; }
         #pick-chat-button {
              padding: 6px 12px;
              font-size: 0.9em;
@@ -174,18 +177,15 @@
              color: var(--text-light);
              border: none;
              border-radius: 4px;
-             transition: background-color 0.2s; /* Added transition */
+             transition: background-color 0.2s;
+             flex-shrink: 0;
         }
         #pick-chat-button:disabled { background-color: var(--disabled-color); cursor: default; }
-        #pick-chat-button:hover:not(:disabled) { background-color: #22b856; } /* Darker green on hover */
-        #delegate-chat-container { display: none; align-items: center; gap: 10px; }
+        #pick-chat-button:hover:not(:disabled) { background-color: #22b856; }
+        #delegate-chat-container { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         #delegate-chat-select { padding: 6px 12px; font-size: 0.9em; border-radius: 4px; border: 1px solid var(--border-color); }
-        #delegate-chat-select option.online {
-            color: green;
-        }
-        #delegate-chat-select option.offline {
-            color: red;
-        }
+        #delegate-chat-select option.online { color: green; }
+        #delegate-chat-select option.offline { color: red; }
         #delegate-chat-button {
              padding: 6px 12px;
              font-size: 0.9em;
@@ -195,19 +195,25 @@
              border: none;
              border-radius: 4px;
              transition: background-color 0.2s;
+             flex-shrink: 0;
         }
         #delegate-chat-button:disabled { background-color: var(--disabled-color); cursor: default; }
-        #delegate-chat-button:hover:not(:disabled) { background-color: #0b6b5a; } /* Darker secondary color on hover */
+        #delegate-chat-button:hover:not(:disabled) { background-color: #0b6b5a; }
 
 
         #messages {
-            flex: 1;
+            flex: 1; /* Memenuhi sisa ruang vertikal */
             padding: 20px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+             /* Style scrollbar */
+            ::-webkit-scrollbar { width: 8px; }
+            ::-webkit-scrollbar-track { background: var(--chat-bg); }
+            ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 10px; }
+            ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
         }
-        /* Placeholder message style */
+
         #messages .placeholder {
             text-align: center; color: #888; margin-top: 50px; font-style: italic;
         }
@@ -218,52 +224,77 @@
             border-radius: 7.5px;
             max-width: 70%;
             word-wrap: break-word;
-            box-shadow: 0 1px 1px rgba(0,0,0,0.05);
-            position: relative; /* For potential timestamp later */
+            box-shadow: 0 1px 0.5px rgba(0,0,0,0.1); /* Adjusted shadow */
+            position: relative;
+             font-size: 0.95em; /* Slightly smaller font in bubble */
         }
         .message strong {
             font-weight: 600;
             margin-bottom: 3px;
             display: inline-block;
-            color: var(--primary-color); /* Default for incoming */
+            color: #333; /* Default color */
         }
-        .message.outgoing strong {
-            color: var(--secondary-color); /* Different color for 'Anda' */
+        .message.incoming strong {
+            color: #075e54; /* Incoming sender color */
         }
+         .message.outgoing strong {
+             color: #128c7e; /* Outgoing sender color */
+         }
 
         .message.incoming {
             background: var(--message-in-bg);
             align-self: flex-start;
+            margin-right: auto; /* Push to left */
         }
 
         .message.outgoing {
             background: var(--message-out-bg);
             align-self: flex-end;
+            margin-left: auto; /* Push to right */
         }
+
+         /* Timestamp inside message bubble (optional, can be complex) */
+         .message-timestamp {
+             display: block;
+             font-size: 0.75em;
+             color: rgba(0,0,0,0.4);
+             text-align: right;
+             margin-top: 5px;
+         }
+
 
         .message img, .message video {
             max-width: 100%;
-            max-height: 250px;
+            max-height: 300px; /* Slightly larger preview */
             display: block;
             margin-top: 5px;
             border-radius: 5px;
         }
         .message img[onclick] { cursor: pointer; }
         .message audio { max-width: 100%; display: block; margin-top: 5px; }
-        .message a { color: var(--primary-color); text-decoration: none; margin-top: 5px; display: inline-block; word-break: break-all; } /* Allow long links to break */
+        .message a { color: var(--primary-color); text-decoration: none; margin-top: 5px; display: inline-block; word-break: break-word; }
         .message a:hover { text-decoration: underline; }
-        .message .caption, .message .text-content { /* Unified class */
-            margin-top: 5px; font-size: 0.95em; white-space: pre-wrap; /* Preserve line breaks */
+        .message .caption, .message .text-content {
+            margin-top: 5px; font-size: 1em; white-space: pre-wrap;
         }
+         .message .document-link i { margin-right: 5px; } /* Icon spacing for documents */
+
 
         #reply-box {
             padding: 10px 20px;
             background: var(--input-bg);
             display: flex;
-            align-items: center; /* Vertically align items */
+            flex-direction: column; /* Use column to stack input and preview */
             border-top: 1px solid var(--border-color);
-            min-height: 40px;
-            position: relative; /* For error message positioning */
+            min-height: 60px; /* Adjusted min height */
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .reply-input-container {
+             display: flex;
+             align-items: center;
+             width: 100%;
         }
 
         #reply-input {
@@ -273,11 +304,27 @@
             border-radius: 20px;
             margin-right: 10px;
             font-size: 1em;
-            resize: none; /* Prevent manual resize if using textarea */
-            height: 22px; /* Start height (adjust based on font/padding) */
-            overflow-y: auto; /* Allow scroll if content grows */
+            resize: none; /* Gunakan textarea untuk resize otomatis */
+            min-height: 22px;
+            max-height: 150px; /* Batas ketinggian agar tidak terlalu besar */
+            overflow-y: auto;
         }
+         /* Style scrollbar for textarea */
+        #reply-input::-webkit-scrollbar { width: 8px; }
+        #reply-input::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 10px; }
+        #reply-input::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        #reply-input::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
         #reply-input:disabled { background-color: #e9e9e9; }
+
+        #media-button {
+             background: none; border: none; font-size: 1.3em; cursor: pointer; color: var(--text-muted); margin-right: 10px;
+             transition: color 0.2s; flex-shrink: 0; padding: 0 5px; /* Add padding around icon */
+        }
+         #media-button i { pointer-events: none; } /* Prevent icon itself from capturing click */
+        #media-button:hover { color: var(--text-dark); }
+        #media-button:disabled { color: var(--disabled-color); cursor: default; }
+
 
         #reply-button {
             padding: 10px 20px;
@@ -288,19 +335,49 @@
             cursor: pointer;
             font-size: 1em;
             transition: background-color 0.2s;
+            flex-shrink: 0;
         }
         #reply-button:disabled { background-color: var(--disabled-color); cursor: default; }
         #reply-button:hover:not(:disabled) { background: var(--secondary-color); }
+        #reply-button i { margin-right: 5px; }
+
+        /* Media Preview Container */
+        #media-preview-container {
+            display: flex; /* Use flex for alignment */
+            align-items: center;
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: white; /* Use white background for preview */
+            width: calc(100% - 40px); /* Match reply-box padding */
+            margin-left: 20px; /* Match reply-box padding */
+            margin-bottom: 10px; /* Space below preview */
+        }
+        #media-preview-container img,
+        #media-preview-container video {
+            max-width: 50px; max-height: 50px; object-fit: cover; border-radius: 5px; margin-right: 10px;
+        }
+         #media-preview-container .file-info {
+             flex-grow: 1; font-size: 0.9em; color: var(--text-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+         }
+         #media-preview-container .clear-media-button {
+             background: none; border: none; color: var(--button-danger-bg); font-size: 1.2em; cursor: pointer;
+             margin-left: 10px; flex-shrink: 0;
+         }
+          #media-preview-container .clear-media-button:hover { color: var(--button-danger-hover); }
+
 
         /* Send Error Message Style */
         .send-error-span {
             color: var(--error-color);
             font-size: 0.85em;
             position: absolute;
-            bottom: -18px; /* Position below the reply box */
+            bottom: 5px; /* Position relative to reply-box bottom */
             left: 20px;
-            background: var(--input-bg); /* Match background */
-            padding: 0 5px;
+            /* background: var(--input-bg); /* Match background */
+            /* padding: 0 5px; */
+             z-index: 1; /* Ensure it's above elements */
         }
 
 
@@ -309,6 +386,8 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.8);
             display: flex; justify-content: center; align-items: center; z-index: 1000;
+             flex-direction: column; /* Stack login box and QR area */
+            gap: 20px; /* Space between them */
         }
         #login-box {
             background: #fff;
@@ -317,6 +396,7 @@
             text-align: center;
             color: var(--text-dark);
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            max-width: 350px; width: 90%; /* Responsive */
         }
         #login-box h2 {
             margin-top: 0;
@@ -326,7 +406,7 @@
         #login-box input {
             margin-bottom: 15px;
             padding: 12px;
-            width: 250px;
+            width: 100%; /* Fill width */
             border: 1px solid var(--border-color);
             border-radius: 4px;
             font-size: 1em;
@@ -334,47 +414,113 @@
         #login-box button {
             padding: 12px 25px; background: var(--primary-color); border: none;
             color: var(--text-light); border-radius: 4px; cursor: pointer; font-size: 1em; width: 100%;
-            transition: background 0.2s; margin-top: 10px; /* Added margin */
+            transition: background 0.2s; margin-top: 10px;
         }
         #login-box button:hover { background: var(--secondary-color); }
         #login-error {
-            color: var(--error-color); margin-top: 15px; font-size: 0.9em; height: 1.2em;
+            color: var(--error-color); margin-top: 15px; font-size: 0.9em; min-height: 1.2em; /* Ensure space */
             font-weight: 500;
         }
+
+         /* QR Code Area */
+         #qr-area {
+             background: #fff;
+             padding: 30px;
+             border-radius: 8px;
+             text-align: center;
+             color: var(--text-dark);
+             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+             max-width: 350px; width: 90%;
+         }
+        #qr-area h3 { margin-top: 0; margin-bottom: 15px; color: var(--primary-color); }
+        #qr-code { margin: 20px auto; width: 200px; height: 200px; } /* Placeholder for QR Code */
+        #qr-area p { font-size: 0.9em; color: var(--text-muted); }
+        #qr-status { font-size: 0.9em; color: var(--text-dark); margin-top: 10px;}
+
 
         /* Media Modal */
         #mediaModal {
             display: none; position: fixed; z-index: 2000;
             left: 0; top: 0; width: 100%; height: 100%;
-            overflow: auto; background-color: rgba(0,0,0,0.9);
+            overflow: auto; background-color: rgba(0,0,0,0.95); /* Darker background */
             justify-content: center; align-items: center;
-            padding: 20px; box-sizing: border-box; /* Add padding */
+            padding: 20px; box-sizing: border-box;
         }
-        #modalMediaContent {
-             max-width: 90%; max-height: 90%; /* Slightly larger */
+        #modalMediaContent, #modalVideoContent, #modalAudioContent {
+             max-width: 95%; max-height: 95%;
              margin: auto; display: block;
-             object-fit: contain; /* Ensure aspect ratio is maintained */
+             object-fit: contain;
          }
+         #modalDocumentContent {
+             background: white; padding: 20px; border-radius: 8px; text-align: center;
+             width: 300px; max-width: 90%; /* Responsive */
+             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+         }
+         #modalDocumentContent i { font-size: 40px; color: var(--primary-color); }
+         #modalDocumentName { margin-top: 10px; font-size: 1.1em; color: var(--text-dark); word-break: break-word;}
+         #modalDocumentLink {
+             display: inline-block; margin-top: 15px; padding: 8px 16px;
+             background: var(--secondary-color); color: white; text-decoration: none; border-radius: 4px;
+         }
+
+
         #closeModal {
             position: absolute; top: 20px; right: 35px; color: #f1f1f1; font-size: 40px;
             font-weight: bold; cursor: pointer; transition: color 0.2s;
-            line-height: 1; /* Prevent extra spacing */
+            line-height: 1;
+            z-index: 2001; /* Above media */
         }
         #closeModal:hover { color: #bbb; }
+
+        /* Generic Modal Style */
+         .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 1500; justify-content: center; align-items: center;
+         }
+         .modal-content {
+            background: white; padding: 20px; border-radius: 8px; text-align: center;
+            width: 300px; max-width: 90%; /* Responsive */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+         }
+         .modal-content h3 { margin-top: 0; color: var(--primary-color); }
+         .modal-content p { color: var(--text-dark); margin-bottom: 20px; }
+         .modal-content button {
+             padding: 10px 20px; background: var(--primary-color); color: white;
+             border: none; border-radius: 4px; cursor: pointer;
+         }
+
+
+        /* Footer Style */
+        footer {
+            text-align: center;
+            padding: 10px;
+            background: var(--input-bg);
+            color: var(--text-muted);
+            font-size: 0.9em;
+            flex-shrink: 0;
+        }
     </style>
-    <!-- Pastikan tag </style> ini ada dan benar-benar menutup blok CSS -->
 </head>
 <body>
     <!-- Login Container -->
     <div id="login-container">
         <div id="login-box">
             <h2>Admin Helpdesk Login</h2>
-            <input type="text" id="username-input" placeholder="Username">
-            <input type="password" id="password-input" placeholder="Password">
+            <input type="text" id="username-input" placeholder="Username" autocomplete="username">
+            <input type="password" id="password-input" placeholder="Password" autocomplete="current-password">
             <button id="login-button">Login</button>
-            <div id="login-error">Menghubungkan...</div> <!-- Initial message -->
+            <div id="login-error"></div> <!-- Empty initially -->
+        </div>
+         <!-- QR Code Area (Initially Hidden) -->
+        <div id="qr-area" class="hidden">
+            <h3>Pindai QR Code</h3>
+            <p>Gunakan aplikasi WhatsApp di ponsel Anda:</p>
+            <p>Pengaturan > Perangkat Tertaut > Tautkan Perangkat</p>
+            <div id="qr-code"></div> <!-- QR Code will be rendered here -->
+            <p id="qr-status"></p> <!-- Optional: Status messages like "Scanning..." -->
         </div>
     </div>
+
 
     <!-- Main App Container (Initially Hidden) -->
     <div id="app-container" class="hidden">
@@ -382,12 +528,14 @@
         <div id="sidebar">
             <div id="sidebar-header">
                 <h2>Admin Helpdesk</h2>
-                <h3 id="admin-username-display"></h3>
+                <div id="admin-username-display"></div>
+                 <div id="whatsapp-status">Status: Menyambungkan...</div> <!-- WA Status -->
                 <h3>Percakapan Aktif</h3>
             </div>
             <div id="active-chats">
                 <ul id="chat-list">
                     <!-- Daftar chat akan diisi oleh JavaScript -->
+                     <div class="placeholder" style="color: rgba(255,255,255,0.7); text-align: center; margin-top: 20px;">Memuat percakapan...</div>
                 </ul>
             </div>
             <button id="logout-button">Logout</button>
@@ -412,32 +560,51 @@
                 <div class="placeholder">Pilih percakapan untuk memulai</div>
             </div>
             <div id="reply-box">
-                <button id="media-button" style="margin-right: 10px; cursor: pointer;"><i class="fas fa-paperclip"></i></button>
-                <input type="text" id="reply-input" placeholder="Pilih atau ambil chat untuk membalas..." disabled>
-                <!-- Bisa juga pakai <textarea> jika ingin multiline lebih mudah -->
-                <!-- <textarea id="reply-input" placeholder="Pilih atau ambil chat untuk membalas..." disabled rows="1"></textarea> -->
-                <button id="reply-button" disabled><i class="fas fa-paper-plane"></i> Kirim</button> <!-- Added icon -->
+                 <div class="reply-input-container">
+                    <button id="media-button" title="Lampirkan Media" disabled><i class="fas fa-paperclip"></i></button>
+                    <!-- Mengganti input type="text" dengan textarea -->
+                    <textarea id="reply-input" placeholder="Pilih atau ambil chat untuk membalas..." disabled rows="1"></textarea>
+                    <button id="reply-button" disabled><i class="fas fa-paper-plane"></i> Kirim</button>
+                 </div>
+                 <!-- Media preview container added here -->
+                 <div id="media-preview-container" style="display: none;">
+                    <!-- Media preview and clear button will be added here by JS -->
+                 </div>
+                 <span class="send-error-span" style="display: none;"></span> <!-- Placeholder for send error -->
             </div>
         </div>
     </div>
 
     <!-- Media Modal Structure -->
-    <div id="mediaModal">
+    <div id="mediaModal" class="modal-overlay">
         <span id="closeModal">×</span>
         <img id="modalMediaContent" src="" alt="Tampilan Media">
+         <!-- Add other media types if needed, e.g., video, audio -->
+         <video id="modalVideoContent" controls style="display: none;"></video>
+         <audio id="modalAudioContent" controls style="display: none;"></audio>
+         <div id="modalDocumentContent" style="display: none;">
+            <i class="fas fa-file-alt"></i>
+            <p id="modalDocumentName"></p>
+            <a id="modalDocumentLink" href="#" target="_blank" download>Unduh</a>
+         </div>
     </div>
 
     <!-- Modal for Offline Admin Notification -->
-    <div id="offlineAdminModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center;">
-        <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; width: 300px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-            <h3 style="margin-top: 0; color: var(--primary-color);">Admin Offline</h3>
-            <p id="offlineAdminMessage" style="color: var(--text-dark); margin-bottom: 20px;">Admin sedang offline.</p>
-            <button id="offlineAdminModalClose" style="padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer;">OK</button>
+    <div id="offlineAdminModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Admin Offline</h3>
+            <p id="offlineAdminMessage">Admin sedang offline.</p>
+            <button id="offlineAdminModalClose">OK</button>
         </div>
     </div>
 
+    <!-- Modal for WhatsApp QR Code -->
+    <!-- QR Code now handled directly in login-container/qr-area -->
+
+
     <!-- Pastikan path ini benar -->
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.js"></script> <!-- Library QR Code -->
     <script>
         // --- Socket.IO Setup ---
         const socket = io({
@@ -455,176 +622,83 @@
         const passwordInput = document.getElementById('password-input');
         const loginButton = document.getElementById('login-button');
         const loginError = document.getElementById('login-error');
+        const qrArea = document.getElementById('qr-area'); // QR Area
+        const qrCodeDiv = document.getElementById('qr-code'); // For QR Code rendering
+        const qrStatus = document.getElementById('qr-status');
+        const whatsappStatusDiv = document.getElementById('whatsapp-status'); // WA Status Display
+
         const adminUsernameDisplay = document.getElementById('admin-username-display');
         const logoutButton = document.getElementById('logout-button');
         const chatList = document.getElementById('chat-list');
         const messagesDiv = document.getElementById('messages');
-        const replyInput = document.getElementById('reply-input');
+        const replyInput = document.getElementById('reply-input'); // Now a textarea
         const replyButton = document.getElementById('reply-button');
-        const replyBox = document.getElementById('reply-box'); // For error message
+        const replyBox = document.getElementById('reply-box');
+        const sendErrorSpan = replyBox.querySelector('.send-error-span'); // Get the error span
+
         const currentChatIdDisplay = document.getElementById('current-chat-id-display');
         const chatPickedStatus = document.getElementById('chat-picked-status');
         const pickChatButton = document.getElementById('pick-chat-button');
         const delegateChatContainer = document.getElementById('delegate-chat-container');
         const delegateChatSelect = document.getElementById('delegate-chat-select');
         const delegateChatButton = document.getElementById('delegate-chat-button');
-        const mediaModal = document.getElementById('mediaModal');
-        const modalMediaContent = document.getElementById('modalMediaContent');
-        const closeModal = document.getElementById('closeModal');
 
-        // Modal elements
+        const mediaButton = document.getElementById('media-button');
+        const mediaInput = document.createElement('input'); // File input for media upload
+        mediaInput.type = 'file';
+        // Allow common image, video, audio, and PDF files
+        mediaInput.accept = 'image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        mediaInput.style.display = 'none'; // Hide the input
+        document.body.appendChild(mediaInput);
+
+        const mediaPreviewContainer = document.getElementById('media-preview-container'); // Container for preview
+
+        // Media Modal Elements
+        const mediaModal = document.getElementById('mediaModal');
+        const closeModal = document.getElementById('closeModal');
+        const modalMediaContent = document.getElementById('modalMediaContent'); // Image
+        const modalVideoContent = document.getElementById('modalVideoContent'); // Video
+        const modalAudioContent = document.getElementById('modalAudioContent'); // Audio
+        const modalDocumentContent = document.getElementById('modalDocumentContent'); // Document
+        const modalDocumentName = document.getElementById('modalDocumentName');
+        const modalDocumentLink = document.getElementById('modalDocumentLink');
+
+
+        // Modal for Offline Admin Notification
         const offlineAdminModal = document.getElementById('offlineAdminModal');
         const offlineAdminMessage = document.getElementById('offlineAdminMessage');
         const offlineAdminModalClose = document.getElementById('offlineAdminModalClose');
 
-        // Add file input for media upload
-        const mediaInput = document.createElement('input');
-        mediaInput.type = 'file';
-        mediaInput.accept = 'image/*,video/*,audio/*,application/pdf'; // Acceptable media types
-        mediaInput.style.display = 'none';
-        document.body.appendChild(mediaInput);
-
-        const mediaButton = document.getElementById('media-button');
-        let selectedMedia = null;
-
-        // Add a container for media preview
-        const mediaPreviewContainer = document.createElement('div');
-        mediaPreviewContainer.style.display = 'none';
-        mediaPreviewContainer.style.marginTop = '10px';
-        mediaPreviewContainer.style.border = '1px solid var(--border-color)';
-        mediaPreviewContainer.style.borderRadius = '8px';
-        mediaPreviewContainer.style.padding = '10px';
-        mediaPreviewContainer.style.backgroundColor = 'var(--input-bg)';
-        replyBox.appendChild(mediaPreviewContainer);
-
-        // Function to update media preview
-        function updateMediaPreview() {
-            mediaPreviewContainer.innerHTML = ''; // Clear previous preview
-            if (selectedMedia) {
-                mediaPreviewContainer.style.display = 'block';
-                if (selectedMedia.type.startsWith('image/')) {
-                    const img = document.createElement('img');
-                    img.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
-                    img.alt = 'Thumbnail Gambar';
-                    img.style.width = '50px'; // Thumbnail size
-                    img.style.height = '50px'; // Thumbnail size
-                    img.style.objectFit = 'cover'; // Maintain aspect ratio
-                    img.style.borderRadius = '5px';
-                    mediaPreviewContainer.appendChild(img);
-                } else if (selectedMedia.type.startsWith('video/')) {
-                    const video = document.createElement('video');
-                    video.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
-                    video.style.width = '50px'; // Thumbnail size
-                    video.style.height = '50px'; // Thumbnail size
-                    video.style.objectFit = 'cover'; // Maintain aspect ratio
-                    video.controls = false; // Disable controls for thumbnail
-                    mediaPreviewContainer.appendChild(video);
-                } else if (selectedMedia.type.startsWith('audio/')) {
-                    const audioIcon = document.createElement('i');
-                    audioIcon.className = 'fas fa-file-audio';
-                    audioIcon.style.fontSize = '30px';
-                    audioIcon.style.color = 'var(--text-dark)';
-                    mediaPreviewContainer.appendChild(audioIcon);
-                } else {
-                    const fileInfo = document.createElement('p');
-                    fileInfo.textContent = `File: ${selectedMedia.name}`;
-                    fileInfo.style.fontSize = '12px';
-                    fileInfo.style.color = 'var(--text-dark)';
-                    mediaPreviewContainer.appendChild(fileInfo);
-                }
-            } else {
-                mediaPreviewContainer.style.display = 'none';
-            }
-        }
-
-        // Handle media selection
-        mediaInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    selectedMedia = {
-                        data: reader.result.split(',')[1], // Base64 data
-                        type: file.type,
-                        name: file.name
-                    };
-                    alert(`Media "${file.name}" telah dipilih.`);
-                    updateMediaPreview(); // Show preview
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        // Open file picker when media button is clicked
-        mediaButton.addEventListener('click', () => {
-            // Cek apakah ada chat yang dipilih
-            if (!currentChatId) {
-                // Tampilkan modal peringatan
-                const warningModal = document.createElement('div');
-                warningModal.id = 'media-warning-modal';
-                warningModal.style.position = 'fixed';
-                warningModal.style.top = '0';
-                warningModal.style.left = '0';
-                warningModal.style.width = '100%';
-                warningModal.style.height = '100%';
-                warningModal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-                warningModal.style.display = 'flex';
-                warningModal.style.justifyContent = 'center';
-                warningModal.style.alignItems = 'center';
-                warningModal.style.zIndex = '1000';
-                
-                const modalContent = document.createElement('div');
-                modalContent.style.backgroundColor = 'white';
-                modalContent.style.padding = '20px';
-                modalContent.style.borderRadius = '8px';
-                modalContent.style.maxWidth = '400px';
-                modalContent.style.textAlign = 'center';
-                
-                const warningText = document.createElement('p');
-                warningText.textContent = 'Silakan pilih dan ambil chat terlebih dahulu sebelum mengirim media';
-                warningText.style.marginBottom = '20px';
-                
-                const okButton = document.createElement('button');
-                okButton.textContent = 'OK';
-                okButton.style.padding = '8px 16px';
-                okButton.style.backgroundColor = 'var(--primary-color)';
-                okButton.style.color = 'white';
-                okButton.style.border = 'none';
-                okButton.style.borderRadius = '4px';
-                okButton.style.cursor = 'pointer';
-                okButton.addEventListener('click', () => {
-                    document.body.removeChild(warningModal);
-                });
-                
-                modalContent.appendChild(warningText);
-                modalContent.appendChild(okButton);
-                warningModal.appendChild(modalContent);
-                document.body.appendChild(warningModal);
-                return;
-            }
-            if (!currentChatId || pickedChatsStatus[currentChatId] !== currentUser) {
-                alert('Silakan pilih dan ambil chat terlebih dahulu sebelum mengirim media');
-                return;
-            }
-            mediaInput.click();
-        });
-
         // --- Application State ---
-        let currentChatId = null;
-        let currentUser = null;
-        let chatHistory = {}; // { chatId: [messages] }
-        let chatListItems = {}; // { chatId: liElement }
-        let pickedChatsStatus = {}; // { chatId: adminUsername }
+        let currentChatId = null; // ID Chat yang sedang dibuka
+        let currentUser = null; // Username admin yang login
+        let chatHistory = {}; // { chatId: [messages] } - Mirror server history state
+        let chatListItems = {}; // { chatId: liElement } - Reference to DOM elements
+        let pickedChatsStatus = {}; // { chatId: adminUsername } - Mirror server pick state
 
-        // Track offline admin notifications to avoid repeated alerts
+        // Track offline admin notifications to avoid repeated alerts for the same admin
         const offlineAdminNotified = new Set();
 
         // --- Helper Functions ---
 
+        // Function to get CSS Variable value
+        function getCssVariable(name) {
+            // Get the computed style of the root element
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+
         function showLoginError(message) {
             loginError.textContent = message;
-            loginError.style.color = message.toLowerCase().includes('berhasil') ? 'green' : 'var(--error-color)';
+            // Use getCssVariable to get the color value from CSS
+            loginError.style.color = message.toLowerCase().includes('berhasil') || message.toLowerCase().includes('menghubungkan') ? getCssVariable('--light-green') : getCssVariable('--error-color'); // Menggunakan --light-green untuk pesan sukses/menghubungkan
         }
+
+         function updateWhatsappStatus(statusText, isConnected) {
+             whatsappStatusDiv.textContent = `Status WA: ${statusText}`;
+             whatsappStatusDiv.style.color = isConnected ? '#a0ffa0' : '#ffb0b0'; // Light green for connected, light red for disconnected
+         }
+
 
         function setLoginState(isLoggedIn, username = null, initialPicks = {}) {
             if (isLoggedIn) {
@@ -633,68 +707,94 @@
                 adminUsernameDisplay.textContent = `Admin: ${username}`;
                 pickedChatsStatus = initialPicks || {}; // Set initial picks received
                 loginContainer.classList.add('hidden');
+                qrArea.classList.add('hidden'); // Hide QR area too
                 appContainer.classList.remove('hidden');
                 console.log(`Login state set: Logged in as ${username}`);
                 showLoginError(''); // Clear any previous login messages
                 requestNotificationPermission();
-                socket.emit('request_initial_data'); // Always request initial data on login
+                // No need to request initial data here, it's handled by 'reconnect_success' or 'login_success'
             } else {
                 currentUser = null;
                 localStorage.removeItem('loggedInUsername');
                 loginContainer.classList.remove('hidden');
+                 qrArea.classList.add('hidden'); // Hide QR when logged out
                 appContainer.classList.add('hidden');
                 resetUI();
                 usernameInput.value = '';
                 passwordInput.value = '';
                 console.log('Login state set: Logged out.');
                 showLoginError('Silakan login kembali.');
+                 updateWhatsappStatus('Disconnected', false); // Assume disconnected on logout
             }
         }
 
         function requestNotificationPermission() {
-            if ('Notification' in window && Notification.permission !== "granted" && Notification.permission !== 'denied') {
-                Notification.requestPermission().then(permission => {
-                    console.log(`Notification permission: ${permission}`);
-                });
+            if ('Notification' in window) {
+                if (Notification.permission !== "granted" && Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        console.log(`Notification permission: ${permission}`);
+                    });
+                }
+            } else {
+                 console.warn("Browser does not support Notifications.");
             }
         }
 
-        function showNotification(title, body) {
+        function showNotification(title, body, options = {}) {
             if ('Notification' in window && Notification.permission === "granted") {
+                 // Prevent notification if chat is currently active and picked by this user
+                 if (currentChatId === options.chatId && pickedChatsStatus[currentChatId] === currentUser) {
+                      console.log(`Notification suppressed for active chat ${options.chatId}`);
+                      return;
+                 }
+
                  const notification = new Notification(title, {
                      body: body,
-                     icon: '/favicon.ico' // Ganti dengan path ikon Anda
-                     // tag: title // Optional: replaces existing notifications with the same tag
+                     icon: options.icon || '/favicon.ico',
+                     tag: options.chatId // Use chat ID as tag to update existing notifications
                  });
-                 // Optional: Auto-close notification after some time
-                 // setTimeout(notification.close.bind(notification), 5000);
+
+                 notification.onclick = function(event) {
+                    event.preventDefault(); // Prevent the browser from focusing the tab that opened the notification
+                    if (options.chatId) {
+                        // Find the chat list item and trigger its click event
+                        const listItem = chatListItems[options.chatId];
+                        if (listItem) {
+                            listItem.click();
+                        }
+                    }
+                    window.focus(); // Bring the window to front
+                 };
             }
         }
 
         function resetChatArea() {
-            messagesDiv.innerHTML = '<div class="placeholder">Pilih percakapan untuk memulai</div>';
+            messagesDiv.innerHTML = '<div class="placeholder">Pilih percakapan dari daftar</div>';
             currentChatIdDisplay.textContent = 'Pilih percakapan dari daftar';
             chatPickedStatus.textContent = '';
             pickChatButton.style.display = 'none';
             delegateChatContainer.style.display = 'none';
             replyInput.disabled = true;
             replyButton.disabled = true;
+            mediaButton.disabled = true; // Disable media button
+            replyInput.value = ''; // Clear input value
+            selectedMedia = null; // Clear selected media state
+            updateMediaPreview(); // Hide media preview
             replyInput.placeholder = 'Pilih atau ambil chat untuk membalas...';
             document.title = 'WhatsApp Helpdesk';
-            // Hapus pesan error kirim jika ada
-            const existingError = replyBox.querySelector('.send-error-span');
-            if(existingError) existingError.remove();
+            hideSendError(); // Hide any send error message
         }
 
         function resetUI() {
             resetChatArea();
-            chatList.innerHTML = '';
+            chatList.innerHTML = '<div class="placeholder" style="color: rgba(255,255,255,0.7); text-align: center; margin-top: 20px;">Memuat percakapan...</div>'; // Reset chat list placeholder
             chatHistory = {};
             chatListItems = {};
             pickedChatsStatus = {};
             currentChatId = null;
             currentUser = null;
             adminUsernameDisplay.textContent = '';
+             whatsappStatusDiv.textContent = ''; // Clear WA Status
             showLoginError(''); // Clear login error specifically
         }
 
@@ -704,12 +804,17 @@
                 return;
             }
 
-            const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
+            // Find the chat name from the list item data attribute
+            const listItem = chatListItems[currentChatId];
+            const chatName = listItem ? listItem.dataset.chatName : currentChatId.split('@')[0]; // Fallback to ID part
+
             const pickedBy = pickedChatsStatus[currentChatId];
 
             currentChatIdDisplay.textContent = `Chat: ${chatName}`;
             document.title = `Chat: ${chatName}`;
-            chatPickedStatus.style.color = 'var(--text-muted)'; // Reset error color
+            // Fix: Use getCssVariable
+            chatPickedStatus.style.color = getCssVariable('--text-muted'); // Reset error color
+            hideSendError(); // Hide send error when switching chats
 
             if (pickedBy) {
                 pickChatButton.style.display = 'none';
@@ -717,44 +822,50 @@
                 if (pickedBy === currentUser) {
                     replyInput.disabled = false;
                     replyButton.disabled = false;
+                    mediaButton.disabled = false; // Enable media button
                     replyInput.placeholder = 'Ketik balasan...';
-                    replyInput.focus(); // Auto-focus input when chat is yours
+                    // Auto-focus input when chat is yours, delay slightly for UI update
+                    setTimeout(() => replyInput.focus(), 100);
                     delegateChatContainer.style.display = 'flex'; // Show delegation dropdown and button
                     populateDelegateChatSelect(); // Populate the dropdown
-                    mediaButton.disabled = false;
                 } else {
                     replyInput.disabled = true;
                     replyButton.disabled = true;
+                    mediaButton.disabled = true; // Disable media button
                     replyInput.placeholder = `Ditangani oleh ${pickedBy}`;
                     delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
-                    mediaButton.disabled = true;
                 }
-            } else {
+            } else { // Chat is not picked
                 pickChatButton.style.display = 'inline-block';
                 pickChatButton.disabled = false; // Ensure enabled
                 pickChatButton.textContent = 'Ambil Chat Ini'; // Reset text
                 chatPickedStatus.textContent = 'Belum diambil';
                 replyInput.disabled = true;
                 replyButton.disabled = true;
+                mediaButton.disabled = true; // Disable media button
                 replyInput.placeholder = 'Ambil chat ini untuk membalas';
                 delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
-                mediaButton.disabled = true;
             }
-            // Hapus pesan error kirim jika ada (saat ganti chat)
-            const existingError = replyBox.querySelector('.send-error-span');
-            if(existingError) existingError.remove();
         }
 
         function populateDelegateChatSelect() {
             delegateChatSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>';
             const onlineAdmins = new Set(socket.onlineAdmins || []);
-            Object.keys(socket.registeredAdmins || {}).forEach(admin => {
+            const registeredAdmins = socket.registeredAdmins || {};
+
+            // Sort admins alphabetically
+            const sortedAdminUsernames = Object.keys(registeredAdmins).sort();
+
+            sortedAdminUsernames.forEach(admin => {
+                // Don't show current user in delegate list
+                if (admin === currentUser) return;
+
                 const isOnline = onlineAdmins.has(admin);
                 const option = document.createElement('option');
                 option.value = admin;
                 option.textContent = `${admin} ${isOnline ? '(Online)' : '(Offline)'}`;
-                option.className = isOnline ? 'online' : 'offline'; // Add class for styling
-                option.disabled = admin === currentUser; // Disable current user
+                option.className = isOnline ? 'online' : 'offline';
+                // option.disabled = !isOnline; // Optional: disable delegation to offline admins
                 delegateChatSelect.appendChild(option);
             });
         }
@@ -777,67 +888,106 @@
                 statusSpan.textContent = '';
                 statusSpan.style.display = 'none';
             }
+            // Also update the visual unread indicator based on pick status
+            updateUnreadIndicator(chatId);
         }
 
         function updateAllChatListItemsPickStatus() {
             Object.keys(chatListItems).forEach(updateChatListItemPickStatus);
         }
 
-        function updateChatList(chatId, name, isUnread = false, lastMessageText = '', timestamp = new Date().toISOString(), isInitialLoad = false) {
+         function updateUnreadIndicator(chatId) {
+            const listItem = chatListItems[chatId];
+            if (!listItem) return;
+
+            const unreadIndicator = listItem.querySelector('.unread-indicator');
+             if (!unreadIndicator) return;
+
+             // Check if chat has any unread messages in the history state
+             const hasUnread = chatHistory[chatId]?.some(msg => msg.type === 'incoming' && msg.unread) || false;
+
+             const pickedBy = pickedChatsStatus[chatId];
+
+             // Show indicator only if there are unread messages AND
+             // it's NOT the current chat OR (it IS the current chat AND it's not picked by this user)
+             // Essentially, show if unread and not currently open and handled by YOU.
+            const shouldShowUnread = hasUnread && chatId !== currentChatId; // Simple: show if unread and not active chat
+
+            unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';
+
+         }
+
+
+        function updateChatList(chatId, name, lastMessageText = '', timestamp = new Date().toISOString(), isInitialLoad = false) {
             let li = chatListItems[chatId];
             const messageTimestamp = new Date(timestamp);
             // Handle invalid dates gracefully
-            const formattedTime = !isNaN(messageTimestamp)
+            const formattedTime = !isNaN(messageTimestamp.getTime()) // Check if it's a valid date
                 ? messageTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : '--:--';
-            const messageTextToShow = lastMessageText || '[Media / Pesan Kosong]'; // More descriptive placeholder
-            // Adjust substring length based on typical sidebar width
-            const shortMessage = messageTextToShow.substring(0, 30) + (messageTextToShow.length > 30 ? '...' : '');
+
+            // Use a more descriptive snippet if messageText is empty or null
+            const snippetText = lastMessageText?.trim() || '[Media/Kosong]';
+             // Use a shorter snippet for the list
+            const shortMessage = snippetText.substring(0, 30) + (snippetText.length > 30 ? '...' : '');
+
+
+            // Check if this chat is already in the history state and get its unread status
+             const hasUnread = chatHistory[chatId]?.some(msg => msg.type === 'incoming' && msg.unread) || false;
+
 
             if (!li) {
+                // Create new list item
                 li = document.createElement('li');
                 li.dataset.chatId = chatId;
-                li.dataset.chatName = name;
+                li.dataset.chatName = name; // Store chat name
                 li.innerHTML = `
                     <div class="chat-info">
                         <i class="fas fa-user-circle"></i>
-                        <span class="chat-name">${name}</span>
+                        <span class="chat-name">${sanitizeHTML(name)}</span>
                         <span class="timestamp">${formattedTime}</span>
                     </div>
                     <div class="message-snippet">
-                        <span class="last-message">${shortMessage}</span>
-                        <span class="unread-indicator" style="display: ${isUnread ? 'inline' : 'none'};">(Baru)</span>
-                        <span class="chat-item-picked-by" style="display: none;"></span>
+                        <span class="last-message">${sanitizeHTML(shortMessage)}</span>
+                        <span class="unread-indicator">(Baru)</span>
+                        <span class="chat-item-picked-by"></span>
                     </div>
                 `;
 
                 li.addEventListener('click', () => {
+                    // If already selected, do nothing
                     if (currentChatId === chatId) return;
 
+                    // Deselect previously selected chat
                     if (currentChatId && chatListItems[currentChatId]) {
                         chatListItems[currentChatId].classList.remove('selected');
                     }
 
+                    // Select the new chat
                     currentChatId = chatId;
                     li.classList.add('selected');
-                    markChatAsRead(chatId); // Mark read visually immediately
-                    loadChatMessages(chatId); // Load messages from server/cache
-                    updateChatAreaForCurrentChat();
+                    markChatAsRead(chatId); // Mark read visually and notify server
+                    loadChatMessages(chatId); // Load messages
+                    updateChatAreaForCurrentChat(); // Update header and reply box state
+                     // Ensure unread indicator is hidden for the active chat
+                     updateUnreadIndicator(chatId);
                 });
 
                 chatListItems[chatId] = li;
 
-                // Insert based on timestamp for initial load, or at top for new messages
+                // Append or insert based on timestamp/initial load
                 if (isInitialLoad) {
-                     // Find correct position based on timestamp (descending)
+                     // Insert based on timestamp (descending order - newest first)
                      let inserted = false;
-                     const currentItems = Array.from(chatList.children);
+                     const currentItems = Array.from(chatList.children).filter(item => item.tagName === 'LI'); // Filter out placeholder
                      const newItemTime = messageTimestamp.getTime();
                      for (let i = 0; i < currentItems.length; i++) {
                          const existingItemId = currentItems[i].dataset.chatId;
+                         // Find the timestamp of the last message in the existing chat's history
                          const existingMessages = chatHistory[existingItemId] || [];
                          const lastExistingMsg = existingMessages.length > 0 ? existingMessages[existingMessages.length - 1] : null;
                          const existingItemTime = lastExistingMsg ? new Date(lastExistingMsg.timestamp).getTime() : 0;
+
                          if (newItemTime > existingItemTime) {
                              chatList.insertBefore(li, currentItems[i]);
                              inserted = true;
@@ -845,151 +995,366 @@
                          }
                      }
                      if (!inserted) {
-                         chatList.appendChild(li);
+                         chatList.appendChild(li); // Append if it's the oldest
                      }
+                     // Remove initial placeholder if it exists
+                     const initialPlaceholder = chatList.querySelector('.placeholder');
+                     if(initialPlaceholder) initialPlaceholder.remove();
+
                  } else {
+                     // For new messages, always prepend
                      chatList.insertBefore(li, chatList.firstChild);
+                     // Remove placeholder if it exists (might still be there if no initial data)
+                      const initialPlaceholder = chatList.querySelector('.placeholder');
+                     if(initialPlaceholder) initialPlaceholder.remove();
                  }
-                updateChatListItemPickStatus(chatId); // Update pick status for the new item
+
+                updateChatListItemPickStatus(chatId); // Set initial pick status indicator
+                 updateUnreadIndicator(chatId); // Set initial unread indicator visibility
+
 
             } else {
                 // --- Update Existing Item ---
-                li.querySelector('.chat-name').textContent = name;
-                li.querySelector('.last-message').textContent = shortMessage;
+                li.querySelector('.chat-name').textContent = sanitizeHTML(name);
+                li.querySelector('.last-message').textContent = sanitizeHTML(shortMessage);
                 li.querySelector('.timestamp').textContent = formattedTime;
-                li.dataset.chatName = name; // Ensure name is updated in dataset
+                li.dataset.chatName = name;
 
-                const unreadIndicator = li.querySelector('.unread-indicator');
-                if (unreadIndicator) {
-                    const pickedBy = pickedChatsStatus[chatId];
-                    const shouldShowUnread = isUnread && chatId !== currentChatId && (!pickedBy || pickedBy === currentUser);
-                    unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';
-                }
+                // Update pick status indicator
+                updateChatListItemPickStatus(chatId);
+                // Update unread indicator visibility
+                updateUnreadIndicator(chatId);
 
-                updateChatListItemPickStatus(chatId); // Update pick status in case it changed
 
-                // Move to top if new activity (and not initial load)
-                if (!isInitialLoad && chatList.firstChild !== li) {
+                // Move to top if new activity and not the current active chat
+                // (Initial load handled sorting separately)
+                if (!isInitialLoad && chatId !== currentChatId && chatList.firstChild !== li) {
                     chatList.insertBefore(li, chatList.firstChild);
                 }
             }
         }
 
         function markChatAsRead(chatId) {
+            // Visually mark as read immediately
             const listItem = chatListItems[chatId];
-            if (!listItem) return;
-
-            const unreadIndicator = listItem.querySelector('.unread-indicator');
-            // Only proceed if it was actually unread visually
-            if (unreadIndicator && unreadIndicator.style.display !== 'none') {
-                unreadIndicator.style.display = 'none';
-
-                const pickedBy = pickedChatsStatus[chatId];
-                if (!pickedBy || pickedBy === currentUser) {
-                    console.log(`Marking chat ${chatId} as read by ${currentUser}`);
-                    socket.emit('mark_as_read', { chatId });
-                } else {
-                     console.log(`Chat ${chatId} viewed, but mark_as_read event not sent (picked by ${pickedBy})`);
-                }
+            if (listItem) {
+                 const unreadIndicator = listItem.querySelector('.unread-indicator');
+                 if (unreadIndicator) {
+                      unreadIndicator.style.display = 'none';
+                 }
             }
+
+            // Update state and notify server IF it was actually unread
+             if (chatHistory[chatId]) {
+                 let changed = false;
+                 for (let i = chatHistory[chatId].length - 1; i >= 0; i--) {
+                     if (chatHistory[chatId][i].type === 'incoming' && chatHistory[chatId][i].unread) {
+                         chatHistory[chatId][i].unread = false;
+                         changed = true;
+                     } else if (chatHistory[chatId][i].type === 'outgoing') {
+                         // Stop at last outgoing message
+                         break;
+                     }
+                 }
+                 if (changed) {
+                      console.log(`Marking chat ${chatId} as read.`);
+                      socket.emit('mark_as_read', { chatId }); // Notify server
+                 }
+             }
         }
 
         function loadChatMessages(chatId) {
             messagesDiv.innerHTML = '<div class="placeholder">Memuat pesan...</div>'; // Show loading
             console.log(`Requesting history for ${chatId}`);
+            // Request history from server, it will emit 'chat_history' event
             socket.emit('get_chat_history', chatId);
-            // markChatAsRead is called when the list item is clicked
-        }
-
-        function getMimeType(mediaType, base64Data = null) {
-            // Basic implementation - needs adjustment based on actual Baileys data
-            if (mediaType === 'imageMessage') return 'image/jpeg';
-            if (mediaType === 'stickerMessage') return 'image/webp';
-            if (mediaType === 'videoMessage') return 'video/mp4'; // Common, but could be others
-            if (mediaType === 'audioMessage') return 'audio/ogg; codecs=opus'; // Common for WhatsApp voice notes
-            if (mediaType === 'documentMessage') {
-                 // Try to infer from base64 prefix if available
-                 if (base64Data?.startsWith('data:application/pdf')) return 'application/pdf';
-                 if (base64Data?.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml.document')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; // .docx
-                 // Add more common types if needed
-                 return 'application/octet-stream'; // Generic fallback
-            }
-            return 'application/octet-stream';
         }
 
         // Basic HTML sanitizer
         function sanitizeHTML(str) {
-             if (!str) return '';
+             if (str === null || str === undefined) return '';
              const temp = document.createElement('div');
+             // Use textContent to prevent XSS
              temp.textContent = str;
-             return temp.innerHTML.replace(/\n/g, '<br>'); // Keep line breaks
+             // Replace newlines with <br> after sanitization
+             return temp.innerHTML.replace(/\n/g, '<br>');
          }
 
-        function appendMessage(msgData) {
-          const { id, from, text, type, mediaData, mediaType, timestamp, fileName } = msgData;
+        // Function to determine MIME type based on Baileys' messageType
+        function getMimeType(mediaType, base64Data = null) {
+            // This is a best guess based on common types. May need refinement.
+            if (mediaType === 'imageMessage') return 'image/jpeg'; // Most common
+            if (mediaType === 'stickerMessage') return 'image/webp';
+            if (mediaType === 'videoMessage') return 'video/mp4'; // Most common
+            if (mediaType === 'audioMessage') {
+                 // Ogg Opus for voice notes, MP4 or M4A for recorded audio
+                 // If base64 starts with ogg, assume opus
+                 if (base64Data?.startsWith('data:audio/ogg')) return 'audio/ogg; codecs=opus';
+                 // If base64 starts with mp4, assume m4a
+                 if (base64Data?.startsWith('data:audio/mp4')) return 'audio/mp4'; // M4A
+                 return 'audio/mpeg'; // Default for other audio
+             }
+            if (mediaType === 'documentMessage') {
+                 // Try to infer from base64 prefix if available
+                 if (base64Data?.startsWith('data:application/pdf')) return 'application/pdf';
+                 if (base64Data?.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml.document')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; // .docx
+                 // Add more common types as needed
+                 return 'application/octet-stream'; // Generic fallback
+            }
+            // Fallback for other types
+            return 'application/octet-stream';
+        }
 
-          // Cek apakah pesan sudah ada di UI
-          if (messagesDiv.querySelector(`[data-message-id="${id}"]`)) {
-            console.warn(`Pesan dengan ID ${id} sudah ditampilkan, diabaikan.`);
-            return; // Hindari duplikasi
+
+        function appendMessage(msgData) {
+          // Ensure message object has necessary properties
+          if (!msgData || !msgData.id || !msgData.type) {
+              console.error("Invalid message data received:", msgData);
+              return;
+          }
+
+          const { id, from, text, type, mediaData, mediaType, timestamp, fileName, initials } = msgData;
+          const chatId = msgData.chatId || msgData.from; // Use chatId property if available
+
+          // Cek apakah pesan sudah ada di UI untuk chat yang sedang aktif
+          if (currentChatId === chatId && messagesDiv.querySelector(`[data-message-id="${id}"]`)) {
+            // console.warn(`Pesan dengan ID ${id} sudah ditampilkan, diabaikan penambahannya.`);
+            return; // Hindari duplikasi di UI
           }
 
           const messageDiv = document.createElement('div');
           messageDiv.className = `message ${type}`;
           messageDiv.dataset.messageId = id; // Tambahkan ID pesan sebagai atribut data
-          const senderName = type === 'incoming' ? (from ? from.split('@')[0] : 'Unknown') : 'Anda';
-          let contentHTML = `<strong>${senderName}</strong>`;
+          messageDiv.dataset.timestamp = timestamp; // Tambahkan timestamp
 
+          // Sender name logic
+          let senderName;
+          if (type === 'incoming') {
+              senderName = chatId ? chatId.split('@')[0] : 'Unknown'; // Use chat ID part for incoming
+          } else { // type === 'outgoing'
+              // For outgoing, 'from' in data is the admin username
+              senderName = initials ? `Anda (${initials})` : 'Anda';
+          }
+
+
+          let contentHTML = `<strong>${sanitizeHTML(senderName)}</strong>`;
+
+          // Handle media content
           if (mediaData && mediaType) {
             let dataUrl = mediaData;
-            // Jika mediaData belum dalam format data URL, konversi dari base64
+            // If mediaData is just base64, convert to data URL
             if (!mediaData.startsWith('data:')) {
-              const mimeType = getMimeType(mediaType, mediaData);
-              dataUrl = `data:${mimeType};base64,${mediaData}`;
+                 const mimeType = getMimeType(mediaType, mediaData);
+                 if (mimeType !== 'application/octet-stream' && !mimeType.startsWith(mediaType.split('Message')[0].toLowerCase() + '/')) {
+                      console.warn(`Mismatched MIME type inferred for ${mediaType}: ${mimeType}`);
+                 }
+                 dataUrl = `data:${mimeType};base64,${mediaData}`;
             }
 
+            // Media display based on type
             if (mediaType === 'imageMessage' || mediaType.startsWith('image/')) {
-              contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 150px; max-height: 150px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
+              contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer;" onclick="openMediaModal('${dataUrl}', 'image')">`;
             } else if (mediaType === 'videoMessage' || mediaType.startsWith('video/')) {
-              contentHTML += `<br><video controls src="${dataUrl}" preload="metadata" style="max-width: 150px; max-height: 150px; border-radius: 5px;"></video>`;
+              contentHTML += `<br><video controls src="${dataUrl}" preload="metadata"></video>`;
             } else if (mediaType === 'audioMessage' || mediaType.startsWith('audio/')) {
-              contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata" style="max-width: 100%;"></audio>`;
+              contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata"></audio>`;
             } else if (mediaType === 'documentMessage' || mediaType.startsWith('application/')) {
               const docName = fileName || "Dokumen";
-              contentHTML += `<br><a href="${dataUrl}" download="${docName}" target="_blank" class="document-link"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
+              contentHTML += `<br><a href="#" class="document-link" onclick="event.preventDefault(); openMediaModal('${dataUrl}', 'document', '${sanitizeHTML(docName)}')"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
             } else {
               contentHTML += `<br>[Media tidak didukung: ${mediaType}]`;
             }
 
+            // Add text/caption if it exists
             if (text) {
-              const textClass = 'caption';
-              contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
+              contentHTML += `<div class="${mediaType === 'audioMessage' ? 'text-content' : 'caption'}">${sanitizeHTML(text)}</div>`;
+               // Note: Caption for audio is often sent as a separate text message by Baileys/WA,
+               // this simple structure puts it below the audio element.
+               // The server-side might send inisials separately for audio too.
             }
           }
 
+          // Handle text-only messages or text without media
           if (text && (!mediaData || !mediaType)) {
-            const textClass = 'text-content';
-            contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
+            contentHTML += `<div class="text-content">${sanitizeHTML(text)}</div>`;
           } else if (!mediaData && type === 'incoming') {
+            // Handle purely empty incoming messages (sometimes happens)
             contentHTML += `<div class="text-content">[Pesan Kosong]</div>`;
           }
 
+          // Add timestamp inside the bubble (optional)
+           const msgTime = new Date(timestamp);
+           if (!isNaN(msgTime.getTime())) {
+                contentHTML += `<span class="message-timestamp">${msgTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
+           }
+
+
           messageDiv.innerHTML = contentHTML;
 
-          const placeholder = messagesDiv.querySelector('.placeholder');
-          if (placeholder) placeholder.remove();
+           // --- Insertion Logic ---
+           // Remove placeholder if it exists
+           const placeholder = messagesDiv.querySelector('.placeholder');
+           if (placeholder) placeholder.remove();
 
-          messagesDiv.appendChild(messageDiv);
-          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+           // Find the correct position to insert the message based on timestamp
+           const messages = Array.from(messagesDiv.children);
+           let inserted = false;
+           const newMessageTime = new Date(timestamp).getTime();
+
+           // Iterate backwards to find the first message that is newer than the new message
+           for (let i = messages.length - 1; i >= 0; i--) {
+               const existingMsg = messages[i];
+               const existingMsgTime = new Date(existingMsg.dataset.timestamp).getTime();
+
+               if (newMessageTime >= existingMsgTime) {
+                   // Insert the new message *after* the existing message
+                   messagesDiv.insertBefore(messageDiv, existingMsg.nextSibling);
+                   inserted = true;
+                   break; // Stop searching once inserted
+               }
+           }
+
+           // If the new message is older than all existing messages or the messages list is empty
+           if (!inserted) {
+               messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild); // Insert at the beginning
+           }
+
+          messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
         }
 
-        function openMediaModal(src, type) {
+        // Function to open the media modal
+        function openMediaModal(src, type, name = null) {
+            // Hide all modal content elements first
+            modalMediaContent.style.display = 'none';
+            modalVideoContent.style.display = 'none';
+            modalAudioContent.style.display = 'none';
+            modalDocumentContent.style.display = 'none';
+
+            let displayElement = null;
+
             if (type === 'image') {
                 modalMediaContent.src = src;
                 modalMediaContent.style.display = 'block';
+                displayElement = modalMediaContent;
+            } else if (type === 'video') {
+                 modalVideoContent.src = src;
+                 modalVideoContent.style.display = 'block';
+                 displayElement = modalVideoContent;
+            } else if (type === 'audio') {
+                 modalAudioContent.src = src;
+                 modalAudioContent.style.display = 'block';
+                 displayElement = modalAudioContent;
+            } else if (type === 'document') {
+                 modalDocumentName.textContent = name || 'Dokumen';
+                 modalDocumentLink.href = src; // Use data URL or link
+                 modalDocumentLink.download = name || 'document'; // Suggest download name
+                 modalDocumentContent.style.display = 'block';
+                 displayElement = modalDocumentContent;
             }
-            mediaModal.style.display = 'flex';
+
+            if (displayElement) {
+                 mediaModal.style.display = 'flex'; // Show the modal overlay
+            } else {
+                 console.warn(`Unsupported media type for modal: ${type}`);
+            }
         }
+        // Close modal when clicking outside or on close button
+        closeModal.addEventListener('click', () => {
+            mediaModal.style.display = 'none';
+            // Pause media when modal is closed
+            modalVideoContent.pause();
+            modalAudioContent.pause();
+            modalMediaContent.src = ''; // Clear image source
+             modalVideoContent.src = ''; // Clear video source
+             modalAudioContent.src = ''; // Clear audio source
+        });
+        mediaModal.addEventListener('click', (e) => {
+             if (e.target === mediaModal) { // Click on background
+                 mediaModal.style.display = 'none';
+                 // Pause media when modal is closed
+                 modalVideoContent.pause();
+                 modalAudioContent.pause();
+                 modalMediaContent.src = ''; // Clear image source
+                 modalVideoContent.src = ''; // Clear video source
+                 modalAudioContent.src = ''; // Clear audio source
+             }
+        });
+
+
+        function showSendError(message) {
+             sendErrorSpan.textContent = `Gagal mengirim: ${message}`;
+             sendErrorSpan.style.display = 'block';
+             // Hide after a few seconds
+             setTimeout(hideSendError, 4000);
+        }
+        function hideSendError() {
+             sendErrorSpan.textContent = '';
+             sendErrorSpan.style.display = 'none';
+        }
+
+        // Function to update media preview area in reply box
+        function updateMediaPreview() {
+            mediaPreviewContainer.innerHTML = ''; // Clear previous preview
+            if (selectedMedia) {
+                mediaPreviewContainer.style.display = 'flex'; // Show flex container
+
+                let previewElement = null;
+                if (selectedMedia.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
+                    img.alt = 'Thumbnail Gambar';
+                    previewElement = img;
+                } else if (selectedMedia.type.startsWith('video/')) {
+                    const video = document.createElement('video');
+                    video.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
+                    video.controls = false;
+                    previewElement = video;
+                } else if (selectedMedia.type.startsWith('audio/')) {
+                    const audioIcon = document.createElement('i');
+                    audioIcon.className = 'fas fa-file-audio';
+                    audioIcon.style.fontSize = '30px';
+                    // Fix: Use getCssVariable
+                    audioIcon.style.color = getCssVariable('--text-dark');
+                    previewElement = audioIcon;
+                } else { // Document or other file types
+                    const fileIcon = document.createElement('i');
+                    fileIcon.className = 'fas fa-file-alt';
+                     fileIcon.style.fontSize = '30px';
+                    // Fix: Use getCssVariable
+                    fileIcon.style.color = getCssVariable('--text-dark');
+                    previewElement = fileIcon;
+                }
+
+                if (previewElement) {
+                    mediaPreviewContainer.appendChild(previewElement);
+                }
+
+                 // Add file name/info
+                 const fileInfo = document.createElement('span');
+                 fileInfo.className = 'file-info';
+                 fileInfo.textContent = selectedMedia.name || selectedMedia.type; // Display name or type
+                 mediaPreviewContainer.appendChild(fileInfo);
+
+                // Add clear button
+                const clearButton = document.createElement('button');
+                clearButton.className = 'clear-media-button';
+                clearButton.innerHTML = '<i class="fas fa-times-circle"></i>'; // 'x' icon
+                clearButton.title = 'Hapus media terpilih';
+                // Fix: Use getCssVariable
+                clearButton.style.color = getCssVariable('--button-danger-bg'); // Set initial color
+                clearButton.addEventListener('click', () => {
+                    selectedMedia = null; // Clear selected media state
+                    updateMediaPreview(); // Hide preview area
+                     mediaInput.value = null; // Clear file input value
+                });
+                mediaPreviewContainer.appendChild(clearButton);
+
+
+            } else {
+                mediaPreviewContainer.style.display = 'none'; // Hide container if no media selected
+            }
+        }
+
 
         // --- Socket Event Handlers ---
 
@@ -1005,11 +1370,16 @@
                 setLoginState(false); // Ensure login page is shown
                  showLoginError(''); // Clear 'Connecting...' if no user
             }
+             // Clear any visible QR code on successful WS connect
+             qrCodeDiv.innerHTML = '';
+             qrArea.classList.add('hidden');
         });
 
         socket.on('reconnect_success', ({ username, currentPicks }) => {
             console.log(`Reconnect successful for ${username}. Current picks:`, currentPicks);
             setLoginState(true, username, currentPicks);
+            updateWhatsappStatus('Connected', true); // Assume WA is also connected
+            // Request initial data will be handled by the server logic on successful login/reconnect
         });
 
         socket.on('reconnect_failed', () => {
@@ -1021,18 +1391,21 @@
 
         socket.on('connect_error', (error) => {
             console.error('WebSocket connection error:', error);
+             // Update WA status display as well
+             updateWhatsappStatus('Disconnected (Server Error)', false);
             showLoginError('Koneksi ke server gagal. Memeriksa ulang...');
-             // Could implement a more robust offline indicator here
         });
 
         socket.on('disconnect', (reason) => {
             console.log('WebSocket disconnected:', reason);
+            updateWhatsappStatus('Disconnected', false); // Update WA status display
             if (reason === 'io server disconnect') {
                 console.log('Server disconnected the socket.');
                  showLoginError('Koneksi diputus oleh server. Silakan login kembali.');
                  setTimeout(() => setLoginState(false), 2000);
             } else if (reason === 'io client disconnect') {
                 console.log('Client disconnected the socket (expected on logout).');
+                 setLoginState(false); // Ensure logout state is set
             } else {
                  // Network error, Socket.IO will attempt to reconnect automatically
                  console.log('Network disconnection. Attempting to reconnect...');
@@ -1045,95 +1418,223 @@
             }
         });
 
-        socket.on('login_success', ({ username, currentPicks }) => {
+        socket.on('login_success', ({ username, initials, currentPicks }) => {
             console.log('Login successful via server.');
+             // Store initials if needed on frontend
+             // localStorage.setItem('adminInitials', initials); // Optional
             setLoginState(true, username, currentPicks);
+            updateWhatsappStatus('Connected', true); // Assume WA is also connected after successful login
+            // Server is expected to send 'initial_data' after successful login
         });
 
         socket.on('login_failed', (data) => {
             console.log('Login failed:', data?.message || 'Invalid credentials.');
             showLoginError(data?.message || 'Username atau password salah.');
+            loginButton.disabled = false; // Re-enable button
         });
 
         socket.on('logout_success', () => {
+            console.log('Logout successful.');
             setLoginState(false); // Reset state and show login page
         });
 
+         // --- WhatsApp Connection Status Updates ---
+        socket.on('whatsapp_connected', (data) => {
+            console.log('WhatsApp Connected:', data?.username);
+            updateWhatsappStatus('Connected', true);
+             qrCodeDiv.innerHTML = ''; // Clear QR code
+             qrArea.classList.add('hidden'); // Hide QR area
+        });
+
+        socket.on('whatsapp_disconnected', (data) => {
+            console.warn('WhatsApp Disconnected:', data?.reason, data?.statusCode);
+             updateWhatsappStatus(`Disconnected (${data?.reason || 'Unknown'})`, false);
+             qrCodeDiv.innerHTML = ''; // Clear any old QR
+        });
+
+         socket.on('whatsapp_fatal_disconnected', (data) => {
+            console.error('WhatsApp Fatal Disconnect:', data?.reason, data?.statusCode, data?.message);
+             updateWhatsappStatus(`FATAL Disconnected (${data?.reason || 'Unknown'})`, false);
+             qrCodeDiv.innerHTML = ''; // Clear any old QR
+            if (data.statusCode === 401 || data.statusCode === 419) { // Invalid/Expired Session
+                 // Prompt user to re-scan QR by showing the QR area
+                 qrArea.classList.remove('hidden');
+                 qrStatus.textContent = 'Sesi invalid. Silakan pindai QR Code baru.';
+            }
+         });
+
+        socket.on('whatsapp_qr', (qrCodeData) => {
+             console.log('Received QR Code data.');
+             updateWhatsappStatus('Waiting for Scan', false);
+             qrArea.classList.remove('hidden'); // Show QR area
+             qrStatus.textContent = 'Memuat QR Code...';
+
+             // Render QR Code
+             qrCodeDiv.innerHTML = ''; // Clear previous QR
+             try {
+                 const typeNumber = 0; // Auto-detect
+                 const errorCorrectionLevel = 'L'; // Low error correction
+                 const qr = qrcode(typeNumber, errorCorrectionLevel);
+                 qr.addData(qrCodeData);
+                 qr.make();
+                 // Append the QR code image (or table)
+                 qrCodeDiv.innerHTML = qr.createImgTag(6, 6); // arguments: cellSize, margin
+                 // Add some style to the generated img tag
+                 const qrImg = qrCodeDiv.querySelector('img');
+                 if(qrImg) {
+                     qrImg.style.maxWidth = '100%';
+                     qrImg.style.height = 'auto';
+                 }
+                 qrStatus.textContent = 'Silakan pindai QR Code di atas.';
+             } catch (e) {
+                 console.error('Failed to render QR code:', e);
+                 qrStatus.textContent = 'Gagal menampilkan QR Code.';
+                 qrCodeDiv.innerHTML = '<p style="color:red;">Error rendering QR</p>';
+             }
+        });
+
+        // --- Initial Data & Message Handling ---
+
         socket.on('initial_data', (initialHistory) => {
-          chatHistory = {};
+            console.log('Received initial data:', Object.keys(initialHistory).length, 'chats');
+
+          chatHistory = {}; // Clear previous history
           Object.keys(initialHistory).forEach(chatId => {
-            chatHistory[chatId] = initialHistory[chatId]; // Gunakan format asli
+            // Store history using the original (decoded) chatId
+            chatHistory[chatId] = initialHistory[chatId];
           });
 
-          chatList.innerHTML = ''; // Clear list
+          chatList.innerHTML = ''; // Clear existing list items
           chatListItems = {};
 
           const sortedChatIds = Object.keys(chatHistory).sort((a, b) => {
             const messagesA = chatHistory[a] || [];
             const messagesB = chatHistory[b] || [];
+            // Get timestamp of the last message for sorting
             const lastMsgTimeA = messagesA.length > 0 ? new Date(messagesA[messagesA.length - 1].timestamp).getTime() : 0;
             const lastMsgTimeB = messagesB.length > 0 ? new Date(messagesB[messagesB.length - 1].timestamp).getTime() : 0;
-            return lastMsgTimeB - lastMsgTimeA;
+            return lastMsgTimeB - lastMsgTimeA; // Sort descending (newest first)
           });
 
           sortedChatIds.forEach(chatId => {
             const messages = chatHistory[chatId] || [];
-            const chatName = chatId.split('@')[0];
+            // Determine chat name (simple version)
+            const chatName = chatId.split('@')[0]; // Or fetch contact info if available
             const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
             updateChatList(
               chatId,
               chatName,
-              false,
-              lastMessage?.text || (lastMessage?.mediaType ? `[${lastMessage.mediaType}]` : ''),
-              lastMessage?.timestamp || new Date(0).toISOString(),
-              true
+              lastMessage?.text || (lastMessage?.mediaType ? `[${lastMessage.mediaType.replace('Message', '')}]` : ''), // Snippet for list
+              lastMessage?.timestamp || new Date(0).toISOString(), // Use message timestamp or epoch
+              true // Mark as initial load
             );
           });
 
+          // Ensure pick statuses are updated after list is built
           updateAllChatListItemsPickStatus();
+
+           // If a chat was previously selected (e.g., after reconnect), load its messages
+           if (currentChatId && chatListItems[currentChatId]) {
+                loadChatMessages(currentChatId);
+                // The click listener handles selecting the item visually
+                // chatListItems[currentChatId].classList.add('selected'); // Ensure selected class
+           } else {
+                resetChatArea(); // Show placeholder if no chat is selected or valid
+           }
+
         });
 
         socket.on('chat_history', ({ chatId, messages }) => {
-          chatHistory[chatId] = messages || []; // Gunakan chatId asli
+           // This event provides the FULL history for a specific chat when requested
+           // Update the chatHistory state first
+           chatHistory[chatId] = messages || []; // Store using original chatId
 
+           // If this is the currently active chat, render the messages
           if (chatId === currentChatId) {
             console.log(`Received history for active chat ${chatId}:`, messages.length, 'messages');
             messagesDiv.innerHTML = ''; // Clear existing messages
             if (messages.length === 0) {
               messagesDiv.innerHTML = '<div class="placeholder">Belum ada pesan di percakapan ini.</div>';
             } else {
+              // Append messages in order received (assuming server sends sorted)
               messages.forEach(msg => {
-                if (!messagesDiv.querySelector(`[data-message-id="${msg.id}"]`)) {
-                  appendMessage(msg); // Tambahkan hanya jika belum ada
-                }
+                // Ensure message has chatId for appendMessage if not present
+                 if (!msg.chatId) msg.chatId = chatId;
+                appendMessage(msg); // appendMessage checks for duplicates in UI
               });
             }
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-          }
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom after loading
+          } else {
+               console.warn(`Received history for non-active chat ${chatId}. Updating state only.`);
+               // History is updated in state, but UI is not refreshed.
+               // This can happen if a user clicks a chat briefly then another.
+           }
         });
 
-        socket.on('new_message', (data) => {
-          const chatId = data.chatId; // Gunakan format asli
 
-          // Hindari duplikasi di frontend
+        // --- Main Message Receiving Handler ---
+        socket.on('new_message', (data) => {
+          const chatId = data.chatId; // Use the normalized chatId from the server
+
+          // Ensure chat exists in history state, add if new
           if (!chatHistory[chatId]) {
             chatHistory[chatId] = [];
+             console.log(`New chat detected: ${chatId}`);
           }
 
-          // Hindari duplikasi di chatHistory
+          // --- Add message to chatHistory state (deduplication by ID) ---
           if (!chatHistory[chatId].some(msg => msg.id === data.id)) {
-            chatHistory[chatId].push(data);
-          } else {
-            console.warn(`Pesan duplikat terdeteksi di frontend (ID: ${data.id}), diabaikan.`);
-            return; // Hindari duplikasi
-          }
+             chatHistory[chatId].push(data);
+             console.log(`Added new message (ID: ${data.id}, Type: ${data.type}) to history for chat ${chatId}`);
 
-          if (chatId === currentChatId) {
-            appendMessage(data); // Tambahkan pesan ke percakapan yang sedang dibuka
+             // --- Update Chat List Item ---
+             // Find chat name (use existing if available, otherwise default)
+             const chatName = chatListItems[chatId]?.dataset.chatName || chatId.split('@')[0];
+
+             updateChatList(
+                 chatId,
+                 chatName,
+                 data.text || (data.mediaType ? `[${data.mediaType.replace('Message', '')}]` : ''), // Snippet for list
+                 data.timestamp // Timestamp of the new message
+             );
+
+             // --- Append Message to Active Chat UI ---
+             if (chatId === currentChatId) {
+                // Add message to the message area if this chat is open
+                // Ensure message has chatId for appendMessage if not present
+                 if (!data.chatId) data.chatId = chatId;
+                appendMessage(data); // appendMessage handles UI duplication check
+                // Automatically mark as read if it's incoming and chat is currently open and picked by YOU
+                 const pickedBy = pickedChatsStatus[chatId];
+                 if (data.type === 'incoming' && pickedBy === currentUser) {
+                     // Delay slightly to ensure message is rendered before marking read
+                     setTimeout(() => markChatAsRead(chatId), 500);
+                 }
+             } else {
+                 // Message for a different chat - ensure unread indicator is visible if incoming
+                 updateUnreadIndicator(chatId); // This will show indicator if message is incoming and not active chat
+                  // Show browser notification (only for incoming messages to other chats)
+                 if (data.type === 'incoming') {
+                      const notificationBody = data.text || (data.mediaType ? `[${data.mediaType.replace('Message', '')}]` : '[Pesan Baru]');
+                      showNotification(`Pesan Baru (${chatName})`, notificationBody, { chatId: chatId });
+                 }
+             }
+
           } else {
-            updateChatList(chatId, chatId.split('@')[0], true, data.text || `[${data.mediaType || 'Media'}]`, data.timestamp);
+             // console.warn(`Pesan dengan ID ${data.id} sudah ada di state history untuk chat ${chatId}.`);
+             // If the message was already in state but somehow not in UI (rare),
+             // check if it needs appending to the active chat
+             if (chatId === currentChatId && !messagesDiv.querySelector(`[data-message-id="${data.id}"]`)) {
+                 console.warn(`Pesan ID ${data.id} di history tapi belum di UI, menambahkan.`);
+                 // Ensure message has chatId for appendMessage if not present
+                 if (!data.chatId) data.chatId = chatId;
+                 appendMessage(data); // Append even if in history, if not in UI
+             }
+             // If message is already in state and in UI, do nothing.
+             // If message is in state but not for active chat, do nothing.
           }
         });
+
 
         socket.on('update_pick_status', ({ chatId, pickedBy }) => {
             console.log(`Pick status update: Chat ${chatId} -> ${pickedBy || 'released'}`);
@@ -1143,98 +1644,101 @@
             } else {
                 delete pickedChatsStatus[chatId];
             }
-            updateChatListItemPickStatus(chatId);
+            // Update UI elements affected by pick status
+            updateChatListItemPickStatus(chatId); // Update indicator on list item
             if (chatId === currentChatId) {
-                updateChatAreaForCurrentChat();
+                updateChatAreaForCurrentChat(); // Update chat header and reply box state
                  // If *this* user just picked it, focus input
                  if(pickedBy === currentUser && previousPicker !== currentUser) {
                     replyInput.focus();
                  }
             }
-            // Optional: Update unread status if chat was released
-             if (!pickedBy && chatListItems[chatId]) {
-                 // Check if there are actually unread messages (requires more complex state)
-                 // Simple approach: If released, ensure unread indicator reflects last message status
-                 // const lastMsg = chatHistory[chatId]?.[chatHistory[chatId].length - 1];
-                 // if(lastMsg && lastMsg.type === 'incoming' && chatId !== currentChatId) {
-                 //    chatListItems[chatId].querySelector('.unread-indicator').style.display = 'inline';
-                 // }
-             }
+             // Ensure unread status is correctly reflected after pick changes
+            updateUnreadIndicator(chatId);
+
         });
 
         socket.on('pick_error', ({ chatId, message }) => {
             console.error(`Pick/Unpick error for chat ${chatId}: ${message}`);
             if (chatId === currentChatId) {
+                 // Fix: Use getCssVariable
                  chatPickedStatus.textContent = `Error: ${message}`;
-                 chatPickedStatus.style.color = 'var(--error-color)';
-                 // Re-enable button and reset text after delay
+                 chatPickedStatus.style.color = getCssVariable('--error-color');
+                 // Reset UI state after a delay based on actual pick status
                  setTimeout(() => {
                     updateChatAreaForCurrentChat(); // Reset to correct state based on actual pickedStatus
-                 }, 2500);
-            } else {
-                 // Show a general notification?
-                 // console.warn(`Pick error for non-active chat ${chatId}: ${message}`);
+                 }, 3000);
             }
         });
 
-        socket.on('send_error', ({ to, text, message }) => {
+        socket.on('send_error', ({ to, text, media, message }) => {
             console.error(`Failed to send message to ${to}: ${message}`);
             if (to === currentChatId) {
                 // Display error message near reply box
-                const existingError = replyBox.querySelector('.send-error-span');
-                if(existingError) existingError.remove(); // Remove previous error
-
-                const errorSpan = document.createElement('span');
-                errorSpan.className = 'send-error-span';
-                errorSpan.textContent = `Gagal mengirim: ${message}`;
-                replyBox.appendChild(errorSpan);
-
-                // Restore text to input field
-                replyInput.value = text;
-
-                // Remove the error message after a few seconds
-                setTimeout(() => errorSpan.remove(), 4000);
+                showSendError(message);
+                // Restore text and media to input field/preview
+                replyInput.value = text || '';
+                selectedMedia = media;
+                updateMediaPreview();
+                replyInput.focus(); // Keep focus
+                 // Re-enable buttons immediately on send error
+                 replyInput.disabled = false;
+                 replyButton.disabled = false;
+                 mediaButton.disabled = false;
             }
         });
 
-        socket.on('update_chat_status', ({ chatId, read }) => {
-            // Handle status updates initiated by *other* admins (e.g., they marked it read)
-            if (read && chatListItems[chatId] && chatId !== currentChatId) {
-                 const unreadIndicator = chatListItems[chatId].querySelector('.unread-indicator');
-                 if (unreadIndicator && unreadIndicator.style.display !== 'none') {
-                     console.log(`Chat ${chatId} marked as read by another admin.`);
-                     unreadIndicator.style.display = 'none';
-                 }
-            }
+        // Event from server when ANOTHER admin marks a chat as read
+        socket.on('update_chat_read_status', ({ chatId }) => {
+             console.log(`Chat ${chatId} read status updated (likely by another admin).`);
+             // Invalidate the unread status in local state for this chat
+             if (chatHistory[chatId]) {
+                 chatHistory[chatId].forEach(msg => {
+                     if (msg.type === 'incoming') msg.unread = false;
+                 });
+             }
+             // Update the unread indicator on the chat list item
+             updateUnreadIndicator(chatId);
         });
+
 
         socket.on('delegate_success', ({ chatId, targetAdminUsername }) => {
+            console.log(`Delegation success: ${chatId} to ${targetAdminUsername}`);
             if (chatId === currentChatId) {
                 alert(`Chat berhasil didelegasikan ke ${targetAdminUsername}.`);
+                 // UI will be updated by the subsequent 'update_pick_status' event
             }
         });
 
         socket.on('delegate_error', ({ chatId, message }) => {
+            console.error(`Delegation error for chat ${chatId}: ${message}`);
             if (chatId === currentChatId) {
                 alert(`Gagal mendelegasikan chat: ${message}`);
             }
         });
 
         socket.on('chat_delegated_to_you', ({ chatId, fromAdmin, message }) => {
+            console.log(`Chat ${chatId} delegated to you by ${fromAdmin}`);
+            // Update state will happen via update_pick_status
             if (chatId === currentChatId) {
-                alert(message);
-                updateChatAreaForCurrentChat();
+                 alert(message);
+                 updateChatAreaForCurrentChat(); // Refresh chat area state
+                 // Auto-focus if delegated to you and it's the current chat
+                 replyInput.focus();
+            } else {
+                // Show notification for delegation to another chat
+                 showNotification(`Chat Didelegasikan`, message, { chatId: chatId });
             }
         });
 
         socket.on('update_online_admins', (onlineAdmins) => {
-            socket.onlineAdmins = onlineAdmins;
-            populateDelegateChatSelect(); // Update dropdown when online status changes
+            socket.onlineAdmins = onlineAdmins; // Store online admins
+            populateDelegateChatSelect(); // Update dropdown
         });
 
         socket.on('registered_admins', (registeredAdmins) => {
-            socket.registeredAdmins = registeredAdmins;
-            populateDelegateChatSelect(); // Update dropdown when registered admins are received
+            socket.registeredAdmins = registeredAdmins; // Store registered admins
+            populateDelegateChatSelect(); // Update dropdown (needed once on login/reconnect)
         });
 
         // --- UI Event Listeners ---
@@ -1242,7 +1746,7 @@
         loginButton.addEventListener('click', () => {
             const username = usernameInput.value.trim();
             const password = passwordInput.value.trim();
-            showLoginError(''); // Clear previous error
+            hideSendError(); // Hide any old errors
             if (username && password) {
                 showLoginError('Memproses login...');
                 loginButton.disabled = true; // Prevent double click
@@ -1250,14 +1754,7 @@
             } else {
                 showLoginError('Username dan password harus diisi.');
             }
-            // Re-enable button if login fails (handled in login_failed)
-            setTimeout(() => { loginButton.disabled = false; }, 1000); // Failsafe re-enable
         });
-        socket.on('login_failed', (data) => { // Also re-enable button on failure
-             loginButton.disabled = false;
-             console.log('Login failed:', data?.message || 'Invalid credentials.');
-             showLoginError(data?.message || 'Username atau password salah.');
-         });
 
         passwordInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -1269,13 +1766,16 @@
             console.log('Logout initiated.');
             if (socket.connected) {
                 socket.emit('admin_logout');
+            } else {
+                 // If socket not connected, just clear local state
+                 setLoginState(false);
             }
         });
 
         pickChatButton.addEventListener('click', () => {
             if (currentChatId && currentUser && !pickedChatsStatus[currentChatId]) {
                 console.log(`Attempting to pick chat: ${currentChatId}`);
-                pickChatButton.disabled = true;
+                pickChatButton.disabled = true; // Disable immediately
                 pickChatButton.textContent = 'Mengambil...';
                 socket.emit('pick_chat', { chatId: currentChatId });
                  // Button state will be updated by 'update_pick_status' or 'pick_error'
@@ -1286,94 +1786,157 @@
 
         delegateChatButton.addEventListener('click', () => {
             const targetAdminUsername = delegateChatSelect.value;
-            const isOnline = delegateChatSelect.options[delegateChatSelect.selectedIndex]?.classList.contains('online');
-
+             // Check if there's a selected admin
             if (!targetAdminUsername) {
-                alert('Pilih admin tujuan untuk delegasi.');
-                return;
-            }
+                 alert('Pilih admin tujuan untuk delegasi.');
+                 return;
+             }
+
+             // Find the option element to check its class (online/offline)
+             const selectedOption = delegateChatSelect.options[delegateChatSelect.selectedIndex];
+             const isOnline = selectedOption?.classList.contains('online');
+
 
             if (!isOnline && !offlineAdminNotified.has(targetAdminUsername)) {
                 offlineAdminNotified.add(targetAdminUsername); // Mark as notified
                 offlineAdminMessage.textContent = `Admin ${targetAdminUsername} sedang offline. Delegasi akan tetap dilakukan, tetapi admin tersebut mungkin tidak segera menangani chat.`;
                 offlineAdminModal.style.display = 'flex'; // Show modal
+            } else {
+                 // If online or already notified about offline, proceed directly
+                 console.log(`Mendelegasikan chat ${currentChatId} ke ${targetAdminUsername}`);
+                 socket.emit('delegate_chat', { chatId: currentChatId, targetAdminUsername });
+                 // Close modal if it was shown previously for this admin (optional)
+                 if (offlineAdminModal.style.display === 'flex') {
+                     offlineAdminModal.style.display = 'none';
+                 }
             }
-
-            console.log(`Mendelegasikan chat ${currentChatId} ke ${targetAdminUsername}`);
-            socket.emit('delegate_chat', { chatId: currentChatId, targetAdminUsername });
         });
 
-        offlineAdminModalClose.addEventListener('click', () => {
-            offlineAdminModal.style.display = 'none';
+         offlineAdminModalClose.addEventListener('click', () => {
+             offlineAdminModal.style.display = 'none';
+         });
+
+
+        // Handle media selection
+        mediaInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                 // Basic file size validation (e.g., max 25MB, Baileys/WA limits vary)
+                 const maxSizeBytes = 25 * 1024 * 1024; // 25 MB
+                 if (file.size > maxSizeBytes) {
+                     alert(`Ukuran file melebihi batas (${maxSizeBytes / (1024*1024)}MB).`);
+                     mediaInput.value = null; // Clear the file input
+                     selectedMedia = null;
+                     updateMediaPreview();
+                     return;
+                 }
+
+                const reader = new FileReader();
+                reader.onload = () => {
+                    selectedMedia = {
+                        data: reader.result.split(',')[1], // Base64 data
+                        type: file.type, // MIME type
+                        name: file.name // File name
+                    };
+                    // alert(`Media "${file.name}" telah dipilih.`); // Less intrusive notification
+                    updateMediaPreview(); // Show preview
+                };
+                reader.onerror = (error) => {
+                     console.error("Error reading file:", error);
+                     alert("Gagal membaca file media.");
+                     mediaInput.value = null;
+                     selectedMedia = null;
+                     updateMediaPreview();
+                };
+                reader.readAsDataURL(file); // Read file as Base64
+            }
         });
 
+        // Open file picker when media button is clicked
+        mediaButton.addEventListener('click', () => {
+            // Check if a chat is selected and picked by the current user
+            if (!currentChatId || pickedChatsStatus[currentChatId] !== currentUser) {
+                 alert('Silakan pilih dan ambil chat terlebih dahulu sebelum mengirim media.');
+                 return;
+             }
+            // Trigger the hidden file input click
+            mediaInput.click();
+        });
+
+
+        // --- Send Reply Logic ---
         replyButton.addEventListener('click', () => {
-          const text = replyInput.value.trim();
+            const text = replyInput.value.trim();
 
-          if (!text && !selectedMedia) return;
-
-          if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
-            const messageData = {
-              to: currentChatId,
-              text: text || null,
-              media: selectedMedia || null
-            };
-            socket.emit('reply_message', messageData);
-
-            const tempOutgoingMsg = {
-              id: `temp-${Date.now()}`, // ID sementara untuk pesan
-              from: currentUser,
-              type: 'outgoing',
-              text: text || null,
-              mediaType: selectedMedia?.type?.startsWith('image/') ? 'imageMessage' : selectedMedia?.type || null,
-              mediaData: selectedMedia?.data || null,
-              fileName: selectedMedia?.name || null,
-              timestamp: new Date().toISOString()
-            };
-
-            // Hindari duplikasi di frontend
-            if (!chatHistory[currentChatId]) {
-              chatHistory[currentChatId] = [];
-            }
-            if (!chatHistory[currentChatId].some(msg => msg.id === tempOutgoingMsg.id)) {
-              chatHistory[currentChatId].push(tempOutgoingMsg);
-              appendMessage(tempOutgoingMsg); // Tampilkan pesan sementara di UI
+            // Check if there is any content to send (text OR selected media)
+            if (!text && !selectedMedia) {
+                 hideSendError(); // Clear previous error if any
+                 return; // Do nothing if input is empty and no media
             }
 
-            replyInput.value = '';
-            selectedMedia = null;
-            updateMediaPreview();
-            replyInput.focus();
-          } else {
-            console.warn("Send attempt in invalid state:", { text, currentChatId, picked: pickedChatsStatus[currentChatId], currentUser });
-          }
+            // Check if a chat is selected and picked by the current user
+            if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
+                const messageData = {
+                  to: currentChatId, // Send to the currently active chat ID
+                  text: text || null, // Send text (or null if empty)
+                  media: selectedMedia || null // Send media object (or null if none)
+                };
+
+                // Disable input and button temporarily to prevent double sending
+                replyInput.disabled = true;
+                replyButton.disabled = true;
+                mediaButton.disabled = true;
+                 hideSendError(); // Hide previous error message
+
+                // Emit the message to the server
+                socket.emit('reply_message', messageData);
+
+                // Clear the input field and selected media IMMEDIATELY
+                replyInput.value = '';
+                selectedMedia = null;
+                updateMediaPreview(); // Hide media preview
+
+
+                // Note: We DO NOT append the message to the UI here.
+                // The server will process the message, save it to history,
+                // and broadcast a 'new_message' event (including back to this client).
+                // The 'new_message' handler is responsible for adding it to the UI.
+
+            } else {
+                console.warn("Send attempt in invalid state:", { text, currentChatId, picked: pickedChatsStatus[currentChatId], currentUser });
+                 showSendError('Pilih atau ambil chat terlebih dahulu.');
+            }
         });
 
+        // Handle Enter key in textarea for sending
         replyInput.addEventListener('keypress', (e) => {
+            // Send on Enter, unless Shift is also pressed (allow Shift+Enter for newline)
             if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault(); // Prevent newline
-                replyButton.click();
+                e.preventDefault(); // Prevent newline and default form submission
+                replyButton.click(); // Trigger send button click
             }
-             // Optional: Auto-resize textarea if using it
-             // if (replyInput.tagName === 'TEXTAREA') {
-             //    setTimeout(() => {
-             //        replyInput.style.height = 'auto';
-             //        replyInput.style.height = replyInput.scrollHeight + 'px';
-             //    }, 0);
-             // }
         });
 
-        // Media Modal Listeners
-        closeModal.addEventListener('click', () => {
-            mediaModal.style.display = 'none';
-            modalMediaContent.src = '';
-        });
-        mediaModal.addEventListener('click', (e) => {
-             if (e.target === mediaModal) { // Click on background
-                 mediaModal.style.display = 'none';
-                 modalMediaContent.src = '';
+         // Auto-resize textarea based on content
+         replyInput.addEventListener('input', () => {
+             replyInput.style.height = 'auto'; // Reset height
+             replyInput.style.height = replyInput.scrollHeight + 'px'; // Set to scroll height
+         });
+
+        // Re-enable input/button after send confirmation or error
+        socket.on('reply_sent_confirmation', ({ sentMsgId, chatId }) => {
+            console.log(`Message sent confirmation received for ID: ${sentMsgId}`);
+             if (chatId === currentChatId) {
+                 // Re-enable input and button
+                 replyInput.disabled = false;
+                 replyButton.disabled = false;
+                 mediaButton.disabled = false;
+                 replyInput.focus(); // Put focus back in input
+                 // Note: The message will be appended to the UI by the 'new_message' handler
              }
         });
+        // send_error also re-enables, handled in its handler
+
 
         // --- Initial Check & Setup ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -1386,22 +1949,50 @@
                  console.log('DOM Loaded. No user in localStorage.');
                  setLoginState(false); // Show login page
                  showLoginError(''); // Clear connecting message
+                 // Also hide QR if no user logged in initially
+                 qrArea.classList.add('hidden');
              }
 
-            // Set versi aplikasi di footer
-            fetch('/config.json')
-                .then(response => response.json())
-                .then(config => {
-                    document.getElementById('app-version').textContent = config.version;
-                })
-                .catch(err => console.error('Gagal memuat versi aplikasi:', err));
+            // Fetch and display app version from config (assuming server serves config.json)
+            // You might need to adjust the path if config.js is not served directly
+             fetch('/config.json')
+                 .then(response => {
+                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                     return response.json();
+                 })
+                 .then(config => {
+                     document.getElementById('app-version').textContent = config.version || 'N/A';
+                 })
+                 .catch(err => {
+                     console.error('Gagal memuat versi aplikasi dari config.json:', err);
+                     document.getElementById('app-version').textContent = 'N/A';
+                 });
+
+            // Add event listener for initial placeholder click (optional)
+             const initialPlaceholder = chatList.querySelector('.placeholder');
+             if(initialPlaceholder) {
+                 initialPlaceholder.addEventListener('click', () => {
+                     if (!currentUser) {
+                          alert('Silakan login terlebih dahulu.');
+                     } else if (whatsappStatusDiv.textContent.includes('Disconnected')) { // Check WA status text
+                         alert('Koneksi WhatsApp belum siap. Silakan tunggu atau periksa log server.');
+                     } else if (whatsappStatusDiv.textContent.includes('Connecting')) {
+                         alert('Koneksi WhatsApp sedang dalam proses. Silakan tunggu.');
+                     }
+                     // If logged in and WA connected, clicking placeholder shouldn't do anything unless there's a bug
+                 });
+             }
+
+             // Trigger auto-resize for the textarea on page load
+             replyInput.style.height = 'auto';
+             replyInput.style.height = replyInput.scrollHeight + 'px';
+
         });
 
     </script>
-    <!-- Pastikan tag </script> ini ada dan benar-benar menutup blok JavaScript -->
 
-    <footer style="text-align: center; padding: 10px; background: var(--input-bg); color: var(--text-muted); font-size: 0.9em;">
-        Versi Aplikasi: <span id="app-version"></span>
+    <footer>
+        Versi Aplikasi: <span id="app-version">N/A</span>
     </footer>
 </body>
 </html>
