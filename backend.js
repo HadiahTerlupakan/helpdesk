@@ -1172,6 +1172,67 @@ io.on('connection', (socket) => {
      }
    });
 
+    // --- QUICK REPLY TEMPLATE MANAGEMENT (Super Admin Only) ---
+    socket.on('save_quick_reply_template', (data) => {
+        const adminInfo = adminSockets[socket.id];
+        if (!adminInfo || adminInfo.role !== 'superadmin') {
+            socket.emit('error_message', 'Hanya Super Admin yang dapat menyimpan template.');
+            return;
+        }
+        if (!data || typeof data.shortcut !== 'string' || typeof data.text !== 'string') {
+            socket.emit('error_message', 'Data template tidak valid.');
+            return;
+        }
+        const shortcut = data.shortcut.trim();
+        const text = data.text.trim();
+
+        if (!shortcut.startsWith('/') || shortcut.length < 2) {
+            socket.emit('error_message', 'Shortcut harus dimulai dengan / dan minimal 2 karakter.');
+            return;
+        }
+        if (!text) {
+            socket.emit('error_message', 'Teks template tidak boleh kosong.');
+            return;
+        }
+
+        // Validate shortcut format (allow alphanumeric, underscore, hyphen after initial /)
+        if (!/^\/[a-zA-Z0-9_-]+$/.test(shortcut)) {
+             socket.emit('error_message', 'Shortcut hanya boleh berisi huruf, angka, garis bawah (_), atau tanda hubung (-).');
+             return;
+        }
+
+
+        quickReplyTemplates[shortcut] = { text: text };
+        saveQuickReplyTemplatesToFirebase(); // Save and broadcast
+        console.log(`[ADMIN] Super Admin '${adminInfo.username}' menyimpan template: ${shortcut}`);
+        socket.emit('success_message', `Template '${shortcut}' berhasil disimpan.`);
+        // No need to emit 'quick_reply_templates_updated' here, save function does it
+    });
+
+    socket.on('delete_quick_reply_template', (shortcutToDelete) => {
+        const adminInfo = adminSockets[socket.id];
+        if (!adminInfo || adminInfo.role !== 'superadmin') {
+            socket.emit('error_message', 'Hanya Super Admin yang dapat menghapus template.');
+            return;
+        }
+        if (typeof shortcutToDelete !== 'string' || !shortcutToDelete.startsWith('/')) {
+             socket.emit('error_message', 'Shortcut template tidak valid.');
+             return;
+        }
+
+        if (quickReplyTemplates[shortcutToDelete]) {
+            delete quickReplyTemplates[shortcutToDelete];
+            saveQuickReplyTemplatesToFirebase(); // Save and broadcast
+            console.log(`[ADMIN] Super Admin '${adminInfo.username}' menghapus template: ${shortcutToDelete}`);
+            socket.emit('success_message', `Template '${shortcutToDelete}' berhasil dihapus.`);
+            // No need to emit 'quick_reply_templates_updated' here, save function does it
+        } else {
+            socket.emit('error_message', `Template '${shortcutToDelete}' tidak ditemukan.`);
+        }
+    });
+    // --- END QUICK REPLY TEMPLATE MANAGEMENT ---
+
+
     // --- Super Admin Fungsi ---
 
     socket.on('delete_chat', async ({ chatId }) => {
