@@ -35,11 +35,11 @@ const config = {
 
   // Waktu (dalam menit) sebelum admin otomatis logout karena tidak ada aktivitas (AFK)
   // Set ke 0 atau null untuk menonaktifkan fitur ini.
-  adminAfkTimeoutMinutes: 2, // <-- Tambahkan ini (contoh: 30 menit)
+  adminAfkTimeoutMinutes: 30, // <-- Tambahkan ini (contoh: 30 menit)
 
   // Waktu (dalam menit) sebelum timeout AFK, admin akan menerima peringatan
   // Set ke 0 atau null untuk menonaktifkan peringatan.
-  adminAfkWarningMinutes: 1, // <-- Tambahkan ini (contoh: 2 menit sebelum logout)
+  adminAfkWarningMinutes: 20, // <-- Tambahkan ini (contoh: 2 menit sebelum logout)
 
 
   // Kunci rahasia untuk sesi Express. GANTI INI dengan string acak yang panjang dan sulit ditebak.

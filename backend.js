@@ -1,4 +1,4 @@
-// backend.js atau server.js
+// backend.js atau server.js (atau file yang sesuai)
 
 import { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } from 'baileys';
 import express from 'express';
