@@ -465,6 +465,9 @@
         const mediaButton = document.getElementById('media-button');
         let selectedMedia = null;
 
+        // Disable media button initially
+        mediaButton.disabled = true;
+
         // Add a container for media preview
         const mediaPreviewContainer = document.createElement('div');
         mediaPreviewContainer.style.display = 'none';
@@ -863,13 +866,15 @@
                 const mimeType = getMimeType(mediaType, mediaData);
                 const dataUrl = mediaData.startsWith('data:') ? mediaData : `data:${mimeType};base64,${mediaData}`;
 
-                if (mediaType.startsWith('image/')) {
+                if (mediaType === 'imageMessage') { // <-- Perubahan di sini
                     contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 150px; max-height: 150px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
-                } else if (mediaType.startsWith('video/')) {
+                } else if (mediaType === 'videoMessage') { // <-- Ubah dari startsWith ke ===
                     contentHTML += `<br><video controls src="${dataUrl}" preload="metadata" style="max-width: 150px; max-height: 150px; border-radius: 5px;"></video>`;
-                } else if (mediaType.startsWith('audio/')) {
+                } else if (mediaType === 'audioMessage') { // <-- Ubah dari startsWith ke ===
                     contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata" style="max-width: 100%;"></audio>`;
-                } else if (mediaType === 'application/pdf') {
+                } else if (mediaType === 'stickerMessage') { // <-- Tambahkan penanganan stiker
+                    contentHTML += `<br><img src="${dataUrl}" alt="Media Stiker" style="max-width: 100px; max-height: 100px;">`;
+                } else if (mediaType === 'documentMessage') { // <-- Ubah dari application/pdf ke ===
                     const docName = fileName || "Dokumen";
                     contentHTML += `<br><a href="${dataUrl}" download="${docName}" target="_blank" class="document-link"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
                 } else {
@@ -1259,7 +1264,7 @@
         replyButton.addEventListener('click', () => {
             const text = replyInput.value.trim();
 
-            if (!text && !selectedMedia) return; // Do nothing if both are empty
+            if (!text && !selectedImageFile) return; // Do nothing if both are empty
 
             if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
                 const messageData = {
@@ -1274,7 +1279,8 @@
                     from: currentUser,
                     type: 'outgoing',
                     text: text || null,
-                    mediaType: selectedMedia?.type || null,
+                    mediaType: selectedMedia?.type?.startsWith('image/') ? 'imageMessage' : selectedMedia?.type || null,
+                    mediaData: selectedMedia?.data || null, // <-- Tambahkan baris ini
                     fileName: selectedMedia?.name || null,
                     timestamp: new Date().toISOString()
                 };
@@ -1345,3 +1351,140 @@
     </footer>
 </body>
 </html>
+
+
+
+function updateChatUI(chatId, chatData) {
+    // Update UI based on picked status
+
+    // Enable reply only if picked by current admin
+    const isAdminPicker = chatData.pickedBy === adminUsername;
+    replyInput.disabled = !isAdminPicker;
+    replyButton.disabled = !isAdminPicker;
+    mediaButton.disabled = !isAdminPicker; // Enable/disable media button
+
+    replyInput.placeholder = isAdminPicker ? 'Ketik balasan...' : 'Chat ini diambil oleh admin lain.';
+    replyInput.focus(); // Keep focus on input
+    delegateChatContainer.style.display = 'flex'; // Show delegation dropdown and button
+    populateDelegateChatSelect(); // Populate the dropdown
+}
+
+function populateDelegateChatSelect() {
+    delegateChatSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>';
+    const onlineAdmins = new Set(socket.onlineAdmins || []);
+    Object.keys(socket.registeredAdmins || {}).forEach(admin => {
+        const isOnline = onlineAdmins.has(admin);
+        const option = document.createElement('option');
+        option.value = admin;
+        option.textContent = `${admin} ${isOnline ? '(Online)' : '(Offline)'}`;
+        option.className = isOnline ? 'online' : 'offline'; // Add class for styling
+        option.disabled = admin === currentUser; // Disable current user
+        delegateChatSelect.appendChild(option);
+    });
+}
+
+function updateChatListItemPickStatus(chatId) {
+    const listItem = chatListItems[chatId];
+    if (!listItem) return;
+
+    let statusSpan = listItem.querySelector('.chat-item-picked-by');
+    if (!statusSpan) {
+        console.warn("Elemen .chat-item-picked-by tidak ditemukan untuk chat:", chatId);
+        return;
+    }
+
+    const pickedBy = pickedChatsStatus[chatId];
+    if (pickedBy) {
+        statusSpan.textContent = `(Oleh: ${pickedBy})`;
+        statusSpan.style.display = 'inline';
+    } else {
+        statusSpan.textContent = '';
+        statusSpan.style.display = 'none';
+    }
+}
+
+function updateAllChatListItemsPickStatus() {
+    Object.keys(chatListItems).forEach(updateChatListItemPickStatus);
+}
+
+function updateChatList(chatId, name, isUnread = false, lastMessageText = '', timestamp = new Date().toISOString(), isInitialLoad = false) {
+    let li = chatListItems[chatId];
+    const messageTimestamp = new Date(timestamp);
+    // Handle invalid dates gracefully
+    const formattedTime = !isNaN(messageTimestamp)
+        ? messageTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '--:--';
+    const messageTextToShow = lastMessageText || '[Media / Pesan Kosong]'; // More descriptive placeholder
+    // Adjust substring length based on typical sidebar width
+    const shortMessage = messageTextToShow.substring(0, 30) + (messageTextToShow.length > 30 ? '...' : '');
+
+    if (!li) {
+        li = document.createElement('li');
+        li.dataset.chatId = chatId;
+        li.dataset.chatName = name;
+        li.innerHTML = `
+            <div class="chat-info">
+                <i class="fas fa-user-circle"></i>
+                <span class="chat-name">${name}</span>
+                <span class="timestamp">${formattedTime}</span>
+            </div>
+            <div class="message-snippet">
+                <span class="last-message">${shortMessage}</span>
+                <span class="unread-indicator" style="display: ${isUnread ? 'inline' : 'none'};">(Baru)</span>
+                <span class="chat-item-picked-by" style="display: none;"></span>
+            </div>
+        `;
+
+        li.addEventListener('click', () => {
+            if (currentChatId === chatId) return;
+
+            if (currentChatId && chatListItems[currentChatId]) {
+                chatListItems[currentChatId].classList.remove('selected');
+            }
+
+            currentChatId = chatId;
+            li.classList.add('selected');
+            markChatAsRead(chatId); // Mark read visually immediately
+            loadChatMessages(chatId); // Load messages from server/cache
+            updateChatAreaForCurrentChat();
+        });
+
+        chatListItems[chatId] = li;
+
+        // Insert based on timestamp for initial load, or at top for new messages
+        if (isInitialLoad) {
+             // Find correct position based on timestamp (descending)
+             let inserted = false;
+             const currentItems = Array.from(chatList.children);
+             const newItemTime = messageTimestamp.getTime();
+             for (let i = 0; i < currentItems.length; i++) {
+                 const existingItemId = currentItems[i].dataset.chatId;
+                 const existingMessages = chatHistory[existingItemId] || [];
+                 const lastExistingMsg = existingMessages.length > 0 ? existingMessages[existingMessages.length - 1] : null;
+                 const existingItemTime = lastExistingMsg ? new Date(lastExistingMsg.timestamp).getTime() : 0;
+                 if (newItemTime > existingItemTime) {
+                     chatList.insertBefore(li, currentItems[i]);
+                     inserted = true;
+                     break;
+                 }
+             }
+             if (!inserted) {
+                 chatList.appendChild(li);
+             }
+         } else {
+             chatList.insertBefore(li, chatList.firstChild);
+         }
+        updateChatListItemPickStatus(chatId); // Update pick status for the new item
+
+    } else {
+        // --- Update Existing Item ---
+        li.querySelector('.chat-name').textContent = name;
+        li.querySelector('.last-message').textContent = shortMessage;
+        li.querySelector('.timestamp').textContent = formattedTime;
+        li.dataset.chatName = name; // Ensure name is updated in dataset
+
+        const unreadIndicator = li.querySelector('.unread-indicator');
+        if (unreadIndicator) {
+            const pickedBy = pickedChatsStatus[chatId];
+            const shouldShowUnread = isUnread && chatId !== currentChatId && (!pickedBy || pickedBy === currentUser);
+            unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';

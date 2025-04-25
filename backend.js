@@ -195,20 +195,31 @@ async function connectToWhatsApp() {
 
       // Cek tipe pesan dan unduh media jika ada
       const messageType = Object.keys(message.message)[0];
+      // Include 'imageMessage' explicitly for clarity, though it was already handled
       const isMedia = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'].includes(messageType);
 
       if (isMedia) {
           try {
               // Hati-hati: downloadMediaMessage bisa memakan waktu & resource
               const buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
-              mediaData = buffer.toString('base64');
+              mediaData = buffer.toString('base64'); // Send base64 data
               mediaType = messageType;
+              // Get caption based on media type
               caption = message.message[mediaType]?.caption || '';
               if (mediaType === 'documentMessage') {
                   fileName = message.message[mediaType]?.fileName || 'Dokumen';
+              } else if (mediaType === 'imageMessage') {
+                  fileName = 'Gambar'; // Default filename for images if none provided
+              } else if (mediaType === 'videoMessage') {
+                  fileName = 'Video';
+              } else if (mediaType === 'audioMessage') {
+                  fileName = 'Audio';
+              } else if (mediaType === 'stickerMessage') {
+                  fileName = 'Stiker';
               }
+
               // Prioritaskan caption, lalu nama file untuk konten teks jika media
-              messageContent = caption || (mediaType === 'documentMessage' ? fileName : '');
+              messageContent = caption || ''; // Use caption as primary text content for media
               // console.log(`Media ${mediaType} dari ${chatId} diterima.`); // Kurangi log
           } catch (error) {
               console.error(`Gagal mengunduh media dari ${chatId}:`, error);
@@ -471,11 +482,18 @@ io.on('connection', (socket) => {
             } else if (media.type.startsWith('video/')) {
                 sentMsg = await sock.sendMessage(to, { video: mediaBuffer, ...mediaOptions });
             } else if (media.type.startsWith('audio/')) {
+                // Audio messages typically don't have captions in the same way
                 sentMsg = await sock.sendMessage(to, { audio: mediaBuffer, mimetype: media.type });
-            } else if (media.type === 'application/pdf') {
+                // Send initials separately if needed
+                if (replyTextWithInitials && !trimmedText) {
+                    await sock.sendMessage(to, { text: `_${adminInitials}_` });
+                }
+            } else if (media.type === 'application/pdf' || media.type.startsWith('document/')) { // Broader document check
                 sentMsg = await sock.sendMessage(to, { document: mediaBuffer, ...mediaOptions });
             } else {
-                throw new Error('Tipe media tidak didukung.');
+                console.warn(`Tipe media tidak didukung untuk dikirim: ${media.type}`);
+                socket.emit('send_error', { to, text, media, message: 'Tipe media tidak didukung.' });
+                return; // Stop processing if media type is unsupported
             }
         } else {
             sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
@@ -504,7 +522,7 @@ io.on('connection', (socket) => {
 
     } catch (error) {
         console.error(`Gagal mengirim pesan ke ${to} oleh ${username}:`, error);
-        socket.emit('send_error', { to, text, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
+        socket.emit('send_error', { to, text, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
     }
   });
 
