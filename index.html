@@ -24,6 +24,8 @@
             --error-color: red;
             --button-danger-bg: #d9534f;
             --button-danger-hover: #c9302c;
+            --button-warning-bg: #f0ad4e; /* Warna untuk tombol close/open */
+            --button-warning-hover: #ec971f;
             --disabled-color: #aaa;
         }
 
@@ -65,6 +67,8 @@
         #sidebar-header h3 { margin: 5px 0 5px 0; font-size: 1em; color: #eee; }
         #admin-username-display { font-weight: normal; font-size: 0.9em; color: #ddd; }
         #whatsapp-status { font-size: 0.8em; color: rgba(255,255,255,0.7); margin-top: 5px;}
+         #admin-role-display { font-size: 0.8em; color: rgba(255,255,255,0.7); margin-top: 2px; font-style: italic;} /* Tampilkan role */
+
 
         #active-chats {
             flex: 1; /* Memenuhi sisa ruang vertikal */
@@ -92,6 +96,7 @@
             cursor: pointer;
             transition: background 0.2s, border-left 0.2s;
             border-left: 4px solid transparent;
+             position: relative; /* Untuk status chat */
         }
 
         #chat-list li:hover {
@@ -102,6 +107,13 @@
             background: var(--chat-list-selected);
             border-left: 4px solid var(--light-green);
         }
+         #chat-list li.closed {
+             opacity: 0.7;
+             background: rgba(255,255,255,0.05);
+         }
+          #chat-list li.closed.selected {
+             border-left: 4px solid var(--button-warning-bg);
+          }
 
         .chat-info {
             display: flex;
@@ -133,6 +145,16 @@
         }
         .unread-indicator { color: yellow; margin-left: 5px; font-weight: bold; display: none; flex-shrink: 0; }
         .chat-item-picked-by { font-size: 0.8em; color: #ccc; margin-left: 5px; font-style: italic; display: none; white-space: nowrap; flex-shrink: 0; }
+        .chat-item-status {
+            position: absolute; bottom: 5px; right: 10px; /* Position at bottom right */
+            font-size: 0.7em; font-weight: bold;
+            padding: 2px 5px; border-radius: 3px;
+            color: var(--text-light);
+             z-index: 1; /* Ensure visibility */
+        }
+         .chat-item-status.closed { background: var(--button-danger-bg); }
+         .chat-item-status.open { background: var(--light-green); }
+
 
         #logout-button {
             padding: 12px 15px;
@@ -166,9 +188,14 @@
              min-height: 50px; /* Sedikit lebih tinggi */
              flex-shrink: 0;
         }
-        #current-chat-id-display { font-weight: bold; color: var(--text-dark); flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px;}
-        #chat-status-area { display: flex; align-items: center; flex-shrink: 0; }
-        #chat-picked-status { font-size: 0.9em; color: var(--text-muted); margin-right: 10px; flex-shrink: 0; }
+        #current-chat-info { display: flex; align-items: center; flex-grow: 1; overflow: hidden; margin-right: 10px; } /* Container untuk nama & status chat area */
+        #current-chat-id-display { font-weight: bold; color: var(--text-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #current-chat-status { font-size: 0.9em; margin-left: 10px; padding: 2px 8px; border-radius: 4px; font-weight: bold; color: var(--text-light); flex-shrink: 0;}
+         #current-chat-status.open { background: var(--light-green); }
+         #current-chat-status.closed { background: var(--button-danger-bg); }
+
+
+        #chat-actions-area { display: flex; align-items: center; flex-shrink: 0; gap: 10px;} /* Container for pick/delegate/close buttons */
         #pick-chat-button {
              padding: 6px 12px;
              font-size: 0.9em;
@@ -200,6 +227,106 @@
         #delegate-chat-button:disabled { background-color: var(--disabled-color); cursor: default; }
         #delegate-chat-button:hover:not(:disabled) { background-color: #0b6b5a; }
 
+         #close-chat-button {
+             padding: 6px 12px;
+             font-size: 0.9em;
+             cursor: pointer;
+             background-color: var(--button-warning-bg);
+             color: var(--text-light);
+             border: none;
+             border-radius: 4px;
+             transition: background-color 0.2s;
+             flex-shrink: 0;
+         }
+          #close-chat-button:disabled { background-color: var(--disabled-color); cursor: default; }
+         #close-chat-button:hover:not(:disabled) { background-color: var(--button-warning-hover); }
+
+         #open-chat-button { /* Style for Open Chat Button */
+             padding: 6px 12px;
+             font-size: 0.9em;
+             cursor: pointer;
+             background-color: var(--light-green); /* Using light green for open */
+             color: var(--text-light);
+             border: none;
+             border-radius: 4px;
+             transition: background-color 0.2s;
+             flex-shrink: 0;
+         }
+          #open-chat-button:disabled { background-color: var(--disabled-color); cursor: default; }
+         #open-chat-button:hover:not(:disabled) { background-color: #22b856; }
+
+
+        /* Super Admin Panel */
+         #superadmin-panel {
+            background: rgba(0,0,0,0.1); /* Slightly transparent */
+            padding: 15px;
+             border-top: 1px solid rgba(255,255,255,0.1); /* Top border */
+             display: none; /* Hidden by default */
+             flex-direction: column;
+             gap: 10px;
+             flex-shrink: 0;
+             margin-top: auto; /* Push to the bottom */
+         }
+         #superadmin-panel .panel-title {
+             font-weight: bold;
+             color: yellow;
+             font-size: 1em;
+             text-align: center;
+             margin-bottom: 5px;
+         }
+         #superadmin-panel button {
+             padding: 8px 12px; /* Slightly larger buttons */
+             font-size: 0.9em;
+             border: none;
+             border-radius: 4px;
+             cursor: pointer;
+              transition: background-color 0.2s;
+              width: 100%; /* Full width */
+              text-align: left; /* Align text left */
+              display: flex; /* Use flex for icon alignment */
+              align-items: center;
+              gap: 8px; /* Space between icon and text */
+         }
+         #superadmin-panel .delete-chat-button { background-color: var(--button-danger-bg); color: var(--text-light); }
+         #superadmin-panel .delete-chat-button:hover { background-color: var(--button-danger-hover); }
+         #superadmin-panel .delete-all-chats-button { background-color: #c0392b; color: var(--text-light); } /* Darker red */
+         #superadmin-panel .delete-all-chats-button:hover { background-color: #a93226; }
+         #superadmin-panel .add-admin-button { background-color: var(--secondary-color); color: var(--text-light); }
+         #superadmin-panel .add-admin-button:hover { background-color: #0b6b5a; }
+         /* Ensure icon has base styling */
+          #superadmin-panel button i { font-size: 1.1em; }
+
+
+         /* Add Admin Modal */
+         #addAdminModal {
+             display: none;
+             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+             background: rgba(0,0,0,0.8); z-index: 2000;
+             justify-content: center; align-items: center;
+         }
+         #addAdminModal .modal-content {
+            text-align: left; /* Align text left in form */
+            width: 350px; /* Wider modal for form */
+         }
+         #addAdminModal h3 { text-align: center; margin-bottom: 20px; } /* Center modal title */
+         #addAdminModal label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: var(--text-dark); } /* Labels for form */
+         #addAdminModal input, #addAdminModal select {
+             display: block; margin-bottom: 15px; padding: 10px; width: 100%;
+             border: 1px solid var(--border-color); border-radius: 4px; font-size: 1em;
+         }
+          #addAdminModal button { width: auto; margin-top: 10px; }
+          #addAdminModal .modal-buttons { text-align: center; } /* Center buttons */
+         #addAdminModal .close-modal-button {
+            background-color: #ccc; margin-left: 10px;
+         }
+          #addAdminModal .close-modal-button:hover { background-color: #bbb; }
+         #addAdminModal .add-admin-form-status {
+             font-size: 0.9em; margin-top: 10px; min-height: 1.2em; /* Ensure space */
+             text-align: center; /* Center status message */
+         }
+         #addAdminModal .add-admin-form-status.success { color: var(--light-green); }
+         #addAdminModal .add-admin-form-status.error { color: var(--error-color); }
+
 
         #messages {
             flex: 1; /* Memenuhi sisa ruang vertikal */
@@ -214,10 +341,6 @@
             ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.3); }
         }
 
-        #messages .placeholder {
-            text-align: center; color: #888; margin-top: 50px; font-style: italic;
-        }
-
         .message {
             margin-bottom: 10px;
             padding: 8px 12px;
@@ -227,18 +350,13 @@
             box-shadow: 0 1px 0.5px rgba(0,0,0,0.1); /* Adjusted shadow */
             position: relative;
              font-size: 0.95em; /* Slightly smaller font in bubble */
+             /* Flex properties for bubble alignment */
+            display: flex;
+            flex-direction: column; /* Stack content and timestamp */
         }
+        /* Remove default strong styling if not used for sender name inside bubble */
         .message strong {
-            font-weight: 600;
-            margin-bottom: 3px;
-            display: inline-block;
-            color: #333; /* Default color */
-        }
-        .message.incoming strong {
-            color: #075e54; /* Incoming sender color */
-        }
-         .message.outgoing strong {
-             color: #128c7e; /* Outgoing sender color */
+             display: none; /* Hide sender name inside bubble */
          }
 
         .message.incoming {
@@ -253,7 +371,7 @@
             margin-left: auto; /* Push to right */
         }
 
-         /* Timestamp inside message bubble (optional, can be complex) */
+         /* Timestamp inside message bubble */
          .message-timestamp {
              display: block;
              font-size: 0.75em;
@@ -275,9 +393,20 @@
         .message a { color: var(--primary-color); text-decoration: none; margin-top: 5px; display: inline-block; word-break: break-word; }
         .message a:hover { text-decoration: underline; }
         .message .caption, .message .text-content {
-            margin-top: 5px; font-size: 1em; white-space: pre-wrap;
+            /* No top margin here if sender name is removed */
+            font-size: 1em; white-space: pre-wrap;
+             margin-top: 0; /* Remove default margin-top */
         }
-         .message .document-link i { margin-right: 5px; } /* Icon spacing for documents */
+         /* Add top margin if there's media above text */
+         .message img + .caption, .message video + .caption,
+         .message audio + .caption, .message a + .caption,
+         .message img + .text-content, .message video + .text-content,
+         .message audio + .text-content, .message a + .text-content {
+             margin-top: 5px;
+         }
+
+
+         .message .document-link i { margin-right: 5px; }
 
 
         #reply-box {
@@ -290,6 +419,11 @@
             position: relative;
             flex-shrink: 0;
         }
+         #reply-box.disabled {
+             opacity: 0.7;
+             pointer-events: none; /* Disable interactions */
+         }
+
 
         .reply-input-container {
              display: flex;
@@ -529,8 +663,16 @@
             <div id="sidebar-header">
                 <h2>Admin Helpdesk</h2>
                 <div id="admin-username-display"></div>
+                 <div id="admin-role-display"></div> <!-- Display admin role -->
                  <div id="whatsapp-status">Status: Menyambungkan...</div> <!-- WA Status -->
                 <h3>Percakapan Aktif</h3>
+            </div>
+             <!-- Super Admin Panel in Sidebar (optional location) -->
+            <div id="superadmin-panel" style="padding: 15px; background: rgba(0,0,0,0.1); display: none; flex-direction: column; gap: 10px; flex-shrink: 0;">
+                 <div class="panel-title">Super Admin Panel</div>
+                <button id="add-admin-button" title="Tambah Admin Baru"><i class="fas fa-user-plus"></i> Tambah Admin</button>
+                 <button id="delete-all-chats-button" title="Hapus Semua Riwayat Chat"><i class="fas fa-trash-alt"></i> Hapus Semua Chat</button>
+                 <!-- Delete single chat button will be in chat area header -->
             </div>
             <div id="active-chats">
                 <ul id="chat-list">
@@ -544,8 +686,15 @@
         <!-- Chat Area -->
         <div id="chat-area">
             <div id="chat-area-header">
-                <span id="current-chat-id-display">Pilih percakapan dari daftar</span>
-                <div id="chat-status-area">
+                 <div id="current-chat-info">
+                    <span id="current-chat-id-display">Pilih percakapan dari daftar</span>
+                     <span id="current-chat-status" style="display: none;"></span> <!-- Chat status -->
+                 </div>
+                <div id="chat-actions-area">
+                     <!-- Close/Open chat button -->
+                     <button id="close-chat-button" style="display: none;" title="Tutup Percakapan Ini"><i class="fas fa-lock"></i> Tutup Chat</button>
+                      <button id="open-chat-button" style="display: none;" title="Buka Kembali Percakapan Ini"><i class="fas fa-lock-open"></i> Buka Chat</button>
+
                     <span id="chat-picked-status"></span>
                     <button id="pick-chat-button" style="display: none;">Ambil Chat Ini</button>
                     <div id="delegate-chat-container" style="display: none;">
@@ -554,6 +703,8 @@
                         </select>
                         <button id="delegate-chat-button">Delegasikan</button>
                     </div>
+                     <!-- Delete single chat button for Super Admin -->
+                     <button id="delete-chat-button" style="display: none;" class="delete-chat-button" title="Hapus Riwayat Chat Ini"><i class="fas fa-trash"></i> Hapus Chat</button>
                 </div>
             </div>
             <div id="messages">
@@ -598,8 +749,28 @@
         </div>
     </div>
 
-    <!-- Modal for WhatsApp QR Code -->
-    <!-- QR Code now handled directly in login-container/qr-area -->
+     <!-- Modal for Add Admin -->
+     <div id="addAdminModal" class="modal-overlay">
+         <div class="modal-content">
+             <h3>Tambah Admin Baru</h3>
+             <label for="new-admin-username">Username:</label>
+             <input type="text" id="new-admin-username" placeholder="Username">
+             <label for="new-admin-password">Password:</label>
+             <input type="password" id="new-admin-password" placeholder="Password">
+             <label for="new-admin-initials">Initials:</label>
+             <input type="text" id="new-admin-initials" placeholder="Initials (cth: AD)">
+             <label for="new-admin-role">Role:</label>
+             <select id="new-admin-role">
+                 <option value="admin" selected>Admin Biasa</option>
+                 <option value="superadmin">Super Admin</option>
+             </select>
+             <div class="modal-buttons">
+                 <button id="submit-add-admin"><i class="fas fa-user-plus"></i> Tambah</button>
+                 <button class="close-modal-button" data-target-modal="addAdminModal">Batal</button>
+             </div>
+             <div class="add-admin-form-status"></div> <!-- Status message -->
+         </div>
+     </div>
 
 
     <!-- Pastikan path ini benar -->
@@ -628,6 +799,7 @@
         const whatsappStatusDiv = document.getElementById('whatsapp-status'); // WA Status Display
 
         const adminUsernameDisplay = document.getElementById('admin-username-display');
+        const adminRoleDisplay = document.getElementById('admin-role-display'); // Role Display
         const logoutButton = document.getElementById('logout-button');
         const chatList = document.getElementById('chat-list');
         const messagesDiv = document.getElementById('messages');
@@ -636,12 +808,23 @@
         const replyBox = document.getElementById('reply-box');
         const sendErrorSpan = replyBox.querySelector('.send-error-span'); // Get the error span
 
+        const currentChatInfoDiv = document.getElementById('current-chat-info'); // Container for name & status
         const currentChatIdDisplay = document.getElementById('current-chat-id-display');
+        const currentChatStatusSpan = document.getElementById('current-chat-status'); // Chat status span
+
+        const chatActionsArea = document.getElementById('chat-actions-area'); // Container for actions
         const chatPickedStatus = document.getElementById('chat-picked-status');
         const pickChatButton = document.getElementById('pick-chat-button');
         const delegateChatContainer = document.getElementById('delegate-chat-container');
         const delegateChatSelect = document.getElementById('delegate-chat-select');
         const delegateChatButton = document.getElementById('delegate-chat-button');
+        const closeChatButton = document.getElementById('close-chat-button'); // Close chat button
+        const openChatButton = document.getElementById('open-chat-button'); // Open chat button
+
+        const superadminPanel = document.getElementById('superadmin-panel'); // Super Admin Panel
+        const addAdminButton = document.getElementById('add-admin-button'); // Add Admin Button
+        const deleteAllChatsButton = document.getElementById('delete-all-chats-button'); // Delete All Chats Button
+        const deleteChatButton = document.getElementById('delete-chat-button'); // Delete Single Chat Button
 
         const mediaButton = document.getElementById('media-button');
         const mediaInput = document.createElement('input'); // File input for media upload
@@ -663,18 +846,30 @@
         const modalDocumentName = document.getElementById('modalDocumentName');
         const modalDocumentLink = document.getElementById('modalDocumentLink');
 
-
         // Modal for Offline Admin Notification
         const offlineAdminModal = document.getElementById('offlineAdminModal');
         const offlineAdminMessage = document.getElementById('offlineAdminMessage');
         const offlineAdminModalClose = document.getElementById('offlineAdminModalClose');
 
+        // Modal for Add Admin
+        const addAdminModal = document.getElementById('addAdminModal');
+        const newAdminUsernameInput = document.getElementById('new-admin-username');
+        const newAdminPasswordInput = document.getElementById('new-admin-password');
+        const newAdminInitialsInput = document.getElementById('new-admin-initials');
+        const newAdminRoleSelect = document.getElementById('new-admin-role');
+        const submitAddAdminButton = document.getElementById('submit-add-admin');
+        const addAdminFormStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
+
+
         // --- Application State ---
         let currentChatId = null; // ID Chat yang sedang dibuka
         let currentUser = null; // Username admin yang login
-        let chatHistory = {}; // { chatId: [messages] } - Mirror server history state
+        let currentUserRole = null; // Role admin yang login (admin/superadmin)
+        let chatHistory = {}; // { chatId: { status: 'open'|'closed', messages: [...] } } - Mirror server history state
         let chatListItems = {}; // { chatId: liElement } - Reference to DOM elements
         let pickedChatsStatus = {}; // { chatId: adminUsername } - Mirror server pick state
+        let registeredAdmins = {}; // { username: { initials, role } } - List of all registered admins
+
 
         // Track offline admin notifications to avoid repeated alerts for the same admin
         const offlineAdminNotified = new Set();
@@ -685,6 +880,30 @@
         function getCssVariable(name) {
             // Get the computed style of the root element
             return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        // Helper to show alerts from server events (Super Admin actions, etc.)
+        function showServerAlert(message, isSuccess = true) {
+            const alertDiv = document.createElement('div');
+            alertDiv.style.position = 'fixed';
+            alertDiv.style.top = '10px';
+            alertDiv.style.right = '10px';
+            alertDiv.style.padding = '15px 20px';
+            alertDiv.style.borderRadius = '8px';
+            alertDiv.style.color = getCssVariable('--text-light');
+            alertDiv.style.backgroundColor = isSuccess ? getCssVariable('--light-green') : getCssVariable('--button-danger-bg');
+            alertDiv.style.zIndex = 3000;
+            alertDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+            alertDiv.style.opacity = 1;
+            alertDiv.style.transition = 'opacity 0.5s ease-in-out';
+            alertDiv.textContent = message;
+
+            document.body.appendChild(alertDiv);
+
+            setTimeout(() => {
+                alertDiv.style.opacity = 0;
+                setTimeout(() => alertDiv.remove(), 500); // Remove after fade out
+            }, 5000); // Show for 5 seconds
         }
 
 
@@ -700,22 +919,30 @@
          }
 
 
-        function setLoginState(isLoggedIn, username = null, initialPicks = {}) {
+        function setLoginState(isLoggedIn, username = null, role = null, initialPicks = {}) {
             if (isLoggedIn) {
                 currentUser = username;
+                currentUserRole = role; // Store the role
                 localStorage.setItem('loggedInUsername', username);
+                // localStorage.setItem('currentUserRole', role); // Optional: store role
                 adminUsernameDisplay.textContent = `Admin: ${username}`;
+                adminRoleDisplay.textContent = `Role: ${role === 'superadmin' ? 'Super Admin' : 'Admin Biasa'}`; // Display role
                 pickedChatsStatus = initialPicks || {}; // Set initial picks received
                 loginContainer.classList.add('hidden');
                 qrArea.classList.add('hidden'); // Hide QR area too
                 appContainer.classList.remove('hidden');
-                console.log(`Login state set: Logged in as ${username}`);
+                console.log(`Login state set: Logged in as ${username} with role ${role}.`);
                 showLoginError(''); // Clear any previous login messages
                 requestNotificationPermission();
-                // No need to request initial data here, it's handled by 'reconnect_success' or 'login_success'
+                // Show/hide Super Admin panel based on role
+                superadminPanel.style.display = (currentUserRole === 'superadmin') ? 'flex' : 'none';
+                // Request initial data will be handled by the server logic on successful login/reconnect
             } else {
                 currentUser = null;
-                localStorage.removeItem('loggedInUsername');
+                currentUserRole = null; // Clear role on logout
+                localStorage.removeItem('loggedInLoggedIn'); // Fix: should be 'loggedInUsername'
+                localStorage.removeItem('loggedInUsername'); // Clear username
+                // localStorage.removeItem('currentUserRole'); // Optional
                 loginContainer.classList.remove('hidden');
                  qrArea.classList.add('hidden'); // Hide QR when logged out
                 appContainer.classList.add('hidden');
@@ -725,6 +952,7 @@
                 console.log('Login state set: Logged out.');
                 showLoginError('Silakan login kembali.');
                  updateWhatsappStatus('Disconnected', false); // Assume disconnected on logout
+                superadminPanel.style.display = 'none'; // Hide Super Admin panel
             }
         }
 
@@ -771,12 +999,24 @@
         function resetChatArea() {
             messagesDiv.innerHTML = '<div class="placeholder">Pilih percakapan dari daftar</div>';
             currentChatIdDisplay.textContent = 'Pilih percakapan dari daftar';
+             currentChatStatusSpan.style.display = 'none'; // Hide status
+             currentChatStatusSpan.textContent = '';
+             currentChatStatusSpan.className = ''; // Clear status class
+
             chatPickedStatus.textContent = '';
             pickChatButton.style.display = 'none';
             delegateChatContainer.style.display = 'none';
+
+            // Disable reply box and media button
+            replyBox.classList.add('disabled');
             replyInput.disabled = true;
             replyButton.disabled = true;
-            mediaButton.disabled = true; // Disable media button
+            mediaButton.disabled = true;
+
+            closeChatButton.style.display = 'none'; // Hide close/open buttons
+            openChatButton.style.display = 'none';
+            deleteChatButton.style.display = 'none'; // Hide delete single button
+
             replyInput.value = ''; // Clear input value
             selectedMedia = null; // Clear selected media state
             updateMediaPreview(); // Hide media preview
@@ -791,11 +1031,15 @@
             chatHistory = {};
             chatListItems = {};
             pickedChatsStatus = {};
+            registeredAdmins = {}; // Clear registered admins
             currentChatId = null;
             currentUser = null;
+            currentUserRole = null; // Clear role
             adminUsernameDisplay.textContent = '';
+             adminRoleDisplay.textContent = ''; // Clear role display
              whatsappStatusDiv.textContent = ''; // Clear WA Status
             showLoginError(''); // Clear login error specifically
+             superadminPanel.style.display = 'none'; // Hide Super Admin panel
         }
 
         function updateChatAreaForCurrentChat() {
@@ -804,48 +1048,71 @@
                 return;
             }
 
-            // Find the chat name from the list item data attribute
-            const listItem = chatListItems[currentChatId];
-            const chatName = listItem ? listItem.dataset.chatName : currentChatId.split('@')[0]; // Fallback to ID part
+            // Find the chat name and status from the chatHistory state
+            const chatEntry = chatHistory[currentChatId]; // Get the chat entry from state
+            const chatName = chatListItems[currentChatId] ? chatListItems[currentChatId].dataset.chatName : currentChatId.split('@')[0];
+            const chatStatus = chatEntry?.status || 'open'; // Get status, default to 'open'
+
 
             const pickedBy = pickedChatsStatus[currentChatId];
 
             currentChatIdDisplay.textContent = `Chat: ${chatName}`;
             document.title = `Chat: ${chatName}`;
-            // Fix: Use getCssVariable
+
+            // Update chat status display in header
+            currentChatStatusSpan.style.display = 'inline';
+            currentChatStatusSpan.textContent = chatStatus.toUpperCase();
+            currentChatStatusSpan.className = `current-chat-status ${chatStatus}`; // Add class for styling
+
+            // Use getCssVariable
             chatPickedStatus.style.color = getCssVariable('--text-muted'); // Reset error color
             hideSendError(); // Hide send error when switching chats
 
-            if (pickedBy) {
-                pickChatButton.style.display = 'none';
-                chatPickedStatus.textContent = `Diambil oleh: ${pickedBy}`;
-                if (pickedBy === currentUser) {
-                    replyInput.disabled = false;
-                    replyButton.disabled = false;
-                    mediaButton.disabled = false; // Enable media button
-                    replyInput.placeholder = 'Ketik balasan...';
-                    // Auto-focus input when chat is yours, delay slightly for UI update
-                    setTimeout(() => replyInput.focus(), 100);
-                    delegateChatContainer.style.display = 'flex'; // Show delegation dropdown and button
-                    populateDelegateChatSelect(); // Populate the dropdown
-                } else {
-                    replyInput.disabled = true;
-                    replyButton.disabled = true;
-                    mediaButton.disabled = true; // Disable media button
-                    replyInput.placeholder = `Ditangani oleh ${pickedBy}`;
-                    delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
-                }
-            } else { // Chat is not picked
-                pickChatButton.style.display = 'inline-block';
-                pickChatButton.disabled = false; // Ensure enabled
-                pickChatButton.textContent = 'Ambil Chat Ini'; // Reset text
-                chatPickedStatus.textContent = 'Belum diambil';
-                replyInput.disabled = true;
-                replyButton.disabled = true;
-                mediaButton.disabled = true; // Disable media button
-                replyInput.placeholder = 'Ambil chat ini untuk membalas';
-                delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
+            // Enable/Disable reply box and media button based on chat status
+            const canReply = chatStatus === 'open';
+            if (canReply && pickedBy === currentUser) {
+                replyBox.classList.remove('disabled');
+                 replyInput.disabled = false;
+                 replyButton.disabled = false;
+                 mediaButton.disabled = false;
+                 replyInput.placeholder = 'Ketik balasan...';
+                 setTimeout(() => replyInput.focus(), 100); // Auto-focus
+            } else {
+                 replyBox.classList.add('disabled');
+                 replyInput.disabled = true;
+                 replyButton.disabled = true;
+                 mediaButton.disabled = true;
+                 replyInput.placeholder = chatStatus === 'closed' ? 'Percakapan ditutup.' : `Ditangani oleh ${pickedBy || 'lain'} / Ambil chat ini.`;
             }
+
+
+            // Show/Hide pick/delegate buttons based on pick status and chat status
+            if (chatStatus === 'open') {
+                 openChatButton.style.display = 'none'; // Hide Open button if already open
+                 pickChatButton.style.display = pickedBy ? 'none' : 'inline-block'; // Show Pick only if not picked
+                 chatPickedStatus.textContent = pickedBy ? `Diambil oleh: ${pickedBy}` : 'Belum diambil'; // Update pick text
+
+                 // Delegate button visible if picked by current user OR is Super Admin
+                 delegateChatContainer.style.display = (pickedBy === currentUser || currentUserRole === 'superadmin') ? 'flex' : 'none';
+                 if (delegateChatContainer.style.display === 'flex') { // Only populate if visible
+                     populateDelegateChatSelect();
+                 }
+
+
+                 // Close button visible only if Super Admin
+                 closeChatButton.style.display = (currentUserRole === 'superadmin') ? 'inline-block' : 'none';
+
+            } else { // ChatStatus is 'closed'
+                 pickChatButton.style.display = 'none';
+                 delegateChatContainer.style.display = 'none';
+                 closeChatButton.style.display = 'none'; // Hide Close button if already closed
+                 openChatButton.style.display = (currentUserRole === 'superadmin') ? 'inline-block' : 'none'; // Only Superadmin can open closed chats
+                 chatPickedStatus.textContent = ''; // No one is picking a closed chat
+            }
+
+            // Show/Hide Delete Chat button based on Super Admin role
+            deleteChatButton.style.display = (currentUserRole === 'superadmin') ? 'inline-block' : 'none';
+
         }
 
         function populateDelegateChatSelect() {
@@ -853,7 +1120,6 @@
             const onlineAdmins = new Set(socket.onlineAdmins || []);
             const registeredAdmins = socket.registeredAdmins || {};
 
-            // Sort admins alphabetically
             const sortedAdminUsernames = Object.keys(registeredAdmins).sort();
 
             sortedAdminUsernames.forEach(admin => {
@@ -865,7 +1131,6 @@
                 option.value = admin;
                 option.textContent = `${admin} ${isOnline ? '(Online)' : '(Offline)'}`;
                 option.className = isOnline ? 'online' : 'offline';
-                // option.disabled = !isOnline; // Optional: disable delegation to offline admins
                 delegateChatSelect.appendChild(option);
             });
         }
@@ -888,7 +1153,6 @@
                 statusSpan.textContent = '';
                 statusSpan.style.display = 'none';
             }
-            // Also update the visual unread indicator based on pick status
             updateUnreadIndicator(chatId);
         }
 
@@ -903,44 +1167,55 @@
             const unreadIndicator = listItem.querySelector('.unread-indicator');
              if (!unreadIndicator) return;
 
-             // Check if chat has any unread messages in the history state
-             const hasUnread = chatHistory[chatId]?.some(msg => msg.type === 'incoming' && msg.unread) || false;
+             const hasUnread = chatHistory[chatId]?.messages?.some(msg => msg.type === 'incoming' && msg.unread) || false;
 
              const pickedBy = pickedChatsStatus[chatId];
 
-             // Show indicator only if there are unread messages AND
-             // it's NOT the current chat OR (it IS the current chat AND it's not picked by this user)
-             // Essentially, show if unread and not currently open and handled by YOU.
-            const shouldShowUnread = hasUnread && chatId !== currentChatId; // Simple: show if unread and not active chat
+             const shouldShowUnread = hasUnread && chatId !== currentChatId;
 
             unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';
 
          }
 
+         function updateChatListItemStatus(chatId, status) {
+             const listItem = chatListItems[chatId];
+             if (!listItem) return;
 
-        function updateChatList(chatId, name, lastMessageText = '', timestamp = new Date().toISOString(), isInitialLoad = false) {
+             let statusSpan = listItem.querySelector('.chat-item-status');
+             if (!statusSpan) {
+                 statusSpan = document.createElement('span');
+                 statusSpan.className = 'chat-item-status';
+                 listItem.appendChild(statusSpan);
+             }
+
+             statusSpan.textContent = status.toUpperCase();
+             statusSpan.className = `chat-item-status ${status}`;
+
+             if (status === 'closed') {
+                 listItem.classList.add('closed');
+             } else {
+                 listItem.classList.remove('closed');
+             }
+         }
+
+
+        function updateChatList(chatId, name, lastMessageText = '', timestamp = new Date().toISOString(), chatStatus = 'open', isInitialLoad = false) {
             let li = chatListItems[chatId];
             const messageTimestamp = new Date(timestamp);
-            // Handle invalid dates gracefully
-            const formattedTime = !isNaN(messageTimestamp.getTime()) // Check if it's a valid date
+            const formattedTime = !isNaN(messageTimestamp.getTime())
                 ? messageTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : '--:--';
 
-            // Use a more descriptive snippet if messageText is empty or null
             const snippetText = lastMessageText?.trim() || '[Media/Kosong]';
-             // Use a shorter snippet for the list
             const shortMessage = snippetText.substring(0, 30) + (snippetText.length > 30 ? '...' : '');
 
-
-            // Check if this chat is already in the history state and get its unread status
-             const hasUnread = chatHistory[chatId]?.some(msg => msg.type === 'incoming' && msg.unread) || false;
+            const hasUnread = chatHistory[chatId]?.messages?.some(msg => msg.type === 'incoming' && msg.unread) || false;
 
 
             if (!li) {
-                // Create new list item
                 li = document.createElement('li');
                 li.dataset.chatId = chatId;
-                li.dataset.chatName = name; // Store chat name
+                li.dataset.chatName = name;
                 li.innerHTML = `
                     <div class="chat-info">
                         <i class="fas fa-user-circle"></i>
@@ -952,39 +1227,33 @@
                         <span class="unread-indicator">(Baru)</span>
                         <span class="chat-item-picked-by"></span>
                     </div>
+                     <span class="chat-item-status" style="display: none;"></span>
                 `;
 
                 li.addEventListener('click', () => {
-                    // If already selected, do nothing
                     if (currentChatId === chatId) return;
 
-                    // Deselect previously selected chat
                     if (currentChatId && chatListItems[currentChatId]) {
                         chatListItems[currentChatId].classList.remove('selected');
                     }
 
-                    // Select the new chat
                     currentChatId = chatId;
                     li.classList.add('selected');
-                    markChatAsRead(chatId); // Mark read visually and notify server
-                    loadChatMessages(chatId); // Load messages
-                    updateChatAreaForCurrentChat(); // Update header and reply box state
-                     // Ensure unread indicator is hidden for the active chat
+                    markChatAsRead(chatId);
+                    loadChatMessages(chatId);
+                    updateChatAreaForCurrentChat();
                      updateUnreadIndicator(chatId);
                 });
 
                 chatListItems[chatId] = li;
 
-                // Append or insert based on timestamp/initial load
                 if (isInitialLoad) {
-                     // Insert based on timestamp (descending order - newest first)
                      let inserted = false;
-                     const currentItems = Array.from(chatList.children).filter(item => item.tagName === 'LI'); // Filter out placeholder
+                     const currentItems = Array.from(chatList.children).filter(item => item.tagName === 'LI');
                      const newItemTime = messageTimestamp.getTime();
                      for (let i = 0; i < currentItems.length; i++) {
                          const existingItemId = currentItems[i].dataset.chatId;
-                         // Find the timestamp of the last message in the existing chat's history
-                         const existingMessages = chatHistory[existingItemId] || [];
+                         const existingMessages = chatHistory[existingItemId]?.messages || [];
                          const lastExistingMsg = existingMessages.length > 0 ? existingMessages[existingMessages.length - 1] : null;
                          const existingItemTime = lastExistingMsg ? new Date(lastExistingMsg.timestamp).getTime() : 0;
 
@@ -995,39 +1264,32 @@
                          }
                      }
                      if (!inserted) {
-                         chatList.appendChild(li); // Append if it's the oldest
+                         chatList.appendChild(li);
                      }
-                     // Remove initial placeholder if it exists
                      const initialPlaceholder = chatList.querySelector('.placeholder');
                      if(initialPlaceholder) initialPlaceholder.remove();
 
                  } else {
-                     // For new messages, always prepend
                      chatList.insertBefore(li, chatList.firstChild);
-                     // Remove placeholder if it exists (might still be there if no initial data)
                       const initialPlaceholder = chatList.querySelector('.placeholder');
                      if(initialPlaceholder) initialPlaceholder.remove();
                  }
 
-                updateChatListItemPickStatus(chatId); // Set initial pick status indicator
-                 updateUnreadIndicator(chatId); // Set initial unread indicator visibility
+                updateChatListItemPickStatus(chatId);
+                 updateUnreadIndicator(chatId);
+                 updateChatListItemStatus(chatId, chatStatus);
 
 
             } else {
-                // --- Update Existing Item ---
                 li.querySelector('.chat-name').textContent = sanitizeHTML(name);
                 li.querySelector('.last-message').textContent = sanitizeHTML(shortMessage);
                 li.querySelector('.timestamp').textContent = formattedTime;
                 li.dataset.chatName = name;
 
-                // Update pick status indicator
                 updateChatListItemPickStatus(chatId);
-                // Update unread indicator visibility
                 updateUnreadIndicator(chatId);
+                updateChatListItemStatus(chatId, chatStatus);
 
-
-                // Move to top if new activity and not the current active chat
-                // (Initial load handled sorting separately)
                 if (!isInitialLoad && chatId !== currentChatId && chatList.firstChild !== li) {
                     chatList.insertBefore(li, chatList.firstChild);
                 }
@@ -1035,7 +1297,6 @@
         }
 
         function markChatAsRead(chatId) {
-            // Visually mark as read immediately
             const listItem = chatListItems[chatId];
             if (listItem) {
                  const unreadIndicator = listItem.querySelector('.unread-indicator');
@@ -1044,105 +1305,76 @@
                  }
             }
 
-            // Update state and notify server IF it was actually unread
-             if (chatHistory[chatId]) {
+             if (chatHistory[chatId]?.messages) {
                  let changed = false;
-                 for (let i = chatHistory[chatId].length - 1; i >= 0; i--) {
-                     if (chatHistory[chatId][i].type === 'incoming' && chatHistory[chatId][i].unread) {
-                         chatHistory[chatId][i].unread = false;
+                 for (let i = chatHistory[chatId].messages.length - 1; i >= 0; i--) {
+                     if (chatHistory[chatId].messages[i].type === 'incoming' && chatHistory[chatId].messages[i].unread) {
+                         chatHistory[chatId].messages[i].unread = false;
                          changed = true;
-                     } else if (chatHistory[chatId][i].type === 'outgoing') {
-                         // Stop at last outgoing message
+                     } else if (chatHistory[chatId].messages[i].type === 'outgoing') {
                          break;
                      }
                  }
                  if (changed) {
                       console.log(`Marking chat ${chatId} as read.`);
-                      socket.emit('mark_as_read', { chatId }); // Notify server
+                      socket.emit('mark_as_read', { chatId });
                  }
              }
         }
 
         function loadChatMessages(chatId) {
-            messagesDiv.innerHTML = '<div class="placeholder">Memuat pesan...</div>'; // Show loading
+            messagesDiv.innerHTML = '<div class="placeholder">Memuat pesan...</div>';
             console.log(`Requesting history for ${chatId}`);
-            // Request history from server, it will emit 'chat_history' event
             socket.emit('get_chat_history', chatId);
         }
 
-        // Basic HTML sanitizer
         function sanitizeHTML(str) {
              if (str === null || str === undefined) return '';
              const temp = document.createElement('div');
-             // Use textContent to prevent XSS
              temp.textContent = str;
-             // Replace newlines with <br> after sanitization
              return temp.innerHTML.replace(/\n/g, '<br>');
          }
 
-        // Function to determine MIME type based on Baileys' messageType
         function getMimeType(mediaType, base64Data = null) {
-            // This is a best guess based on common types. May need refinement.
-            if (mediaType === 'imageMessage') return 'image/jpeg'; // Most common
+            if (mediaType === 'imageMessage') return 'image/jpeg';
             if (mediaType === 'stickerMessage') return 'image/webp';
-            if (mediaType === 'videoMessage') return 'video/mp4'; // Most common
+            if (mediaType === 'videoMessage') return 'video/mp4';
             if (mediaType === 'audioMessage') {
-                 // Ogg Opus for voice notes, MP4 or M4A for recorded audio
-                 // If base64 starts with ogg, assume opus
                  if (base64Data?.startsWith('data:audio/ogg')) return 'audio/ogg; codecs=opus';
-                 // If base64 starts with mp4, assume m4a
-                 if (base64Data?.startsWith('data:audio/mp4')) return 'audio/mp4'; // M4A
-                 return 'audio/mpeg'; // Default for other audio
+                 if (base64Data?.startsWith('data:audio/mp4')) return 'audio/mp4';
+                 return 'audio/mpeg';
              }
             if (mediaType === 'documentMessage') {
-                 // Try to infer from base64 prefix if available
                  if (base64Data?.startsWith('data:application/pdf')) return 'application/pdf';
-                 if (base64Data?.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml.document')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; // .docx
-                 // Add more common types as needed
-                 return 'application/octet-stream'; // Generic fallback
+                 if (base64Data?.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml.document')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                 return 'application/octet-stream';
             }
-            // Fallback for other types
             return 'application/octet-stream';
         }
 
-
         function appendMessage(msgData) {
-          // Ensure message object has necessary properties
           if (!msgData || !msgData.id || !msgData.type) {
               console.error("Invalid message data received:", msgData);
               return;
           }
 
           const { id, from, text, type, mediaData, mediaType, timestamp, fileName, initials } = msgData;
-          const chatId = msgData.chatId || msgData.from; // Use chatId property if available
+          const chatId = msgData.chatId || msgData.from;
 
-          // Cek apakah pesan sudah ada di UI untuk chat yang sedang aktif
           if (currentChatId === chatId && messagesDiv.querySelector(`[data-message-id="${id}"]`)) {
             // console.warn(`Pesan dengan ID ${id} sudah ditampilkan, diabaikan penambahannya.`);
-            return; // Hindari duplikasi di UI
+            return;
           }
 
           const messageDiv = document.createElement('div');
           messageDiv.className = `message ${type}`;
-          messageDiv.dataset.messageId = id; // Tambahkan ID pesan sebagai atribut data
-          messageDiv.dataset.timestamp = timestamp; // Tambahkan timestamp
+          messageDiv.dataset.messageId = id;
+          messageDiv.dataset.timestamp = timestamp;
 
-          // Sender name logic
-          let senderName;
-          if (type === 'incoming') {
-              senderName = chatId ? chatId.split('@')[0] : 'Unknown'; // Use chat ID part for incoming
-          } else { // type === 'outgoing'
-              // For outgoing, 'from' in data is the admin username
-              senderName = initials ? `Anda (${initials})` : 'Anda';
-          }
+          let contentHTML = '';
 
-
-          let contentHTML = `<strong>${sanitizeHTML(senderName)}</strong>`;
-
-          // Handle media content
           if (mediaData && mediaType) {
             let dataUrl = mediaData;
-            // If mediaData is just base64, convert to data URL
             if (!mediaData.startsWith('data:')) {
                  const mimeType = getMimeType(mediaType, mediaData);
                  if (mimeType !== 'application/octet-stream' && !mimeType.startsWith(mediaType.split('Message')[0].toLowerCase() + '/')) {
@@ -1151,38 +1383,30 @@
                  dataUrl = `data:${mimeType};base64,${mediaData}`;
             }
 
-            // Media display based on type
             if (mediaType === 'imageMessage' || mediaType.startsWith('image/')) {
-              contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer;" onclick="openMediaModal('${dataUrl}', 'image')">`;
+              contentHTML += `<img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 200px; max-height: 300px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
             } else if (mediaType === 'videoMessage' || mediaType.startsWith('video/')) {
-              contentHTML += `<br><video controls src="${dataUrl}" preload="metadata"></video>`;
+              contentHTML += `<video controls src="${dataUrl}" preload="metadata" style="max-width: 200px; max-height: 300px; border-radius: 5px;"></video>`;
             } else if (mediaType === 'audioMessage' || mediaType.startsWith('audio/')) {
-              contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata"></audio>`;
+              contentHTML += `<audio controls src="${dataUrl}" preload="metadata" style="width: 200px;"></audio>`;
             } else if (mediaType === 'documentMessage' || mediaType.startsWith('application/')) {
               const docName = fileName || "Dokumen";
-              contentHTML += `<br><a href="#" class="document-link" onclick="event.preventDefault(); openMediaModal('${dataUrl}', 'document', '${sanitizeHTML(docName)}')"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
+              contentHTML += `<a href="#" class="document-link" onclick="event.preventDefault(); openMediaModal('${dataUrl}', 'document', '${sanitizeHTML(docName)}')"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
             } else {
-              contentHTML += `<br>[Media tidak didukung: ${mediaType}]`;
+              contentHTML += `[Media tidak didukung: ${mediaType}]`;
             }
 
-            // Add text/caption if it exists
             if (text) {
-              contentHTML += `<div class="${mediaType === 'audioMessage' ? 'text-content' : 'caption'}">${sanitizeHTML(text)}</div>`;
-               // Note: Caption for audio is often sent as a separate text message by Baileys/WA,
-               // this simple structure puts it below the audio element.
-               // The server-side might send inisials separately for audio too.
+              contentHTML += `<div class="text-content">${sanitizeHTML(text)}</div>`;
             }
           }
 
-          // Handle text-only messages or text without media
           if (text && (!mediaData || !mediaType)) {
             contentHTML += `<div class="text-content">${sanitizeHTML(text)}</div>`;
           } else if (!mediaData && type === 'incoming') {
-            // Handle purely empty incoming messages (sometimes happens)
             contentHTML += `<div class="text-content">[Pesan Kosong]</div>`;
           }
 
-          // Add timestamp inside the bubble (optional)
            const msgTime = new Date(timestamp);
            if (!isNaN(msgTime.getTime())) {
                 contentHTML += `<span class="message-timestamp">${msgTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
@@ -1191,40 +1415,32 @@
 
           messageDiv.innerHTML = contentHTML;
 
-           // --- Insertion Logic ---
-           // Remove placeholder if it exists
            const placeholder = messagesDiv.querySelector('.placeholder');
            if (placeholder) placeholder.remove();
 
-           // Find the correct position to insert the message based on timestamp
            const messages = Array.from(messagesDiv.children);
            let inserted = false;
            const newMessageTime = new Date(timestamp).getTime();
 
-           // Iterate backwards to find the first message that is newer than the new message
            for (let i = messages.length - 1; i >= 0; i--) {
                const existingMsg = messages[i];
                const existingMsgTime = new Date(existingMsg.dataset.timestamp).getTime();
 
                if (newMessageTime >= existingMsgTime) {
-                   // Insert the new message *after* the existing message
                    messagesDiv.insertBefore(messageDiv, existingMsg.nextSibling);
                    inserted = true;
-                   break; // Stop searching once inserted
+                   break;
                }
            }
 
-           // If the new message is older than all existing messages or the messages list is empty
            if (!inserted) {
-               messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild); // Insert at the beginning
+               messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
            }
 
-          messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        // Function to open the media modal
         function openMediaModal(src, type, name = null) {
-            // Hide all modal content elements first
             modalMediaContent.style.display = 'none';
             modalVideoContent.style.display = 'none';
             modalAudioContent.style.display = 'none';
@@ -1246,37 +1462,34 @@
                  displayElement = modalAudioContent;
             } else if (type === 'document') {
                  modalDocumentName.textContent = name || 'Dokumen';
-                 modalDocumentLink.href = src; // Use data URL or link
-                 modalDocumentLink.download = name || 'document'; // Suggest download name
+                 modalDocumentLink.href = src;
+                 modalDocumentLink.download = name || 'document';
                  modalDocumentContent.style.display = 'block';
                  displayElement = modalDocumentContent;
             }
 
             if (displayElement) {
-                 mediaModal.style.display = 'flex'; // Show the modal overlay
+                 mediaModal.style.display = 'flex';
             } else {
                  console.warn(`Unsupported media type for modal: ${type}`);
             }
         }
-        // Close modal when clicking outside or on close button
         closeModal.addEventListener('click', () => {
             mediaModal.style.display = 'none';
-            // Pause media when modal is closed
             modalVideoContent.pause();
             modalAudioContent.pause();
-            modalMediaContent.src = ''; // Clear image source
-             modalVideoContent.src = ''; // Clear video source
-             modalAudioContent.src = ''; // Clear audio source
+            modalMediaContent.src = '';
+             modalVideoContent.src = '';
+             modalAudioContent.src = '';
         });
         mediaModal.addEventListener('click', (e) => {
-             if (e.target === mediaModal) { // Click on background
+             if (e.target === mediaModal) {
                  mediaModal.style.display = 'none';
-                 // Pause media when modal is closed
                  modalVideoContent.pause();
                  modalAudioContent.pause();
-                 modalMediaContent.src = ''; // Clear image source
-                 modalVideoContent.src = ''; // Clear video source
-                 modalAudioContent.src = ''; // Clear audio source
+                 modalMediaContent.src = '';
+                 modalVideoContent.src = '';
+                 modalAudioContent.src = '';
              }
         });
 
@@ -1284,7 +1497,6 @@
         function showSendError(message) {
              sendErrorSpan.textContent = `Gagal mengirim: ${message}`;
              sendErrorSpan.style.display = 'block';
-             // Hide after a few seconds
              setTimeout(hideSendError, 4000);
         }
         function hideSendError() {
@@ -1292,11 +1504,10 @@
              sendErrorSpan.style.display = 'none';
         }
 
-        // Function to update media preview area in reply box
         function updateMediaPreview() {
-            mediaPreviewContainer.innerHTML = ''; // Clear previous preview
+            mediaPreviewContainer.innerHTML = '';
             if (selectedMedia) {
-                mediaPreviewContainer.style.display = 'flex'; // Show flex container
+                mediaPreviewContainer.style.display = 'flex';
 
                 let previewElement = null;
                 if (selectedMedia.type.startsWith('image/')) {
@@ -1313,14 +1524,12 @@
                     const audioIcon = document.createElement('i');
                     audioIcon.className = 'fas fa-file-audio';
                     audioIcon.style.fontSize = '30px';
-                    // Fix: Use getCssVariable
                     audioIcon.style.color = getCssVariable('--text-dark');
                     previewElement = audioIcon;
-                } else { // Document or other file types
+                } else {
                     const fileIcon = document.createElement('i');
                     fileIcon.className = 'fas fa-file-alt';
                      fileIcon.style.fontSize = '30px';
-                    // Fix: Use getCssVariable
                     fileIcon.style.color = getCssVariable('--text-dark');
                     previewElement = fileIcon;
                 }
@@ -1329,29 +1538,26 @@
                     mediaPreviewContainer.appendChild(previewElement);
                 }
 
-                 // Add file name/info
                  const fileInfo = document.createElement('span');
                  fileInfo.className = 'file-info';
-                 fileInfo.textContent = selectedMedia.name || selectedMedia.type; // Display name or type
+                 fileInfo.textContent = selectedMedia.name || selectedMedia.type;
                  mediaPreviewContainer.appendChild(fileInfo);
 
-                // Add clear button
                 const clearButton = document.createElement('button');
                 clearButton.className = 'clear-media-button';
-                clearButton.innerHTML = '<i class="fas fa-times-circle"></i>'; // 'x' icon
+                clearButton.innerHTML = '<i class="fas fa-times-circle"></i>';
                 clearButton.title = 'Hapus media terpilih';
-                // Fix: Use getCssVariable
-                clearButton.style.color = getCssVariable('--button-danger-bg'); // Set initial color
+                clearButton.style.color = getCssVariable('--button-danger-bg');
                 clearButton.addEventListener('click', () => {
-                    selectedMedia = null; // Clear selected media state
-                    updateMediaPreview(); // Hide preview area
-                     mediaInput.value = null; // Clear file input value
+                    selectedMedia = null;
+                    updateMediaPreview();
+                     mediaInput.value = null;
                 });
                 mediaPreviewContainer.appendChild(clearButton);
 
 
             } else {
-                mediaPreviewContainer.style.display = 'none'; // Hide container if no media selected
+                mediaPreviewContainer.style.display = 'none';
             }
         }
 
@@ -1363,101 +1569,87 @@
             const storedUsername = localStorage.getItem('loggedInUsername');
             if (storedUsername) {
                 console.log('Found logged in user in storage:', storedUsername);
-                showLoginError('Menghubungkan kembali...'); // Update status
+                showLoginError('Menghubungkan kembali...');
                 socket.emit('admin_reconnect', { username: storedUsername });
             } else {
                 console.log('No user logged in.');
-                setLoginState(false); // Ensure login page is shown
-                 showLoginError(''); // Clear 'Connecting...' if no user
+                setLoginState(false);
+                 showLoginError('');
             }
-             // Clear any visible QR code on successful WS connect
              qrCodeDiv.innerHTML = '';
              qrArea.classList.add('hidden');
         });
 
-        socket.on('reconnect_success', ({ username, currentPicks }) => {
-            console.log(`Reconnect successful for ${username}. Current picks:`, currentPicks);
-            setLoginState(true, username, currentPicks);
-            updateWhatsappStatus('Connected', true); // Assume WA is also connected
-            // Request initial data will be handled by the server logic on successful login/reconnect
+        socket.on('reconnect_success', ({ username, role, currentPicks }) => {
+            console.log(`Reconnect successful for ${username}. Role: ${role}. Current picks:`, currentPicks);
+            setLoginState(true, username, role, currentPicks);
+            updateWhatsappStatus('Connected', true);
+            socket.emit('request_initial_data');
         });
 
         socket.on('reconnect_failed', () => {
             console.log('Reconnect failed (session invalid?). Forcing logout.');
              showLoginError('Sesi tidak valid, silakan login kembali.');
-             // Delay logout slightly to allow user to see message
              setTimeout(() => setLoginState(false), 1500);
         });
 
         socket.on('connect_error', (error) => {
             console.error('WebSocket connection error:', error);
-             // Update WA status display as well
              updateWhatsappStatus('Disconnected (Server Error)', false);
             showLoginError('Koneksi ke server gagal. Memeriksa ulang...');
         });
 
         socket.on('disconnect', (reason) => {
             console.log('WebSocket disconnected:', reason);
-            updateWhatsappStatus('Disconnected', false); // Update WA status display
-            if (reason === 'io server disconnect') {
-                console.log('Server disconnected the socket.');
-                 showLoginError('Koneksi diputus oleh server. Silakan login kembali.');
-                 setTimeout(() => setLoginState(false), 2000);
-            } else if (reason === 'io client disconnect') {
-                console.log('Client disconnected the socket (expected on logout).');
-                 setLoginState(false); // Ensure logout state is set
-            } else {
-                 // Network error, Socket.IO will attempt to reconnect automatically
-                 console.log('Network disconnection. Attempting to reconnect...');
-                 if (!currentUser) { // Only show error if not logged in
-                     showLoginError('Koneksi terputus. Mencoba menyambungkan ulang...');
-                 } else {
-                     // Optionally show a non-blocking reconnecting indicator within the app
-                     adminUsernameDisplay.textContent = `Admin: ${currentUser} (Menyambungkan ulang...)`;
-                 }
+            updateWhatsappStatus('Disconnected', false);
+            // Set UI to logged out state immediately on *any* disconnect if currently logged in
+            if (currentUser && reason !== 'io client disconnect') { // Avoid changing state if client initiated disconnect (logout button)
+                 console.log('Server disconnected or network issue. Changing UI to logged out.');
+                 setLoginState(false); // This is the key for responsive logout
+            } else if (reason === 'io server disconnect') {
+                 // If server specifically tells us to disconnect, also set logged out state
+                  console.log('Server explicitly disconnected the socket.');
+                 setLoginState(false); // Ensure state is set
             }
         });
 
-        socket.on('login_success', ({ username, initials, currentPicks }) => {
+        socket.on('login_success', ({ username, initials, role, currentPicks }) => {
             console.log('Login successful via server.');
-             // Store initials if needed on frontend
-             // localStorage.setItem('adminInitials', initials); // Optional
-            setLoginState(true, username, currentPicks);
-            updateWhatsappStatus('Connected', true); // Assume WA is also connected after successful login
-            // Server is expected to send 'initial_data' after successful login
+            setLoginState(true, username, role, currentPicks);
+            updateWhatsappStatus('Connected', true);
+            socket.emit('request_initial_data');
         });
 
         socket.on('login_failed', (data) => {
             console.log('Login failed:', data?.message || 'Invalid credentials.');
             showLoginError(data?.message || 'Username atau password salah.');
-            loginButton.disabled = false; // Re-enable button
+            loginButton.disabled = false;
         });
 
-        socket.on('logout_success', () => {
-            console.log('Logout successful.');
-            setLoginState(false); // Reset state and show login page
-        });
+        // We don't need a specific UI change handler for logout_success anymore,
+        // as the button listener handles the UI state change immediately.
+        // socket.on('logout_success', () => { ... });
+
 
          // --- WhatsApp Connection Status Updates ---
         socket.on('whatsapp_connected', (data) => {
             console.log('WhatsApp Connected:', data?.username);
             updateWhatsappStatus('Connected', true);
-             qrCodeDiv.innerHTML = ''; // Clear QR code
-             qrArea.classList.add('hidden'); // Hide QR area
+             qrCodeDiv.innerHTML = '';
+             qrArea.classList.add('hidden');
         });
 
         socket.on('whatsapp_disconnected', (data) => {
             console.warn('WhatsApp Disconnected:', data?.reason, data?.statusCode);
              updateWhatsappStatus(`Disconnected (${data?.reason || 'Unknown'})`, false);
-             qrCodeDiv.innerHTML = ''; // Clear any old QR
+             qrCodeDiv.innerHTML = '';
         });
 
          socket.on('whatsapp_fatal_disconnected', (data) => {
             console.error('WhatsApp Fatal Disconnect:', data?.reason, data?.statusCode, data?.message);
              updateWhatsappStatus(`FATAL Disconnected (${data?.reason || 'Unknown'})`, false);
-             qrCodeDiv.innerHTML = ''; // Clear any old QR
-            if (data.statusCode === 401 || data.statusCode === 419) { // Invalid/Expired Session
-                 // Prompt user to re-scan QR by showing the QR area
+             qrCodeDiv.innerHTML = '';
+            if (data.statusCode === 401 || data.statusCode === 419) {
                  qrArea.classList.remove('hidden');
                  qrStatus.textContent = 'Sesi invalid. Silakan pindai QR Code baru.';
             }
@@ -1466,24 +1658,22 @@
         socket.on('whatsapp_qr', (qrCodeData) => {
              console.log('Received QR Code data.');
              updateWhatsappStatus('Waiting for Scan', false);
-             qrArea.classList.remove('hidden'); // Show QR area
+             qrArea.classList.remove('hidden');
              qrStatus.textContent = 'Memuat QR Code...';
 
-             // Render QR Code
-             qrCodeDiv.innerHTML = ''; // Clear previous QR
+             qrCodeDiv.innerHTML = '';
              try {
-                 const typeNumber = 0; // Auto-detect
-                 const errorCorrectionLevel = 'L'; // Low error correction
+                 const typeNumber = 0;
+                 const errorCorrectionLevel = 'L';
                  const qr = qrcode(typeNumber, errorCorrectionLevel);
                  qr.addData(qrCodeData);
                  qr.make();
-                 // Append the QR code image (or table)
-                 qrCodeDiv.innerHTML = qr.createImgTag(6, 6); // arguments: cellSize, margin
-                 // Add some style to the generated img tag
-                 const qrImg = qrCodeDiv.querySelector('img');
-                 if(qrImg) {
-                     qrImg.style.maxWidth = '100%';
-                     qrImg.style.height = 'auto';
+                 const qrImg = qr.createImgTag(6, 6);
+                 qrCodeDiv.innerHTML = qrImg;
+                 const qrImgElement = qrCodeDiv.querySelector('img');
+                 if(qrImgElement) {
+                     qrImgElement.style.maxWidth = '100%';
+                     qrImgElement.style.height = 'auto';
                  }
                  qrStatus.textContent = 'Silakan pindai QR Code di atas.';
              } catch (e) {
@@ -1495,125 +1685,105 @@
 
         // --- Initial Data & Message Handling ---
 
-        socket.on('initial_data', (initialHistory) => {
-            console.log('Received initial data:', Object.keys(initialHistory).length, 'chats');
+        socket.on('initial_data', ({ chatHistory: initialChatHistory, admins: registeredAdminList, currentUserRole: role }) => {
+            console.log('Received initial data:', Object.keys(initialChatHistory).length, 'chats');
+            console.log('Received registered admins:', registeredAdminList);
+             registeredAdmins = registeredAdminList || {};
+             populateDelegateChatSelect();
 
-          chatHistory = {}; // Clear previous history
-          Object.keys(initialHistory).forEach(chatId => {
-            // Store history using the original (decoded) chatId
-            chatHistory[chatId] = initialHistory[chatId];
-          });
+          chatHistory = initialChatHistory || {};
 
-          chatList.innerHTML = ''; // Clear existing list items
+          chatList.innerHTML = '';
           chatListItems = {};
 
           const sortedChatIds = Object.keys(chatHistory).sort((a, b) => {
-            const messagesA = chatHistory[a] || [];
-            const messagesB = chatHistory[b] || [];
-            // Get timestamp of the last message for sorting
+            const messagesA = chatHistory[a]?.messages || [];
+            const messagesB = chatHistory[b]?.messages || [];
             const lastMsgTimeA = messagesA.length > 0 ? new Date(messagesA[messagesA.length - 1].timestamp).getTime() : 0;
             const lastMsgTimeB = messagesB.length > 0 ? new Date(messagesB[messagesB.length - 1].timestamp).getTime() : 0;
-            return lastMsgTimeB - lastMsgTimeA; // Sort descending (newest first)
+            return lastMsgTimeB - lastMsgTimeA;
           });
 
           sortedChatIds.forEach(chatId => {
-            const messages = chatHistory[chatId] || [];
-            // Determine chat name (simple version)
-            const chatName = chatId.split('@')[0]; // Or fetch contact info if available
+            const chatEntry = chatHistory[chatId];
+            const messages = chatEntry?.messages || [];
+            const chatName = chatId.split('@')[0];
             const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
             updateChatList(
               chatId,
               chatName,
-              lastMessage?.text || (lastMessage?.mediaType ? `[${lastMessage.mediaType.replace('Message', '')}]` : ''), // Snippet for list
-              lastMessage?.timestamp || new Date(0).toISOString(), // Use message timestamp or epoch
-              true // Mark as initial load
+              lastMessage?.text || (lastMessage?.mediaType ? `[${lastMessage.mediaType.replace('Message', '')}]` : ''),
+              lastMessage?.timestamp || new Date(0).toISOString(),
+              chatEntry?.status || 'open',
+              true
             );
           });
 
-          // Ensure pick statuses are updated after list is built
           updateAllChatListItemsPickStatus();
 
-           // If a chat was previously selected (e.g., after reconnect), load its messages
            if (currentChatId && chatListItems[currentChatId]) {
                 loadChatMessages(currentChatId);
-                // The click listener handles selecting the item visually
-                // chatListItems[currentChatId].classList.add('selected'); // Ensure selected class
            } else {
-                resetChatArea(); // Show placeholder if no chat is selected or valid
+                resetChatArea();
            }
 
         });
 
-        socket.on('chat_history', ({ chatId, messages }) => {
-           // This event provides the FULL history for a specific chat when requested
-           // Update the chatHistory state first
-           chatHistory[chatId] = messages || []; // Store using original chatId
+        socket.on('chat_history', ({ chatId, messages, status }) => {
+           console.log(`Received history for chat ${chatId}:`, messages.length, 'messages', 'status:', status);
+           chatHistory[chatId] = { status: status, messages: messages || [] };
 
-           // If this is the currently active chat, render the messages
-          if (chatId === currentChatId) {
-            console.log(`Received history for active chat ${chatId}:`, messages.length, 'messages');
-            messagesDiv.innerHTML = ''; // Clear existing messages
+           if (chatId === currentChatId) {
+            messagesDiv.innerHTML = '';
             if (messages.length === 0) {
               messagesDiv.innerHTML = '<div class="placeholder">Belum ada pesan di percakapan ini.</div>';
             } else {
-              // Append messages in order received (assuming server sends sorted)
               messages.forEach(msg => {
-                // Ensure message has chatId for appendMessage if not present
                  if (!msg.chatId) msg.chatId = chatId;
-                appendMessage(msg); // appendMessage checks for duplicates in UI
+                appendMessage(msg);
               });
             }
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom after loading
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+             updateChatAreaForCurrentChat();
           } else {
                console.warn(`Received history for non-active chat ${chatId}. Updating state only.`);
-               // History is updated in state, but UI is not refreshed.
-               // This can happen if a user clicks a chat briefly then another.
            }
         });
 
 
         // --- Main Message Receiving Handler ---
         socket.on('new_message', (data) => {
-          const chatId = data.chatId; // Use the normalized chatId from the server
+          const chatId = data.chatId;
 
-          // Ensure chat exists in history state, add if new
           if (!chatHistory[chatId]) {
-            chatHistory[chatId] = [];
+            chatHistory[chatId] = { status: 'open', messages: [] };
              console.log(`New chat detected: ${chatId}`);
           }
 
-          // --- Add message to chatHistory state (deduplication by ID) ---
-          if (!chatHistory[chatId].some(msg => msg.id === data.id)) {
-             chatHistory[chatId].push(data);
+          if (!chatHistory[chatId].messages.some(msg => msg.id === data.id)) {
+             chatHistory[chatId].messages.push(data);
              console.log(`Added new message (ID: ${data.id}, Type: ${data.type}) to history for chat ${chatId}`);
 
-             // --- Update Chat List Item ---
-             // Find chat name (use existing if available, otherwise default)
              const chatName = chatListItems[chatId]?.dataset.chatName || chatId.split('@')[0];
+             const chatStatus = chatHistory[chatId].status;
 
              updateChatList(
                  chatId,
                  chatName,
-                 data.text || (data.mediaType ? `[${data.mediaType.replace('Message', '')}]` : ''), // Snippet for list
-                 data.timestamp // Timestamp of the new message
+                 data.text || (data.mediaType ? `[${data.mediaType.replace('Message', '')}]` : ''),
+                 data.timestamp,
+                 chatStatus
              );
 
-             // --- Append Message to Active Chat UI ---
              if (chatId === currentChatId) {
-                // Add message to the message area if this chat is open
-                // Ensure message has chatId for appendMessage if not present
                  if (!data.chatId) data.chatId = chatId;
-                appendMessage(data); // appendMessage handles UI duplication check
-                // Automatically mark as read if it's incoming and chat is currently open and picked by YOU
+                appendMessage(data);
                  const pickedBy = pickedChatsStatus[chatId];
                  if (data.type === 'incoming' && pickedBy === currentUser) {
-                     // Delay slightly to ensure message is rendered before marking read
                      setTimeout(() => markChatAsRead(chatId), 500);
                  }
              } else {
-                 // Message for a different chat - ensure unread indicator is visible if incoming
-                 updateUnreadIndicator(chatId); // This will show indicator if message is incoming and not active chat
-                  // Show browser notification (only for incoming messages to other chats)
+                 updateUnreadIndicator(chatId);
                  if (data.type === 'incoming') {
                       const notificationBody = data.text || (data.mediaType ? `[${data.mediaType.replace('Message', '')}]` : '[Pesan Baru]');
                       showNotification(`Pesan Baru (${chatName})`, notificationBody, { chatId: chatId });
@@ -1621,17 +1791,11 @@
              }
 
           } else {
-             // console.warn(`Pesan dengan ID ${data.id} sudah ada di state history untuk chat ${chatId}.`);
-             // If the message was already in state but somehow not in UI (rare),
-             // check if it needs appending to the active chat
              if (chatId === currentChatId && !messagesDiv.querySelector(`[data-message-id="${data.id}"]`)) {
-                 console.warn(`Pesan ID ${data.id} di history tapi belum di UI, menambahkan.`);
-                 // Ensure message has chatId for appendMessage if not present
+                 console.warn(`Pesan ID ${data.id} in history but not in UI, adding.`);
                  if (!data.chatId) data.chatId = chatId;
-                 appendMessage(data); // Append even if in history, if not in UI
+                 appendMessage(data);
              }
-             // If message is already in state and in UI, do nothing.
-             // If message is in state but not for active chat, do nothing.
           }
         });
 
@@ -1644,60 +1808,50 @@
             } else {
                 delete pickedChatsStatus[chatId];
             }
-            // Update UI elements affected by pick status
-            updateChatListItemPickStatus(chatId); // Update indicator on list item
+            updateChatListItemPickStatus(chatId);
             if (chatId === currentChatId) {
-                updateChatAreaForCurrentChat(); // Update chat header and reply box state
-                 // If *this* user just picked it, focus input
+                updateChatAreaForCurrentChat();
                  if(pickedBy === currentUser && previousPicker !== currentUser) {
                     replyInput.focus();
                  }
             }
-             // Ensure unread status is correctly reflected after pick changes
             updateUnreadIndicator(chatId);
-
         });
 
         socket.on('pick_error', ({ chatId, message }) => {
             console.error(`Pick/Unpick error for chat ${chatId}: ${message}`);
             if (chatId === currentChatId) {
-                 // Fix: Use getCssVariable
                  chatPickedStatus.textContent = `Error: ${message}`;
                  chatPickedStatus.style.color = getCssVariable('--error-color');
-                 // Reset UI state after a delay based on actual pick status
                  setTimeout(() => {
-                    updateChatAreaForCurrentChat(); // Reset to correct state based on actual pickedStatus
+                    updateChatAreaForCurrentChat();
                  }, 3000);
+            } else {
+                  showServerAlert(`Gagal mengambil chat ${chatId.split('@')[0]}: ${message}`, false);
             }
         });
 
         socket.on('send_error', ({ to, text, media, message }) => {
             console.error(`Failed to send message to ${to}: ${message}`);
             if (to === currentChatId) {
-                // Display error message near reply box
                 showSendError(message);
-                // Restore text and media to input field/preview
                 replyInput.value = text || '';
                 selectedMedia = media;
                 updateMediaPreview();
-                replyInput.focus(); // Keep focus
-                 // Re-enable buttons immediately on send error
+                replyInput.focus();
                  replyInput.disabled = false;
                  replyButton.disabled = false;
                  mediaButton.disabled = false;
             }
         });
 
-        // Event from server when ANOTHER admin marks a chat as read
         socket.on('update_chat_read_status', ({ chatId }) => {
              console.log(`Chat ${chatId} read status updated (likely by another admin).`);
-             // Invalidate the unread status in local state for this chat
-             if (chatHistory[chatId]) {
-                 chatHistory[chatId].forEach(msg => {
+             if (chatHistory[chatId]?.messages) {
+                 chatHistory[chatId].messages.forEach(msg => {
                      if (msg.type === 'incoming') msg.unread = false;
                  });
              }
-             // Update the unread indicator on the chat list item
              updateUnreadIndicator(chatId);
         });
 
@@ -1706,7 +1860,6 @@
             console.log(`Delegation success: ${chatId} to ${targetAdminUsername}`);
             if (chatId === currentChatId) {
                 alert(`Chat berhasil didelegasikan ke ${targetAdminUsername}.`);
-                 // UI will be updated by the subsequent 'update_pick_status' event
             }
         });
 
@@ -1719,37 +1872,98 @@
 
         socket.on('chat_delegated_to_you', ({ chatId, fromAdmin, message }) => {
             console.log(`Chat ${chatId} delegated to you by ${fromAdmin}`);
-            // Update state will happen via update_pick_status
             if (chatId === currentChatId) {
                  alert(message);
-                 updateChatAreaForCurrentChat(); // Refresh chat area state
-                 // Auto-focus if delegated to you and it's the current chat
+                 updateChatAreaForCurrentChat();
                  replyInput.focus();
             } else {
-                // Show notification for delegation to another chat
-                 showNotification(`Chat Didelegasikan`, message, { chatId: chatId });
+                showNotification(`Chat Didelegasikan`, message, { chatId: chatId });
             }
         });
 
         socket.on('update_online_admins', (onlineAdmins) => {
-            socket.onlineAdmins = onlineAdmins; // Store online admins
-            populateDelegateChatSelect(); // Update dropdown
+            socket.onlineAdmins = onlineAdmins;
+            populateDelegateChatSelect();
         });
 
-        socket.on('registered_admins', (registeredAdmins) => {
-            socket.registeredAdmins = registeredAdmins; // Store registered admins
-            populateDelegateChatSelect(); // Update dropdown (needed once on login/reconnect)
+        socket.on('registered_admins', (registeredAdminList) => {
+            console.log('Received updated registered admins:', registeredAdminList);
+            registeredAdmins = registeredAdminList || {};
+            populateDelegateChatSelect();
         });
+
+        // --- Super Admin Event Handlers ---
+
+        socket.on('superadmin_error', ({ message }) => {
+            console.error(`Super Admin Error: ${message}`);
+             showServerAlert(message, false);
+             const addAdminStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
+             if (addAdminModal.style.display !== 'none') {
+                 addAdminStatusDiv.textContent = message;
+                 addAdminStatusDiv.className = 'add-admin-form-status error';
+             }
+        });
+
+        socket.on('superadmin_success', ({ message }) => {
+             console.log(`Super Admin Success: ${message}`);
+             showServerAlert(message, true);
+             const addAdminStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
+              if (addAdminModal.style.display !== 'none') {
+                 addAdminStatusDiv.textContent = message;
+                 addAdminStatusDiv.className = 'add-admin-form-status success';
+                  setTimeout(() => addAdminModal.style.display = 'none', 1500);
+             }
+        });
+
+         socket.on('chat_history_deleted', ({ chatId }) => {
+             console.log(`Chat history deleted for ${chatId}.`);
+             delete chatHistory[chatId];
+             delete chatListItems[chatId];
+             delete pickedChatsStatus[chatId];
+
+             const listItem = chatList.querySelector(`li[data-chat-id="${chatId}"]`);
+             if (listItem) {
+                 listItem.remove();
+             }
+
+             if (currentChatId === chatId) {
+                 currentChatId = null;
+                 resetChatArea();
+             }
+             if (chatList.children.length === 0 || (chatList.children.length === 1 && chatList.querySelector('.placeholder'))) {
+                 chatList.innerHTML = '<div class="placeholder" style="color: rgba(255,255,255,0.7); text-align: center; margin-top: 20px;">Tidak ada percakapan.</div>';
+             }
+         });
+
+        socket.on('all_chat_history_deleted', () => {
+            console.log('All chat history deleted.');
+            resetUI();
+            chatList.innerHTML = '<div class="placeholder" style="color: rgba(255,255,255,0.7); text-align: center; margin-top: 20px;">Tidak ada percakapan.</div>';
+        });
+
+        socket.on('chat_status_updated', ({ chatId, status }) => {
+            console.log(`Chat status updated for ${chatId} to ${status}.`);
+            if (chatHistory[chatId]) {
+                 chatHistory[chatId].status = status;
+            }
+
+             updateChatListItemStatus(chatId, status);
+
+             if (chatId === currentChatId) {
+                 updateChatAreaForCurrentChat();
+             }
+        });
+
 
         // --- UI Event Listeners ---
 
         loginButton.addEventListener('click', () => {
             const username = usernameInput.value.trim();
             const password = passwordInput.value.trim();
-            hideSendError(); // Hide any old errors
+            hideSendError();
             if (username && password) {
                 showLoginError('Memproses login...');
-                loginButton.disabled = true; // Prevent double click
+                loginButton.disabled = true;
                 socket.emit('admin_login', { username, password });
             } else {
                 showLoginError('Username dan password harus diisi.');
@@ -1762,23 +1976,37 @@
             }
         });
 
+        // --- PERBAIKAN FUNGSI LOGOUT ---
         logoutButton.addEventListener('click', () => {
             console.log('Logout initiated.');
+            // Kirim event ke server untuk membersihkan state
             if (socket.connected) {
                 socket.emit('admin_logout');
+                // Tidak perlu menunggu konfirmasi dari server untuk logout UI
+                // UI langsung diubah
+                setLoginState(false);
+                // Opsional: putuskan koneksi Socket.IO dari client side
+                // Ini akan memicu event 'disconnect' handler
+                socket.disconnect();
             } else {
-                 // If socket not connected, just clear local state
+                 // Jika socket tidak terhubung, langsung bersihkan state lokal
                  setLoginState(false);
             }
         });
+        // --- AKHIR PERBAIKAN FUNGSI LOGOUT ---
+
 
         pickChatButton.addEventListener('click', () => {
             if (currentChatId && currentUser && !pickedChatsStatus[currentChatId]) {
+                 const chatStatus = chatHistory[currentChatId]?.status || 'open';
+                 if (chatStatus === 'closed') {
+                      alert('Tidak bisa mengambil chat yang sudah ditutup.');
+                      return;
+                 }
                 console.log(`Attempting to pick chat: ${currentChatId}`);
-                pickChatButton.disabled = true; // Disable immediately
+                pickChatButton.disabled = true;
                 pickChatButton.textContent = 'Mengambil...';
                 socket.emit('pick_chat', { chatId: currentChatId });
-                 // Button state will be updated by 'update_pick_status' or 'pick_error'
             } else {
                  console.warn("Pick button clicked in invalid state:", { currentChatId, currentUser, picked: pickedChatsStatus[currentChatId] });
             }
@@ -1786,26 +2014,26 @@
 
         delegateChatButton.addEventListener('click', () => {
             const targetAdminUsername = delegateChatSelect.value;
-             // Check if there's a selected admin
             if (!targetAdminUsername) {
                  alert('Pilih admin tujuan untuk delegasi.');
                  return;
              }
-
-             // Find the option element to check its class (online/offline)
              const selectedOption = delegateChatSelect.options[delegateChatSelect.selectedIndex];
              const isOnline = selectedOption?.classList.contains('online');
 
+             const chatStatus = chatHistory[currentChatId]?.status || 'open';
+             if (chatStatus === 'closed') {
+                  alert('Tidak bisa mendelegasikan chat yang sudah ditutup.');
+                  return;
+             }
 
             if (!isOnline && !offlineAdminNotified.has(targetAdminUsername)) {
-                offlineAdminNotified.add(targetAdminUsername); // Mark as notified
+                offlineAdminNotified.add(targetAdminUsername);
                 offlineAdminMessage.textContent = `Admin ${targetAdminUsername} sedang offline. Delegasi akan tetap dilakukan, tetapi admin tersebut mungkin tidak segera menangani chat.`;
-                offlineAdminModal.style.display = 'flex'; // Show modal
+                offlineAdminModal.style.display = 'flex';
             } else {
-                 // If online or already notified about offline, proceed directly
                  console.log(`Mendelegasikan chat ${currentChatId} ke ${targetAdminUsername}`);
                  socket.emit('delegate_chat', { chatId: currentChatId, targetAdminUsername });
-                 // Close modal if it was shown previously for this admin (optional)
                  if (offlineAdminModal.style.display === 'flex') {
                      offlineAdminModal.style.display = 'none';
                  }
@@ -1816,16 +2044,117 @@
              offlineAdminModal.style.display = 'none';
          });
 
+         addAdminButton.addEventListener('click', () => {
+             if (currentUserRole === 'superadmin') {
+                 addAdminModal.style.display = 'flex';
+                  newAdminUsernameInput.value = '';
+                  newAdminPasswordInput.value = '';
+                  newAdminInitialsInput.value = '';
+                  newAdminRoleSelect.value = 'admin';
+                  addAdminFormStatusDiv.textContent = '';
+                  addAdminFormStatusDiv.className = 'add-admin-form-status';
+                  newAdminUsernameInput.focus();
+             }
+         });
 
-        // Handle media selection
+        submitAddAdminButton.addEventListener('click', () => {
+             if (currentUserRole !== 'superadmin') {
+                  showServerAlert('Akses ditolak.', false);
+                  return;
+             }
+             const username = newAdminUsernameInput.value.trim();
+             const password = newAdminPasswordInput.value.trim();
+             const initials = newAdminInitialsInput.value.trim();
+             const role = newAdminRoleSelect.value;
+
+             if (!username || !password || !initials) {
+                 addAdminFormStatusDiv.textContent = 'Username, password, dan initials harus diisi.';
+                 addAdminFormStatusDiv.className = 'add-admin-form-status error';
+                 return;
+             }
+             if (initials.length > 3) {
+                  addAdminFormStatusDiv.textContent = 'Initials maksimal 3 karakter.';
+                  addAdminFormStatusDiv.className = 'add-admin-form-status error';
+                  return;
+             }
+
+
+             addAdminFormStatusDiv.textContent = 'Menambahkan admin...';
+             addAdminFormStatusDiv.className = 'add-admin-form-status';
+
+             socket.emit('add_admin', { username, password, initials, role });
+        });
+
+        document.querySelectorAll('.close-modal-button').forEach(button => {
+             button.addEventListener('click', (e) => {
+                 const modalId = e.target.dataset.targetModal;
+                 if (modalId) {
+                     document.getElementById(modalId).style.display = 'none';
+                 }
+             });
+        });
+
+
+         deleteChatButton.addEventListener('click', () => {
+             if (currentUserRole !== 'superadmin' || !currentChatId) {
+                  showServerAlert('Akses ditolak atau chat tidak dipilih.', false);
+                  return;
+             }
+             if (confirm(`Anda yakin ingin menghapus riwayat chat untuk ${currentChatId.split('@')[0]}? Tindakan ini tidak bisa dibatalkan.`)) {
+                  console.log(`Super Admin ${currentUser} menghapus chat ${currentChatId}`);
+                 socket.emit('delete_chat', { chatId: currentChatId });
+             }
+         });
+
+         deleteAllChatsButton.addEventListener('click', () => {
+             if (currentUserRole !== 'superadmin') {
+                  showServerAlert('Akses ditolak.', false);
+                  return;
+             }
+            if (confirm('Anda yakin ingin menghapus SEMUA riwayat chat? Tindakan ini tidak bisa dibatalkan dan akan menghapus data secara permanen.')) {
+                 if (confirm('INI TINDAKAN KRITIS! Konfirmasi sekali lagi untuk menghapus SEMUA chat history?')) {
+                      console.log(`Super Admin ${currentUser} menghapus SEMUA chat history.`);
+                      socket.emit('delete_all_chats');
+                 }
+            }
+         });
+
+         closeChatButton.addEventListener('click', () => {
+             // Fix: Only Super Admin can close chat
+             if (currentUserRole !== 'superadmin' || !currentChatId) {
+                  showServerAlert('Akses ditolak. Hanya Super Admin yang bisa menutup chat.', false);
+                  return;
+             }
+
+            if (!currentChatId || !currentUser) return; // Should not happen if button hidden correctly
+
+             const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
+              if (confirm(`Tutup percakapan dengan ${chatName}? Ini akan melepaskan chat.`)) {
+                  console.log(`Admin ${currentUser} menutup chat ${currentChatId}`);
+                  socket.emit('close_chat', { chatId: currentChatId });
+              }
+         });
+
+         openChatButton.addEventListener('click', () => {
+             if (currentUserRole !== 'superadmin' || !currentChatId) {
+                  showServerAlert('Akses ditolak atau chat tidak dipilih.', false);
+                  return;
+             }
+             const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
+             if (confirm(`Buka kembali percakapan dengan ${chatName}?`)) {
+                  console.log(`Super Admin ${currentUser} membuka kembali chat ${currentChatId}`);
+                  socket.emit('open_chat', { chatId: currentChatId });
+             }
+         });
+
+
         mediaInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (file) {
-                 // Basic file size validation (e.g., max 25MB, Baileys/WA limits vary)
-                 const maxSizeBytes = 25 * 1024 * 1024; // 25 MB
+                 const maxSizeBytes = 25 * 1024 * 1024;
                  if (file.size > maxSizeBytes) {
                      alert(`Ukuran file melebihi batas (${maxSizeBytes / (1024*1024)}MB).`);
-                     mediaInput.value = null; // Clear the file input
+                     mediaInput.value = null;
                      selectedMedia = null;
                      updateMediaPreview();
                      return;
@@ -1834,12 +2163,11 @@
                 const reader = new FileReader();
                 reader.onload = () => {
                     selectedMedia = {
-                        data: reader.result.split(',')[1], // Base64 data
-                        type: file.type, // MIME type
-                        name: file.name // File name
+                        data: reader.result.split(',')[1],
+                        type: file.type,
+                        name: file.name
                     };
-                    // alert(`Media "${file.name}" telah dipilih.`); // Less intrusive notification
-                    updateMediaPreview(); // Show preview
+                    updateMediaPreview();
                 };
                 reader.onerror = (error) => {
                      console.error("Error reading file:", error);
@@ -1848,113 +2176,99 @@
                      selectedMedia = null;
                      updateMediaPreview();
                 };
-                reader.readAsDataURL(file); // Read file as Base64
+                reader.readAsDataURL(file);
             }
         });
 
-        // Open file picker when media button is clicked
         mediaButton.addEventListener('click', () => {
-            // Check if a chat is selected and picked by the current user
             if (!currentChatId || pickedChatsStatus[currentChatId] !== currentUser) {
                  alert('Silakan pilih dan ambil chat terlebih dahulu sebelum mengirim media.');
                  return;
              }
-            // Trigger the hidden file input click
+             const chatStatus = chatHistory[currentChatId]?.status || 'open';
+             if (chatStatus === 'closed') {
+                  alert('Tidak bisa mengirim media ke chat yang sudah ditutup.');
+                  return;
+             }
             mediaInput.click();
         });
 
 
-        // --- Send Reply Logic ---
         replyButton.addEventListener('click', () => {
             const text = replyInput.value.trim();
 
-            // Check if there is any content to send (text OR selected media)
             if (!text && !selectedMedia) {
-                 hideSendError(); // Clear previous error if any
-                 return; // Do nothing if input is empty and no media
+                 hideSendError();
+                 return;
             }
 
-            // Check if a chat is selected and picked by the current user
             if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
+                 const chatStatus = chatHistory[currentChatId]?.status || 'open';
+                 if (chatStatus === 'closed') {
+                      showSendError('Tidak bisa mengirim balasan ke chat yang sudah ditutup.');
+                      return;
+                 }
+
                 const messageData = {
-                  to: currentChatId, // Send to the currently active chat ID
-                  text: text || null, // Send text (or null if empty)
-                  media: selectedMedia || null // Send media object (or null if none)
+                  to: currentChatId,
+                  text: text || null,
+                  media: selectedMedia || null
                 };
 
-                // Disable input and button temporarily to prevent double sending
                 replyInput.disabled = true;
                 replyButton.disabled = true;
                 mediaButton.disabled = true;
-                 hideSendError(); // Hide previous error message
+                 hideSendError();
 
-                // Emit the message to the server
                 socket.emit('reply_message', messageData);
 
-                // Clear the input field and selected media IMMEDIATELY
                 replyInput.value = '';
                 selectedMedia = null;
-                updateMediaPreview(); // Hide media preview
-
-
-                // Note: We DO NOT append the message to the UI here.
-                // The server will process the message, save it to history,
-                // and broadcast a 'new_message' event (including back to this client).
-                // The 'new_message' handler is responsible for adding it to the UI.
-
+                updateMediaPreview();
             } else {
                 console.warn("Send attempt in invalid state:", { text, currentChatId, picked: pickedChatsStatus[currentChatId], currentUser });
                  showSendError('Pilih atau ambil chat terlebih dahulu.');
             }
         });
 
-        // Handle Enter key in textarea for sending
         replyInput.addEventListener('keypress', (e) => {
-            // Send on Enter, unless Shift is also pressed (allow Shift+Enter for newline)
             if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault(); // Prevent newline and default form submission
-                replyButton.click(); // Trigger send button click
+                e.preventDefault();
+                replyButton.click();
             }
         });
 
-         // Auto-resize textarea based on content
          replyInput.addEventListener('input', () => {
-             replyInput.style.height = 'auto'; // Reset height
-             replyInput.style.height = replyInput.scrollHeight + 'px'; // Set to scroll height
+             replyInput.style.height = 'auto';
+             replyInput.style.height = replyInput.scrollHeight + 'px';
          });
 
-        // Re-enable input/button after send confirmation or error
         socket.on('reply_sent_confirmation', ({ sentMsgId, chatId }) => {
             console.log(`Message sent confirmation received for ID: ${sentMsgId}`);
              if (chatId === currentChatId) {
-                 // Re-enable input and button
                  replyInput.disabled = false;
                  replyButton.disabled = false;
                  mediaButton.disabled = false;
-                 replyInput.focus(); // Put focus back in input
-                 // Note: The message will be appended to the UI by the 'new_message' handler
+                 replyInput.focus();
              }
         });
-        // send_error also re-enables, handled in its handler
 
 
-        // --- Initial Check & Setup ---
         document.addEventListener('DOMContentLoaded', () => {
             const storedUsername = localStorage.getItem('loggedInUsername');
             if (storedUsername) {
                  console.log('DOM Loaded. Found user in localStorage:', storedUsername);
-                 // UI will wait for socket 'connect' and 'reconnect_success'
-                 showLoginError('Menghubungkan...'); // Initial message
+                 showLoginError('Menghubungkan...');
+                 // On DOMContentLoaded, request reconnect. Role and initial data will come via events.
+                 socket.emit('admin_reconnect', { username: storedUsername });
              } else {
                  console.log('DOM Loaded. No user in localStorage.');
-                 setLoginState(false); // Show login page
-                 showLoginError(''); // Clear connecting message
-                 // Also hide QR if no user logged in initially
+                 // If no stored user, show login page immediately
+                 setLoginState(false);
+                 showLoginError('');
                  qrArea.classList.add('hidden');
              }
 
-            // Fetch and display app version from config (assuming server serves config.json)
-            // You might need to adjust the path if config.js is not served directly
              fetch('/config.json')
                  .then(response => {
                      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1968,22 +2282,19 @@
                      document.getElementById('app-version').textContent = 'N/A';
                  });
 
-            // Add event listener for initial placeholder click (optional)
              const initialPlaceholder = chatList.querySelector('.placeholder');
              if(initialPlaceholder) {
                  initialPlaceholder.addEventListener('click', () => {
                      if (!currentUser) {
                           alert('Silakan login terlebih dahulu.');
-                     } else if (whatsappStatusDiv.textContent.includes('Disconnected')) { // Check WA status text
+                     } else if (whatsappStatusDiv.textContent.includes('Disconnected')) {
                          alert('Koneksi WhatsApp belum siap. Silakan tunggu atau periksa log server.');
                      } else if (whatsappStatusDiv.textContent.includes('Connecting')) {
                          alert('Koneksi WhatsApp sedang dalam proses. Silakan tunggu.');
                      }
-                     // If logged in and WA connected, clicking placeholder shouldn't do anything unless there's a bug
                  });
              }
 
-             // Trigger auto-resize for the textarea on page load
              replyInput.style.height = 'auto';
              replyInput.style.height = replyInput.scrollHeight + 'px';
 
