@@ -1,19 +1,21 @@
-const { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } = require('baileys');
-const express = require('express');
-const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http, {
+import { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } from 'baileys';
+import express from 'express';
+const expressApp = express();
+import http from 'http';
+const server = http.createServer(expressApp);
+import { Server } from 'socket.io';
+const io = new Server(server, {
     cors: {
         origin: "*", // Allow all origins; replace with specific origin if needed
         methods: ["GET", "POST"]
     }
 });
-const qrcode = require('qrcode-terminal');
-const session = require('express-session');
-const fs = require('fs');
-const path = require('path');
-const pino = require('pino'); // Untuk logging Baileys yang lebih detail (opsional)
-const config = require('./config');
+import qrcode from 'qrcode-terminal';
+import session from 'express-session';
+import fs from 'fs';
+import path from 'path';
+import pino from 'pino'; // Untuk logging Baileys yang lebih detail (opsional)
+import config from './config.js';
 
 // --- Konfigurasi & State ---
 const admins = config.admins;
@@ -31,29 +33,35 @@ let sock; // Variabel global untuk instance socket Baileys
 const logger = pino({ level: 'warn' }); // Level: 'trace', 'debug', 'info', 'warn', 'error', 'fatal'
 
 // Memuat history chat dari file
+import { getDatabase, ref, child, get } from 'firebase/database';
+import { app as firebaseApp } from './firebaseConfig.js';
+
 function loadChatHistory() {
-  try {
-    if (fs.existsSync(chatHistoryFile)) {
-      const data = fs.readFileSync(chatHistoryFile, 'utf-8');
-      chatHistory = JSON.parse(data);
-      console.log('Riwayat chat berhasil dimuat.');
+  const dbRef = ref(getDatabase(firebaseApp));
+  get(child(dbRef, 'chatHistory')).then((snapshot) => {
+    if (snapshot.exists()) {
+      chatHistory = snapshot.val();
+      console.log('Riwayat chat berhasil dimuat dari Firebase.');
     } else {
-      console.log('File riwayat chat tidak ditemukan, memulai dengan history kosong.');
+      console.log('Tidak ada riwayat chat di Firebase, memulai dengan history kosong.');
       chatHistory = {};
     }
-  } catch (error) {
-    console.error('Gagal memuat riwayat chat:', error);
+  }).catch((error) => {
+    console.error('Gagal memuat riwayat chat dari Firebase:', error);
     chatHistory = {};
-  }
+  });
 }
 
 // Menyimpan history chat ke file
+const { set } = require('firebase/database');
+
 function saveChatHistory() {
-  try {
-    fs.writeFileSync(chatHistoryFile, JSON.stringify(chatHistory, null, 2), 'utf-8');
-  } catch (error) {
-    console.error('Gagal menyimpan riwayat chat:', error);
-  }
+  const dbRef = ref(getDatabase(), 'chatHistory');
+  set(dbRef, chatHistory).then(() => {
+    console.log('Riwayat chat berhasil disimpan ke Firebase.');
+  }).catch((error) => {
+    console.error('Gagal menyimpan riwayat chat ke Firebase:', error);
+  });
 }
 
 // Membatalkan timer auto-release

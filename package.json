@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Aplikasi Helpdesk WhatsApp dengan GUI",
   "main": "backend.js",
+  "type": "module",
   "scripts": {
     "start": "node backend.js",
     "dev": "nodemon backend.js"
@@ -11,6 +12,8 @@
     "baileys": "^6.7.16",
     "express": "^4.18.2",
     "express-session": "^1.18.1",
+    "firebase": "^11.6.1",
+    "firebase-admin": "^13.3.0",
     "jimp": "^0.16.13",
     "qrcode-terminal": "^0.12.0",
     "sharp": "^0.32.6",
