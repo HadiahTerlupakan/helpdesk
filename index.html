@@ -665,7 +665,7 @@
                 <div id="admin-username-display"></div>
                  <div id="admin-role-display"></div> <!-- Display admin role -->
                  <div id="whatsapp-status">Status: Menyambungkan...</div> <!-- WA Status -->
-                <h3>Percakapan Aktif</h3>
+                <h3>Percakasaan Aktif</h3>
             </div>
              <!-- Super Admin Panel in Sidebar (optional location) -->
             <div id="superadmin-panel" style="padding: 15px; background: rgba(0,0,0,0.1); display: none; flex-direction: column; gap: 10px; flex-shrink: 0;">
@@ -940,7 +940,6 @@
             } else {
                 currentUser = null;
                 currentUserRole = null; // Clear role on logout
-                localStorage.removeItem('loggedInLoggedIn'); // Fix: should be 'loggedInUsername'
                 localStorage.removeItem('loggedInUsername'); // Clear username
                 // localStorage.removeItem('currentUserRole'); // Optional
                 loginContainer.classList.remove('hidden');
@@ -1097,7 +1096,6 @@
                  if (delegateChatContainer.style.display === 'flex') { // Only populate if visible
                      populateDelegateChatSelect();
                  }
-
 
                  // Close button visible only if Super Admin
                  closeChatButton.style.display = (currentUserRole === 'superadmin') ? 'inline-block' : 'none';
@@ -1602,14 +1600,12 @@
         socket.on('disconnect', (reason) => {
             console.log('WebSocket disconnected:', reason);
             updateWhatsappStatus('Disconnected', false);
-            // Set UI to logged out state immediately on *any* disconnect if currently logged in
-            if (currentUser && reason !== 'io client disconnect') { // Avoid changing state if client initiated disconnect (logout button)
+            if (currentUser && reason !== 'io client disconnect') {
                  console.log('Server disconnected or network issue. Changing UI to logged out.');
-                 setLoginState(false); // This is the key for responsive logout
+                 setLoginState(false);
             } else if (reason === 'io server disconnect') {
-                 // If server specifically tells us to disconnect, also set logged out state
                   console.log('Server explicitly disconnected the socket.');
-                 setLoginState(false); // Ensure state is set
+                 setLoginState(false);
             }
         });
 
@@ -1625,10 +1621,6 @@
             showLoginError(data?.message || 'Username atau password salah.');
             loginButton.disabled = false;
         });
-
-        // We don't need a specific UI change handler for logout_success anymore,
-        // as the button listener handles the UI state change immediately.
-        // socket.on('logout_success', () => { ... });
 
 
          // --- WhatsApp Connection Status Updates ---
@@ -1883,13 +1875,13 @@
 
         socket.on('update_online_admins', (onlineAdmins) => {
             socket.onlineAdmins = onlineAdmins;
-            populateDelegateChatSelect();
+            populateDelegateChatSelect(); // Populate when online status changes
         });
 
         socket.on('registered_admins', (registeredAdminList) => {
             console.log('Received updated registered admins:', registeredAdminList);
             registeredAdmins = registeredAdminList || {};
-            populateDelegateChatSelect();
+            populateDelegateChatSelect(); // Populate when registered admin list changes (e.g., new admin added)
         });
 
         // --- Super Admin Event Handlers ---
@@ -1976,24 +1968,15 @@
             }
         });
 
-        // --- PERBAIKAN FUNGSI LOGOUT ---
         logoutButton.addEventListener('click', () => {
             console.log('Logout initiated.');
-            // Kirim event ke server untuk membersihkan state
             if (socket.connected) {
                 socket.emit('admin_logout');
-                // Tidak perlu menunggu konfirmasi dari server untuk logout UI
-                // UI langsung diubah
-                setLoginState(false);
-                // Opsional: putuskan koneksi Socket.IO dari client side
-                // Ini akan memicu event 'disconnect' handler
-                socket.disconnect();
-            } else {
-                 // Jika socket tidak terhubung, langsung bersihkan state lokal
-                 setLoginState(false);
             }
+            // Segera ganti UI ke tampilan login
+            setLoginState(false);
+             // Socket.IO will automatically handle disconnecting after the state change.
         });
-        // --- AKHIR PERBAIKAN FUNGSI LOGOUT ---
 
 
         pickChatButton.addEventListener('click', () => {
@@ -2026,6 +2009,14 @@
                   alert('Tidak bisa mendelegasikan chat yang sudah ditutup.');
                   return;
              }
+
+             // Check if current user is Super Admin OR is the one who picked the chat
+             const pickedBy = pickedChatsStatus[currentChatId];
+             if (currentUserRole !== 'superadmin' && pickedBy !== currentUser) {
+                  alert('Anda tidak punya izin mendelegasikan chat ini.');
+                  return; // Prevent delegation if not Super Admin and not the picker
+             }
+
 
             if (!isOnline && !offlineAdminNotified.has(targetAdminUsername)) {
                 offlineAdminNotified.add(targetAdminUsername);
@@ -2120,13 +2111,13 @@
          });
 
          closeChatButton.addEventListener('click', () => {
-             // Fix: Only Super Admin can close chat
-             if (currentUserRole !== 'superadmin' || !currentChatId) {
+             // Only Super Admin can close chat (validation on server too)
+             if (currentUserRole !== 'superadmin') {
                   showServerAlert('Akses ditolak. Hanya Super Admin yang bisa menutup chat.', false);
                   return;
              }
 
-            if (!currentChatId || !currentUser) return; // Should not happen if button hidden correctly
+            if (!currentChatId || !currentUser) return;
 
              const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
               if (confirm(`Tutup percakapan dengan ${chatName}? Ini akan melepaskan chat.`)) {
@@ -2259,11 +2250,9 @@
             if (storedUsername) {
                  console.log('DOM Loaded. Found user in localStorage:', storedUsername);
                  showLoginError('Menghubungkan...');
-                 // On DOMContentLoaded, request reconnect. Role and initial data will come via events.
                  socket.emit('admin_reconnect', { username: storedUsername });
              } else {
                  console.log('DOM Loaded. No user in localStorage.');
-                 // If no stored user, show login page immediately
                  setLoginState(false);
                  showLoginError('');
                  qrArea.classList.add('hidden');
