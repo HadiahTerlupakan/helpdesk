@@ -13,7 +13,7 @@ const config = {
   // untuk keamanan produksi. Untuk contoh ini, kita menggunakan plain text.
 
   admins: {
-    'admin': { password: 'admin123', initials: '-AD', role: 'admin' }, // Contoh: admin biasa
+    'admin': { password: 'admin123', initials: 'AD', role: 'admin' }, // Contoh: admin biasa
     'admin2': { password: 'password', initials: 'A2', role: 'admin' }, // Contoh: admin biasa
     'superadmin': { password: 'superpassword', initials: '-SA', role: 'superadmin' }, // Contoh: super admin
     // Anda bisa menambahkan admin lain di sini:
