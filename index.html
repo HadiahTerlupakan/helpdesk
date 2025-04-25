@@ -852,26 +852,23 @@
          }
 
         function appendMessage(msgData) {
-            const { from, text, type, mediaData, mediaType, timestamp, fileName } = msgData; // type: 'incoming'/'outgoing', fileName for documents
+            const { from, text, type, mediaData, mediaType, timestamp, fileName } = msgData;
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
             const senderName = type === 'incoming' ? (from ? from.split('@')[0] : 'Unknown') : 'Anda';
             let contentHTML = `<strong>${senderName}</strong>`;
 
-            // Handle Media
             if (mediaData && mediaType) {
                 const mimeType = getMimeType(mediaType, mediaData);
                 const dataUrl = mediaData.startsWith('data:') ? mediaData : `data:${mimeType};base64,${mediaData}`;
 
-                if (mediaType === 'imageMessage') { // <-- Perubahan di sini
+                if (mediaType === 'imageMessage') {
                     contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 150px; max-height: 150px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
-                } else if (mediaType === 'videoMessage') { // <-- Ubah dari startsWith ke ===
+                } else if (mediaType === 'videoMessage') {
                     contentHTML += `<br><video controls src="${dataUrl}" preload="metadata" style="max-width: 150px; max-height: 150px; border-radius: 5px;"></video>`;
-                } else if (mediaType === 'audioMessage') { // <-- Ubah dari startsWith ke ===
+                } else if (mediaType === 'audioMessage') {
                     contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata" style="max-width: 100%;"></audio>`;
-                } else if (mediaType === 'stickerMessage') { // <-- Tambahkan penanganan stiker
-                    contentHTML += `<br><img src="${dataUrl}" alt="Media Stiker" style="max-width: 100px; max-height: 100px;">`;
-                } else if (mediaType === 'documentMessage') { // <-- Ubah dari application/pdf ke ===
+                } else if (mediaType === 'documentMessage') {
                     const docName = fileName || "Dokumen";
                     contentHTML += `<br><a href="${dataUrl}" download="${docName}" target="_blank" class="document-link"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
                 } else {
@@ -879,7 +876,6 @@
                 }
             }
 
-            // Handle Text (Caption or regular message)
             if (text) {
                 const textClass = (mediaData && mediaType) ? 'caption' : 'text-content';
                 contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
@@ -889,13 +885,11 @@
 
             messageDiv.innerHTML = contentHTML;
 
-            // Remove placeholder if it exists
             const placeholder = messagesDiv.querySelector('.placeholder');
             if (placeholder) placeholder.remove();
 
             messagesDiv.appendChild(messageDiv);
 
-            // Scroll logic
             const isScrolledToBottom = messagesDiv.scrollHeight - messagesDiv.clientHeight <= messagesDiv.scrollTop + 150;
             if (isScrolledToBottom || type === 'outgoing') {
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -1261,32 +1255,31 @@
         replyButton.addEventListener('click', () => {
             const text = replyInput.value.trim();
 
-            if (!text && !selectedImageFile) return; // Do nothing if both are empty
+            if (!text && !selectedMedia) return;
 
             if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
                 const messageData = {
                     to: currentChatId,
                     text: text || null,
-                    media: selectedMedia || null // Include media if selected
+                    media: selectedMedia || null
                 };
                 socket.emit('reply_message', messageData);
 
-                // Optimistic UI update
                 const tempOutgoingMsg = {
                     from: currentUser,
                     type: 'outgoing',
                     text: text || null,
                     mediaType: selectedMedia?.type?.startsWith('image/') ? 'imageMessage' : selectedMedia?.type || null,
-                    mediaData: selectedMedia?.data || null, // <-- Tambahkan baris ini
+                    mediaData: selectedMedia?.data || null,
                     fileName: selectedMedia?.name || null,
                     timestamp: new Date().toISOString()
                 };
                 appendMessage(tempOutgoingMsg);
 
-                replyInput.value = ''; // Clear input
-                selectedMedia = null; // Clear selected media
-                updateMediaPreview(); // Clear preview
-                replyInput.focus(); // Keep focus on input
+                replyInput.value = '';
+                selectedMedia = null;
+                updateMediaPreview();
+                replyInput.focus();
             } else {
                 console.warn("Send attempt in invalid state:", { text, currentChatId, picked: pickedChatsStatus[currentChatId], currentUser });
             }

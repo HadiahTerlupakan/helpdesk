@@ -471,7 +471,9 @@ io.on('connection', (socket) => {
     try {
         const adminInfo = admins[username];
         const adminInitials = adminInfo?.initials || username.substring(0, 2).toUpperCase();
-        const replyTextWithInitials = text ? `${text.trim()}\n\n_${adminInitials}_` : null; // Italic initials
+        const replyTextWithInitials = text ? `${text.trim()}
+
+_${adminInitials}_` : null;
 
         let sentMsg;
         if (media) {
@@ -487,30 +489,28 @@ io.on('connection', (socket) => {
             } else if (media.type.startsWith('video/')) {
                 sentMsg = await sock.sendMessage(to, { video: mediaBuffer, ...mediaOptions });
             } else if (media.type.startsWith('audio/')) {
-                // Audio messages typically don't have captions in the same way
                 sentMsg = await sock.sendMessage(to, { audio: mediaBuffer, mimetype: media.type });
-                // Send initials separately if needed
-                if (replyTextWithInitials && !trimmedText) {
+                if (replyTextWithInitials && !text) {
                     await sock.sendMessage(to, { text: `_${adminInitials}_` });
                 }
-            } else if (media.type === 'application/pdf' || media.type.startsWith('document/')) { // Broader document check
+            } else if (media.type === 'application/pdf' || media.type.startsWith('document/')) {
                 sentMsg = await sock.sendMessage(to, { document: mediaBuffer, ...mediaOptions });
             } else {
                 console.warn(`Tipe media tidak didukung untuk dikirim: ${media.type}`);
                 socket.emit('send_error', { to, text, media, message: 'Tipe media tidak didukung.' });
-                return; // Stop processing if media type is unsupported
+                return;
             }
         } else {
             sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
         }
 
-        clearAutoReleaseTimer(to); // Batalkan timer karena ada balasan
+        clearAutoReleaseTimer(to);
 
         const outgoingMessageData = {
             id: sentMsg.key.id,
-            from: username, // Nama admin pengirim
+            from: username,
             to: to,
-            text: text?.trim() || null, // Teks asli
+            text: text?.trim() || null,
             mediaType: media?.type || null,
             fileName: media?.name || null,
             initials: adminInitials,
@@ -518,9 +518,8 @@ io.on('connection', (socket) => {
             type: 'outgoing'
         };
 
-        socket.emit('reply_sent_confirmation', outgoingMessageData); // Konfirmasi ke pengirim
+        socket.emit('reply_sent_confirmation', outgoingMessageData);
 
-        // Simpan ke history
         if (!chatHistory[to]) chatHistory[to] = [];
         chatHistory[to].push(outgoingMessageData);
         saveChatHistory();
