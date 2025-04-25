@@ -31,7 +31,8 @@ let quickReplies = []; // Array of { shortcut: string, text: string } - Akan dim
 
 const adminSockets = {}; // socket ID -> { username: '...', role: '...' } // Menyimpan info admin login
 const usernameToSocketId = {}; // username -> socket ID
-const pickedChats = {}; // chatId (normalized) -> username // State di backend untuk chat yang diambil
+// PERBAIKAN: Mengubah const menjadi let karena variabel ini akan ditugaskan ulang
+let pickedChats = {}; // chatId (normalized) -> username // State di backend untuk chat yang diambil
 const chatReleaseTimers = {}; // chatId (normalized) -> setTimeout ID
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1098,7 +1099,8 @@ io.on('connection', (socket) => {
 
     } catch (error) {
       console.error(`[REPLY] Gagal mengirim pesan ke ${chatId} oleh ${username}:`, error);
-      socket.emit('send_error', { to: chatId, text: text, media: media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') }); // Send back original text/media on error
+      // Emit send error back to the original sender, restoring their input
+      socket.emit('send_error', { to: chatId, text: text, media: media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
     }
   });
 

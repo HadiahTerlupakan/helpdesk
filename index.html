@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -183,7 +182,7 @@
          #chat-picked-status { font-size: 0.9em; color: var(--text-muted); margin-top: 2px;} /* Picked status below chat name */
 
 
-        #chat-actions-area { display: flex; align-items: center; flex-shrink: 0; gap: 10px; flex-wrap: wrap;} /* Container for pick/delegate/close buttons, allow wrap */
+        #chat-actions-area { display: flex; align-items: center; flex-shrink: 0; gap: 10px; flex-wrap: wrap; } /* Container for pick/delegate/close buttons, allow wrap */
         #pick-chat-button {
              padding: 6px 12px;
              font-size: 0.9em;
@@ -325,21 +324,35 @@
              text-align: center;
              width: 350px;
              max-width: 90%; /* Responsive */
+              position: relative; /* Added for close button */
           }
+           /* Style for modal close button (placed inside modal-content) */
+          #qrModal .modal-content .close-modal-button {
+              position: absolute;
+              top: 10px; right: 10px;
+              font-size: 24px; font-weight: bold;
+              background: none; border: none;
+              color: var(--text-muted); cursor: pointer;
+              padding: 5px; margin: 0;
+              transition: color 0.2s;
+         }
+          #qrModal .modal-content .close-modal-button:hover { color: var(--text-dark); }
+
          #qrModal h3 { margin-top: 0; margin-bottom: 15px; color: var(--primary-color); }
          #qrModal p { font-size: 0.9em; color: var(--text-muted); margin-bottom: 8px; }
          #qrModal #qr-code { margin: 20px auto; width: 200px; height: 200px; } /* Match login page size */
          #qrModal #qr-code img { max-width: 100%; height: auto; }
          #qrModal #qr-status { font-size: 0.9em; color: var(--text-dark); margin-top: 10px;}
-          #qrModal .close-modal-button {
-             margin-top: 20px; /* Space from status/QR */
+          /* Removed explicit style for close button here, using generic style */
+          /* #qrModal .close-modal-button {
+             margin-top: 20px;
              background-color: #ccc;
              color: var(--text-dark);
-             padding: 8px 20px; /* Standard button padding */
+             padding: 8px 20px;
              border: none; border-radius: 4px; cursor: pointer;
              transition: background-color 0.2s;
           }
-          #qrModal .close-modal-button:hover { background-color: #bbb; }
+          #qrModal .close-modal-button:hover { background-color: #bbb; } */
 
 
          /* Add Admin Modal */
@@ -357,20 +370,16 @@
              position: relative; /* Added */
          }
           /* Added style for the new close button inside modal-content */
-         #addAdminModal .close-modal-button {
-             position: absolute;
-             top: 10px; /* Adjust as needed */
-             right: 10px; /* Adjust as needed */
-             font-size: 24px; /* Larger size for 'x' */
-             font-weight: bold;
-             background: none; /* No background */
-             border: none; /* No border */
-             color: var(--text-muted); /* Color */
-             cursor: pointer;
-             padding: 5px; /* Padding around the 'x' */
-             margin: 0; /* Remove margin from generic style */
+          #addAdminModal .modal-content .close-modal-button {
+              position: absolute;
+              top: 10px; right: 10px;
+              font-size: 24px; font-weight: bold;
+              background: none; border: none;
+              color: var(--text-muted); cursor: pointer;
+              padding: 5px; margin: 0;
+              transition: color 0.2s;
          }
-         #addAdminModal .close-modal-button:hover { color: var(--text-dark); background: none; } /* Adjust hover */
+         #addAdminModal .modal-content .close-modal-button:hover { color: var(--text-dark); }
 
          #addAdminModal h3 { text-align: center; margin-bottom: 20px; } /* Center modal title */
          #addAdminModal label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: var(--text-dark); } /* Labels for form */
@@ -390,7 +399,6 @@
          #addAdminModal .add-admin-form-status.success { color: var(--light-green); }
          #addAdminModal .add-admin-form-status.error { color: var(--error-color); }
 
-
         /* Delete Admin Modal */
          #deleteAdminModal {
              display: none;
@@ -402,7 +410,20 @@
              text-align: left;
              width: 350px;
              max-width: 90%; /* Responsive */
+              position: relative; /* Added for close button */
           }
+          /* Style for modal close button (placed inside modal-content) */
+          #deleteAdminModal .modal-content .close-modal-button {
+              position: absolute;
+              top: 10px; right: 10px;
+              font-size: 24px; font-weight: bold;
+              background: none; border: none;
+              color: var(--text-muted); cursor: pointer;
+              padding: 5px; margin: 0;
+              transition: color 0.2s;
+         }
+          #deleteAdminModal .modal-content .close-modal-button:hover { color: var(--text-dark); }
+
          #deleteAdminModal h3 { text-align: center; margin-bottom: 20px;}
          #deleteAdminModal label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: var(--text-dark);}
          #deleteAdminModal select {
@@ -412,8 +433,9 @@
          }
          #deleteAdminModal button { width: auto; margin-top: 10px;}
          #deleteAdminModal .modal-buttons { text-align: center;}
-         #deleteAdminModal .close-modal-button { background-color: #ccc; margin-left: 10px;}
-         #deleteAdminModal .close-modal-button:hover { background-color: #bbb;}
+         /* Removed redundant style for close button here */
+         /* #deleteAdminModal .close-modal-button { background-color: #ccc; margin-left: 10px;} */
+         /* #deleteAdminModal .close-modal-button:hover { background-color: #bbb;} */
          #deleteAdminModal .delete-admin-form-status {
              font-size: 0.9em; margin-top: 10px; min-height: 1.2em;
              text-align: center;
@@ -768,14 +790,10 @@
               position: absolute;
               top: 10px; /* Adjust as needed */
               right: 10px; /* Adjust as needed */
-              font-size: 24px; /* Larger size for 'x' */
-              font-weight: bold;
-              background: none; /* No background */
-              border: none; /* No border */
-              color: var(--text-muted); /* Color */
-              cursor: pointer;
-              padding: 5px; /* Padding around the 'x' */
-              margin: 0; /* Remove margin from generic style */
+              font-size: 24px; font-weight: bold;
+              background: none; border: none;
+              color: var(--text-muted); cursor: pointer;
+              padding: 5px; margin: 0;
               transition: color 0.2s;
          }
           .modal-content .close-modal-button:hover { color: var(--text-dark); }
@@ -808,6 +826,18 @@
              text-align: left; /* Align text left in form */
              position: relative; /* Added for close button */
          }
+          /* Style for modal close button (placed inside modal-content) */
+          #quickReplyModal .modal-content .close-modal-button {
+              position: absolute;
+              top: 10px; right: 10px;
+              font-size: 24px; font-weight: bold;
+              background: none; border: none;
+              color: var(--text-muted); cursor: pointer;
+              padding: 5px; margin: 0;
+              transition: color 0.2s;
+         }
+          #quickReplyModal .modal-content .close-modal-button:hover { color: var(--text-dark); }
+
         #quickReplyModal .modal-content h3 { text-align: center; margin-bottom: 20px; }
         #quickReplyModal label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: var(--text-dark); }
         #quickReplyModal input[type="text"], #quickReplyModal textarea { /* Specific selector for new inputs */
@@ -817,7 +847,10 @@
              min-height: 50px; /* Minimum height for textarea */
          }
           /* Style for the shortcut input */
-         #quickReplyModal input[type="text"] { min-height: 38px; margin-bottom: 5px; } /* Teks biasa, lebih pendek */
+         #quickReplyModal input[type="text"]#new-quick-reply-shortcut { /* Added specific ID */
+              min-height: 38px; /* Teks biasa, lebih pendek */
+              margin-bottom: 5px; /* Space below shortcut input */
+         }
 
 
          #quickReplyModal .modal-buttons { text-align: center; margin-top: 20px; } /* Center buttons */
@@ -877,7 +910,21 @@
          }
          #confirmDeleteQRModal .modal-content {
              width: 300px;
+              position: relative; /* Added for close button */
          }
+          /* Style for modal close button (placed inside modal-content) */
+          #confirmDeleteQRModal .modal-content .close-modal-button {
+              position: absolute;
+              top: 10px; right: 10px;
+              font-size: 24px; font-weight: bold;
+              background: none; border: none;
+              color: var(--text-muted); cursor: pointer;
+              padding: 5px; margin: 0;
+              transition: color 0.2s;
+         }
+         #confirmDeleteQRModal .modal-content .close-modal-button:hover { color: var(--text-dark); }
+
+
           #confirmDeleteQRModal .modal-content p {
               margin-bottom: 25px; /* More space before buttons */
           }
@@ -892,16 +939,75 @@
           }
           #confirmDeleteQRModal #confirm-delete-qr-yes {
              background-color: var(--button-danger-bg);
+             color: var(--text-light); /* Ensure text is white */
           }
            #confirmDeleteQRModal #confirm-delete-qr-yes:hover {
              background-color: var(--button-danger-hover);
            }
           #confirmDeleteQRModal #confirm-delete-qr-no {
              background-color: var(--button-neutral-bg); /* Use neutral gray for Cancel */
+              color: var(--text-light); /* Ensure text is white */
           }
            #confirmDeleteQRModal #confirm-delete-qr-no:hover {
              background-color: var(--button-neutral-hover);
            }
+
+         /* NEW: Modal for Delete ALL Chats Confirmation */
+         #confirmDeleteAllChatsModal {
+             display: none;
+             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+             background: rgba(0,0,0,0.8); z-index: 2600; /* Even higher z-index */
+             justify-content: center; align-items: center;
+         }
+          #confirmDeleteAllChatsModal .modal-content {
+             width: 350px; /* Slightly wider */
+              position: relative; /* Added for close button */
+         }
+          /* Style for modal close button (placed inside modal-content) */
+          #confirmDeleteAllChatsModal .modal-content .close-modal-button {
+              position: absolute;
+              top: 10px; right: 10px;
+              font-size: 24px; font-weight: bold;
+              background: none; border: none;
+              color: var(--text-muted); cursor: pointer;
+              padding: 5px; margin: 0;
+              transition: color 0.2s;
+         }
+         #confirmDeleteAllChatsModal .modal-content .close-modal-button:hover { color: var(--text-dark); }
+
+
+         #confirmDeleteAllChatsModal .modal-content p {
+             margin-bottom: 25px;
+              font-weight: bold; /* Emphasize warning */
+              color: var(--button-danger-bg); /* Use error color for warning */
+         }
+          #confirmDeleteAllChatsModal .modal-content p strong {
+              color: var(--button-danger-bg); /* Ensure strong text is also red */
+          }
+         #confirmDeleteAllChatsModal .modal-buttons {
+              display: flex;
+              justify-content: space-around;
+              gap: 10px;
+         }
+          #confirmDeleteAllChatsModal .modal-buttons button {
+             flex-grow: 1;
+             padding: 10px;
+         }
+          #confirmDeleteAllChatsModal #confirm-delete-all-chats-yes {
+             background-color: var(--button-danger-bg);
+              color: var(--text-light);
+          }
+          #confirmDeleteAllChatsModal #confirm-delete-all-chats-yes:hover {
+             background-color: var(--button-danger-hover);
+          }
+          #confirmDeleteAllChatsModal #confirm-delete-all-chats-no {
+              background-color: var(--button-neutral-bg);
+               color: var(--text-light);
+          }
+           #confirmDeleteAllChatsModal #confirm-delete-all-chats-no:hover {
+             background-color: var(--button-neutral-hover);
+           }
+
 
 
         /* Footer Style - Moved inside chat-area flex */
@@ -917,10 +1023,11 @@
 
 
     </style>
+    <!-- IMPORTANT: Ensure the </style> tag closes the CSS block correctly -->
 </head>
 <body>
     <!-- Login Container -->
-    <div id="login-container">
+    <div id="login-container" class=""> <!-- Removed hidden class here -->
         <div id="login-box">
             <h2>Admin Helpdesk Login</h2>
             <input type="text" id="username-input" placeholder="Username" autocomplete="username">
@@ -1042,9 +1149,12 @@
     <!-- Modal for Offline Admin Notification -->
     <div id="offlineAdminModal" class="modal-overlay">
         <div class="modal-content">
+             <button class="close-modal-button" data-target-modal="offlineAdminModal">×</button> <!-- Added Close Button -->
             <h3>Admin Offline</h3>
             <p id="offlineAdminMessage">Admin sedang offline.</p>
-            <button id="offlineAdminModalClose">OK</button>
+            <div class="modal-buttons"> <!-- Wrap OK button in modal-buttons for consistent styling -->
+                 <button id="offlineAdminModalClose">OK</button>
+            </div>
         </div>
     </div>
 
@@ -1120,7 +1230,7 @@
 
              <div class="add-template-area">
                  <label for="new-quick-reply-shortcut">Pintasan:</label> <!-- NEW Shortcut input -->
-                 <input type="text" id="new-quick-reply-shortcut" placeholder="Cth: sapaan, infoalamat"> <!-- Added input for shortcut -->
+                 <input type="text" id="new-quick-reply-shortcut" placeholder="Cth: sapaan, infoalamat" autocomplete="off"> <!-- Added input for shortcut -->
                  <label for="new-quick-reply-text">Isi Pesan Template:</label>
                  <textarea id="new-quick-reply-text" placeholder="Ketik template pesan baru di sini..."></textarea>
                  <div class="modal-buttons" style="text-align: left;"> <!-- Align add button left -->
@@ -1140,11 +1250,26 @@
     <!-- New Modal for Delete Quick Reply Confirmation -->
      <div id="confirmDeleteQRModal" class="modal-overlay">
          <div class="modal-content">
+             <button class="close-modal-button" data-target-modal="confirmDeleteQRModal">×</button> <!-- Added Close Button -->
              <h3>Konfirmasi Hapus</h3>
              <p id="confirm-delete-qr-message">Anda yakin ingin menghapus template ini?</p>
              <div class="modal-buttons">
                  <button id="confirm-delete-qr-yes">Ya, Hapus</button>
                  <button id="confirm-delete-qr-no">Batal</button>
+             </div>
+         </div>
+     </div>
+
+     <!-- NEW: Modal for Delete ALL Chats Confirmation -->
+     <div id="confirmDeleteAllChatsModal" class="modal-overlay">
+         <div class="modal-content">
+              <button class="close-modal-button" data-target-modal="confirmDeleteAllChatsModal">×</button> <!-- Added Close Button -->
+             <h3>Konfirmasi Hapus Semua Chat</h3>
+             <p><strong>PERINGATAN:</strong> Tindakan ini akan menghapus <br> <strong>SEMUA RIWAYAT CHAT</strong> <br> secara permanen. <br> Ini tidak bisa dibatalkan.</p>
+             <p>Lanjutkan?</p>
+             <div class="modal-buttons">
+                 <button id="confirm-delete-all-chats-yes">Ya, Hapus SEMUA</button>
+                 <button id="confirm-delete-all-chats-no">Batal</button>
              </div>
          </div>
      </div>
@@ -1155,6 +1280,35 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.js"></script> <!-- Library QR Code -->
     <script>
         // --- Socket.IO Setup ---
+
+        // Auto Logout Timer
+        let logoutTimer;
+        const logoutTime = 15 * 60 * 1000; // 15 menit
+        const warningTime = 30 * 1000; // 30 detik
+
+        function resetLogoutTimer() {
+            clearTimeout(logoutTimer);
+            logoutTimer = setTimeout(() => {
+                // Tampilkan notifikasi countdown
+                const countdown = setInterval(() => {
+                    const remaining = Math.ceil(warningTime / 1000);
+                    showNotification(`Anda akan logout dalam ${remaining} detik...`);
+                    warningTime -= 1000;
+                    if (warningTime <= 0) {
+                        clearInterval(countdown);
+                        logoutButton.click();
+                    }
+                }, 1000);
+            }, logoutTime - warningTime);
+        }
+
+        // Reset timer pada aktivitas user
+        ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
+            window.addEventListener(event, resetLogoutTimer);
+        });
+
+        // Inisialisasi timer
+        resetLogoutTimer();
         // Tambahkan transport 'websocket' secara eksplisit jika perlu (tergantung setup server)
         // const socket = io({ transports: ['websocket', 'polling'] });
         const socket = io({
@@ -1271,6 +1425,11 @@
         const confirmDeleteQRNoButton = confirmDeleteQRModal.querySelector('#confirm-delete-qr-no');
          // State to hold the template object { shortcut, text } pending deletion
          let templateToDelete = null;
+
+        // NEW: Modal for Delete ALL Chats Confirmation
+         const confirmDeleteAllChatsModal = document.getElementById('confirmDeleteAllChatsModal');
+         const confirmDeleteAllChatsYesButton = confirmDeleteAllChatsModal.querySelector('#confirm-delete-all-chats-yes');
+         const confirmDeleteAllChatsNoButton = confirmDeleteAllChatsModal.querySelector('#confirm-delete-all-chats-no');
 
 
         // --- Application State ---
@@ -1422,1582 +1581,72 @@
             }
         }
 
-        function showNotification(title, body, options = {}) {
-             // Check if browser supports notifications AND permission is granted
-            if ('Notification' in window && Notification.permission === "granted") {
-                 // Prevent notification if chat is currently active and picked by this user
-                 // This requires currentChatId, pickedChatsStatus, and currentUser to be correct.
-                 if (currentChatId === options.chatId && pickedChatsStatus[currentChatId] === currentUser) {
-                      console.log(`Notification suppressed for active chat ${options.chatId}`);
-                      return; // Do not show notification
-                 }
-
-                 try {
-                     const notification = new Notification(title, {
-                         body: body,
-                         icon: options.icon || '/favicon.ico',
-                         tag: options.chatId // Use chat ID as tag to update existing notifications for the same chat
-                     });
-
-                     // Add click handler to focus the window and navigate to the chat
-                     notification.onclick = function(event) {
-                        event.preventDefault(); // Prevent the browser from focusing the tab that opened the notification
-                        if (options.chatId) {
-                            // Find the chat list item and trigger its click event
-                            const listItem = chatListItems[options.chatId];
-                            if (listItem) {
-                                listItem.click(); // This will switch the active chat
-                            }
-                        }
-                        window.focus(); // Bring the window to front
-                     };
-                 } catch (e) {
-                      console.error("Failed to create notification:", e);
-                 }
+        function updateChatStatusIndicator(chatId, status) {
+            const chatListItem = document.querySelector(`[data-chat-id="${chatId}"]`);
+            if (!chatListItem) return;
+            
+            // Remove any existing status indicators
+            const existingIndicator = chatListItem.querySelector('.chat-status');
+            if (existingIndicator) {
+                existingIndicator.remove();
             }
+            
+            // Add new status indicator if status is not 'open'
+            if (status !== 'open') {
+                const statusIndicator = document.createElement('div');
+                statusIndicator.className = 'chat-status';
+                statusIndicator.textContent = status;
+                chatListItem.appendChild(statusIndicator);
+            }
+        }
+        
+        function showNotification(title, body, options = {}) {
+            console.log(`[UI] Showing notification: ${title} - ${body}`);
+            
+            // Check if browser supports notifications
+            if (!("Notification" in window)) {
+                console.warn("[UI] This browser does not support desktop notifications");
+                return;
+            }
+            
+            // Check if permission is already granted
+            if (Notification.permission === "granted") {
+                createNotification(title, body, options);
+            } 
+            // Otherwise, ask for permission
+            else if (Notification.permission !== "denied") {
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        createNotification(title, body, options);
+                    }
+                });
+            }
+        }
+        
+        function createNotification(title, body, options = {}) {
+            const notification = new Notification(title, {
+                body: body,
+                icon: '/favicon.ico',
+                ...options
+            });
+            
+            // Add click event to open the chat if chatId is provided
+            if (options.chatId) {
+                notification.onclick = function() {
+                    window.focus();
+                    openChat(options.chatId);
+                };
+            }
+            
+            // Auto close after 5 seconds
+            setTimeout(() => {
+                notification.close();
+            }, 5000);
         }
 
         function resetChatArea() {
-            messagesDiv.innerHTML = '<div class="placeholder">Pilih percakapan dari daftar</div>';
-            currentChatIdDisplay.textContent = 'Pilih percakapan dari daftar';
-             currentChatStatusSpan.style.display = 'none'; // Hide status
-             currentChatStatusSpan.textContent = '';
-             currentChatStatusSpan.className = ''; // Clear status class
-            chatPickedStatus.textContent = ''; // Clear picked status text
-
-            pickChatButton.style.display = 'none';
-             releaseChatButton.style.display = 'none'; // Hide Release button
-            delegateChatContainer.style.display = 'none';
-             delegateChatSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>'; // Reset delegate select
-
-            // Disable reply box and media button
-            replyBox.classList.add('disabled');
-            replyInput.disabled = true;
-            replyButton.disabled = true;
-            mediaButton.disabled = true;
-             // Disable quick reply buttons
-             quickRepliesContainer.querySelectorAll('button').forEach(btn => btn.disabled = true);
-
-
-            closeChatButton.style.display = 'none'; // Hide close/open buttons
-            openChatButton.style.display = 'none';
-            deleteChatButton.style.display = 'none'; // Controlled by SuperAdmin role later
-
-            replyInput.value = ''; // Clear input value
-            selectedMedia = null; // Clear selected media state
-            updateMediaPreview(); // Hide media preview
-            replyInput.placeholder = 'Pilih atau ambil chat untuk membalas...';
-            document.title = 'WhatsApp Helpdesk';
-            hideSendError(); // Hide any send error message
-             // Reset textarea height
-            replyInput.style.height = 'auto';
-            replyInput.rows = 1; // Reset rows attribute as well
+            updateChatAreaForCurrentChat(); // Re-evaluate UI state
         }
-
-        function resetUI() {
-            resetChatArea();
-             // Clear chat list and its internal state
-            chatList.innerHTML = '<div class="placeholder" style="color: rgba(255,255,255,0.7); text-align: center; margin-top: 20px;">Memuat percakapan...</div>'; // Reset chat list placeholder
-            chatHistory = {};
-            chatListItems = {};
-            pickedChatsStatus = {}; // Crucially reset picked status
-            registeredAdmins = {}; // Clear registered admins
-            onlineAdmins = []; // Clear online admins
-            // Quick replies state reset
-             quickReplies = [];
-             editingQuickReplies = [];
-             renderQuickReplyButtons(); // Render empty buttons area
-
-
-            currentChatId = null;
-            currentUser = null;
-            currentUserRole = null; // Clear role
-            adminUsernameDisplay.textContent = '';
-             adminRoleDisplay.textContent = ''; // Clear role display
-             updateWhatsappStatus('Memuat status WA...', false); // Reset WA Status display
-
-            showLoginError(''); // Clear login error specifically
-            superadminPanel.style.display = 'none'; // Hide Super Admin panel
-             showQrButton.style.display = 'none'; // Hide QR button
-             manageQuickRepliesButton.style.display = 'none'; // Hide Quick Reply button
-
-             // Ensure all modals are hidden on reset
-             addAdminModal.style.display = 'none';
-             deleteAdminModal.style.display = 'none';
-             quickReplyModal.style.display = 'none';
-             mediaModal.style.display = 'none';
-             offlineAdminModal.style.display = 'none';
-             confirmDeleteQRModal.style.display = 'none'; // Hide delete confirmation modal
-             templateToDelete = null; // Clear state
-
-        }
-
-        // --- Helper Functions ---
-
-        // Moved function declaration to a scope where it's available
-        function updateAllChatListItemsPickStatus() {
-             console.log('[UI] Memperbarui status pick semua chat item.');
-             // Use Object.keys(chatListItems) to iterate over currently rendered items
-            Object.keys(chatListItems).forEach(chatId => {
-                updateChatListItemPickStatus(chatId);
-                 updateUnreadIndicator(chatId); // Also ensure unread is correct
-            });
-        }
-
-
-        function updateChatAreaForCurrentChat() {
-            if (!currentChatId || !currentUser) {
-                resetChatArea();
-                return;
-            }
-
-            // Find the chat name and status from the chatHistory state
-            const chatEntry = chatHistory[currentChatId]; // Get the chat entry from state
-            // Fallback to chat ID if chatListItems not ready or entry missing
-            const chatName = chatListItems[currentChatId] ? chatListItems[currentChatId].dataset.chatName : currentChatId.split('@')[0];
-            const chatStatus = chatEntry?.status || 'open'; // Get status, default to 'open'
-
-            const pickedBy = pickedChatsStatus[currentChatId];
-
-            currentChatIdDisplay.textContent = `Chat: ${chatName}`;
-            document.title = `Chat: ${chatName}`;
-
-            // Update chat status display in header
-            currentChatStatusSpan.style.display = 'inline-block'; // Use inline-block
-            currentChatStatusSpan.textContent = chatStatus.toUpperCase();
-            currentChatStatusSpan.className = `current-chat-status ${chatStatus}`; // Add class for styling
-
-             // Update picked status display in header
-            chatPickedStatus.textContent = pickedBy ? `Diambil oleh: ${pickedBy}` : 'Belum diambil';
-             chatPickedStatus.style.color = getCssVariable('--text-muted'); // Reset error color
-
-            hideSendError(); // Hide send error when switching chats
-
-            // Enable/Disable reply box and media button based on chat status AND pick status
-            const canReply = chatStatus === 'open' && pickedBy === currentUser;
-            if (canReply) {
-                replyBox.classList.remove('disabled');
-                 replyInput.disabled = false;
-                 replyButton.disabled = false;
-                 mediaButton.disabled = false;
-                  // Enable quick reply buttons
-                 quickRepliesContainer.querySelectorAll('button').forEach(btn => btn.disabled = false);
-
-                 replyInput.placeholder = 'Ketik balasan...';
-                 // Auto-size textarea on load for current chat
-                 replyInput.style.height = 'auto';
-                 replyInput.rows = 1; // Reset rows before calculating scrollHeight
-                 // Use a slight delay to ensure element is fully rendered before calculating scrollHeight
-                 setTimeout(() => {
-                     replyInput.style.height = replyInput.scrollHeight + 'px';
-                 }, 0);
-
-                 setTimeout(() => replyInput.focus(), 100); // Auto-focus
-            } else {
-                 replyBox.classList.add('disabled');
-                 replyInput.disabled = true;
-                 replyButton.disabled = true;
-                 mediaButton.disabled = true;
-                 // Disable quick reply buttons
-                 quickRepliesContainer.querySelectorAll('button').forEach(btn => btn.disabled = true);
-
-                 if (chatStatus === 'closed') {
-                     replyInput.placeholder = 'Percakapan ditutup. Tidak bisa membalas.';
-                 } else if (pickedBy) {
-                     replyInput.placeholder = `Ditangani oleh ${pickedBy}. Anda tidak bisa membalas kecuali mengambil alih.`;
-                 } else {
-                     replyInput.placeholder = 'Ambil chat ini untuk membalas.';
-                 }
-                  replyInput.value = ''; // Clear input value when disabling
-                  selectedMedia = null; // Clear media when disabling
-                  updateMediaPreview(); // Hide media preview
-                   // Reset textarea height when disabling
-                   replyInput.style.height = 'auto';
-                   replyInput.rows = 1;
-            }
-
-
-            // Show/Hide action buttons based on pick status, chat status, and user role
-            // Default hide all action buttons
-            pickChatButton.style.display = 'none';
-            releaseChatButton.style.display = 'none'; // Ensure hidden by default
-            delegateChatContainer.style.display = 'none';
-            closeChatButton.style.display = 'none';
-            openChatButton.style.display = 'none';
-            deleteChatButton.style.display = 'none'; // Controlled by SuperAdmin role later
-
-            if (chatStatus === 'open') {
-                 // Show Pick button if not picked AND user is not Super Admin (Super Admin doesn't need to pick to delegate/reply)
-                 if (!pickedBy && currentUserRole !== 'superadmin') {
-                     pickChatButton.style.display = 'inline-block';
-                      pickChatButton.disabled = false; // Ensure pick button is enabled when shown
-                      pickChatButton.textContent = 'Ambil Chat Ini'; // Reset text
-                 }
-                 // Show Release button if picked by the current user
-                 if (pickedBy === currentUser) { // Correct condition
-                     releaseChatButton.style.display = 'inline-block';
-                      releaseChatButton.disabled = false; // Ensure release button is enabled when shown
-                      releaseChatButton.textContent = 'Lepas Chat'; // Reset text
-                 }
-
-                 // Show Delegate container if picked by current user OR is Super Admin
-                 if (pickedBy === currentUser || currentUserRole === 'superadmin') {
-                     delegateChatContainer.style.display = 'flex'; // Use flex as container uses flex
-                      delegateChatButton.disabled = false; // Ensure delegate button is enabled
-                      delegateChatSelect.disabled = false; // Ensure select is enabled
-                     populateDelegateChatSelect(); // Populate select when container is shown
-                 }
-                 // Show Close button if Super Admin OR if admin who picked it (backend allows this)
-                 if (currentUserRole === 'superadmin' || pickedBy === currentUser) {
-                      closeChatButton.style.display = 'inline-block';
-                       closeChatButton.disabled = false; // Ensure button is enabled
-                 }
-
-
-            } else { // ChatStatus is 'closed'
-                 // Only Superadmin can open closed chats
-                 if (currentUserRole === 'superadmin') {
-                     openChatButton.style.display = 'inline-block';
-                      openChatButton.disabled = false; // Ensure button is enabled
-                 }
-            }
-
-            // Show/Hide Delete Chat button based on Super Admin role
-            deleteChatButton.style.display = (currentUserRole === 'superadmin') ? 'inline-block' : 'none';
-             deleteChatButton.disabled = false; // Ensure button is enabled when shown
-
-        }
-
-        function populateDelegateChatSelect() {
-            console.log('[Delegate Select] Populating select. Current User:', currentUser);
-            // Clear existing options except the disabled default
-            delegateChatSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>';
-
-            const onlineAdminsSet = new Set(onlineAdmins || []); // Use the state variable
-            // Ensure registeredAdmins is loaded
-            if (!registeredAdmins || Object.keys(registeredAdmins).length === 0) {
-                 console.warn('[Delegate Select] registeredAdmins data not available yet.');
-                 return;
-            }
-
-            const sortedAdminUsernames = Object.keys(registeredAdmins).sort();
-
-            sortedAdminUsernames.forEach(admin => {
-                // Don't show current user in delegate list
-                if (admin === currentUser) return;
-
-                const isOnline = onlineAdminsSet.has(admin);
-                const option = document.createElement('option');
-                option.value = admin;
-                option.textContent = `${admin} ${isOnline ? '(Online)' : '(Offline)'}`;
-                option.className = isOnline ? 'online' : 'offline';
-                // Optionally disable delegation to offline admins if desired, but backend doesn't currently enforce this.
-                // option.disabled = !isOnline;
-                delegateChatSelect.appendChild(option);
-            });
-             // Reset selected option to the placeholder after populating
-            delegateChatSelect.value = ""; // Select the disabled option
-             console.log('[Delegate Select] Select populated.');
-        }
-
-        // New function to populate the Delete Admin select dropdown
-        function populateDeleteAdminSelect() {
-             console.log('[Delete Admin Select] Populating select. Current User:', currentUser);
-             deleteAdminSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>';
-
-             if (!registeredAdmins || Object.keys(registeredAdmins).length === 0) {
-                  console.warn('[Delete Admin Select] registeredAdmins data not available yet.');
-                  // Add a disabled option indicating no admins available?
-                   const noAdminOption = document.createElement('option');
-                   noAdminOption.value = '';
-                   noAdminOption.textContent = 'Tidak ada admin lain';
-                   noAdminOption.disabled = true;
-                   deleteAdminSelect.appendChild(noAdminOption);
-                  return;
-             }
-
-             const sortedAdminUsernames = Object.keys(registeredAdmins).sort();
-
-             let hasOtherAdmins = false;
-             sortedAdminUsernames.forEach(admin => {
-                  // Exclude the current user from the delete list
-                 if (admin === currentUser) return;
-
-                  hasOtherAdmins = true; // Found at least one other admin
-
-                  const option = document.createElement('option');
-                  option.value = admin;
-                  option.textContent = admin;
-                  deleteAdminSelect.appendChild(option);
-             });
-
-             if (!hasOtherAdmins) {
-                  const noAdminOption = document.createElement('option');
-                  noAdminOption.value = '';
-                  noAdminOption.textContent = 'Tidak ada admin lain';
-                  noAdminOption.disabled = true;
-                  deleteAdminSelect.appendChild(noAdminOption);
-             }
-
-              // Reset selected option to the placeholder
-             deleteAdminSelect.value = "";
-              deleteAdminFormStatusDiv.textContent = ''; // Clear status message
-              deleteAdminFormStatusDiv.className = 'delete-admin-form-status';
-               // Disable submit button if no other admins to delete
-              submitDeleteAdminButton.disabled = !hasOtherAdmins;
-        }
-
-
-        function updateChatListItemPickStatus(chatId) {
-            const listItem = chatListItems[chatId];
-            if (!listItem) {
-                // console.warn("Elemen .chat-item-picked-by tidak ditemukan untuk chat:", chatId, "- List item not found.");
-                return; // Chat list item might not exist yet if message is very first one
-            }
-
-            let statusContainer = listItem.querySelector('.message-snippet'); // Find the snippet div
-             if (!statusContainer) {
-                  console.warn("Elemen .message-snippet tidak ditemukan untuk chat:", chatId);
-                  return;
-             }
-
-            let statusSpan = statusContainer.querySelector('.chat-item-picked-by');
-             // Create the span if it doesn't exist (should be in initial template, but safety)
-            if (!statusSpan) {
-                statusSpan = document.createElement('span');
-                statusSpan.className = 'chat-item-picked-by';
-                statusContainer.appendChild(statusSpan); // Append inside the snippet div
-                // console.warn("Elemen .chat-item-picked-by DIBUAT untuk chat:", chatId);
-            }
-
-
-            const pickedBy = pickedChatsStatus[chatId];
-            // Check if the chat is currently picked by the *current* user
-            const isPickedByCurrentUser = pickedBy === currentUser;
-
-            if (pickedBy) {
-                statusSpan.textContent = `(Oleh: ${pickedBy})`;
-                statusSpan.style.display = 'inline';
-                 // Visual cue in list item if picked by current user
-                if (isPickedByCurrentUser) {
-                     listItem.classList.add('picked-by-me');
-                } else {
-                     listItem.classList.remove('picked-by-me');
-                }
-            } else {
-                statusSpan.textContent = '';
-                statusSpan.style.display = 'none';
-                 listItem.classList.remove('picked-by-me');
-            }
-             // Ensure unread indicator is updated correctly after pick status change
-            updateUnreadIndicator(chatId);
-        }
-
-
-        function updateUnreadIndicator(chatId) {
-            const listItem = chatListItems[chatId];
-            if (!listItem) return;
-
-            const unreadIndicator = listItem.querySelector('.unread-indicator');
-             if (!unreadIndicator) return;
-
-             // Check actual unread status from chatHistory state
-             // A message is unread if it's incoming AND its 'unread' flag is true.
-             const hasUnread = chatHistory[chatId]?.messages?.some(msg => msg.type === 'incoming' && msg.unread) || false;
-
-             // Show unread indicator if there are unread messages AND the chat is NOT currently active
-             const shouldShowUnread = hasUnread && chatId !== currentChatId;
-
-            unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';
-
-         }
-
-         function updateChatListItemStatus(chatId, status) {
-             const listItem = chatListItems[chatId];
-             if (!listItem) return;
-
-             let statusSpan = listItem.querySelector('.chat-item-status');
-             if (!statusSpan) {
-                 statusSpan = document.createElement('span');
-                 statusSpan.className = 'chat-item-status';
-                 listItem.appendChild(statusSpan);
-             }
-
-             statusSpan.textContent = status.toUpperCase();
-             statusSpan.className = `chat-item-status ${status}`; // Adds 'open' or 'closed' class
-
-             // Update list item class for styling
-             if (status === 'closed') {
-                 listItem.classList.add('closed');
-             } else {
-                 listItem.classList.remove('closed');
-             }
-
-             // If the currently active chat's status changes, update the header area
-             if (chatId === currentChatId) {
-                 updateChatAreaForCurrentChat(); // This re-evaluates button/reply box states
-             }
-         }
-
-
-        function updateChatList(chatId, name, lastMessageText = '', timestamp = new Date().toISOString(), chatStatus = 'open', isInitialLoad = false) {
-            let li = chatListItems[chatId];
-            const messageTimestamp = new Date(timestamp);
-             // Use a formatter that handles locale and potentially date if it's not today
-             const now = new Date();
-             const isToday = now.toDateString() === messageTimestamp.toDateString();
-            const formattedTime = !isNaN(messageTimestamp.getTime())
-                ? (isToday ? messageTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : messageTimestamp.toLocaleDateString())
-                : '--:--'; // Handle invalid dates
-
-            const snippetText = lastMessageText?.trim() || '[Media/Kosong]';
-            const shortMessage = snippetText.substring(0, 30) + (snippetText.length > 30 ? '...' : '');
-
-            // Check if chat item already exists
-            if (!li) {
-                li = document.createElement('li');
-                li.dataset.chatId = chatId;
-                li.dataset.chatName = name;
-                li.innerHTML = `
-                    <div class="chat-info">
-                        <i class="fas fa-user-circle"></i>
-                        <span class="chat-name">${sanitizeHTML(name)}</span>
-                        <span class="timestamp">${formattedTime}</span>
-                    </div>
-                    <div class="message-snippet">
-                        <span class="last-message">${sanitizeHTML(shortMessage)}</span>
-                        <span class="unread-indicator">(Baru)</span>
-                        <span class="chat-item-picked-by"></span>
-                    </div>
-                     <span class="chat-item-status" style="display: none;"></span> <!-- Status will be set by updateChatListItemStatus -->
-                `;
-
-                // Add click listener
-                li.addEventListener('click', () => {
-                    // Prevent clicking on the currently selected chat
-                    if (currentChatId === chatId) return;
-
-                    // Deselect previous chat item if any
-                    if (currentChatId && chatListItems[currentChatId]) {
-                        chatListItems[currentChatId].classList.remove('selected');
-                    }
-
-                    // Set new current chat and select the list item
-                    currentChatId = chatId;
-                    li.classList.add('selected');
-
-                    // Mark chat as read and load messages
-                    markChatAsRead(chatId);
-                    loadChatMessages(chatId); // This will trigger 'chat_history' event
-
-                    // Update chat area header and actions based on the newly selected chat
-                    // Call this *after* loadChatMessages, because chatHistory state might be updated by the response
-                    // No, updateChatAreaForCurrentChat needs the *initial* state to show placeholders.
-                    // It will be called *again* when 'chat_history' is received.
-                     updateChatAreaForCurrentChat(); // Show loading/initial state buttons
-
-                     // Update unread indicator for the newly selected chat (should become hidden)
-                     updateUnreadIndicator(chatId); // This will hide the indicator
-
-                });
-
-                // Store reference to the created list item
-                chatListItems[chatId] = li;
-
-                // Insert the new list item into the chat list, sorted by timestamp (newest first)
-                let inserted = false;
-                const currentItems = Array.from(chatList.children).filter(item => item.tagName === 'LI');
-                const newItemTime = messageTimestamp.getTime();
-
-                for (let i = 0; i < currentItems.length; i++) {
-                    const existingItemId = currentItems[i].dataset.chatId;
-                     // Get the last message timestamp of the existing item from chatHistory state
-                     const existingChatEntry = chatHistory[existingItemId];
-                     const existingMessagesArray = existingChatEntry?.messages || [];
-                     const lastExistingMessage = existingMessagesArray.length > 0 ? existingMessagesArray[existingMessagesArray.length - 1] : null;
-                     const existingItemTime = lastExistingMessage ? new Date(lastExistingMessage.timestamp).getTime() : 0;
-
-                    // If the new item is newer than or equal to the current one in the list, insert after it
-                    if (newItemTime >= existingItemTime) {
-                         // Handle case where new message is exactly the same time as the last one in the list
-                        if (newItemTime === existingItemTime && i === currentItems.length - 1) {
-                             insertBeforeElement = currentItems[i].nextSibling; // Append after the last if same timestamp
-                        } else {
-                            insertBeforeElement = currentItems[i]; // Insert before the current one
-                        }
-                        inserted = true;
-                        break; // Found the position
-                    }
-                     // If we are at the last element and the new item is older, it goes after
-                     if (i === currentItems.length - 1) {
-                         insertBeforeElement = currentItems[i].nextSibling;
-                     }
-                }
-                // If the new item is the oldest, append it to the end
-                if (!inserted) {
-                    chatList.appendChild(li);
-                }
-
-                // Remove the initial placeholder if it exists
-                const initialPlaceholder = chatList.querySelector('.placeholder');
-                if(initialPlaceholder) initialPlaceholder.remove();
-
-
-            } else {
-                // If chat item already exists, update its content
-                li.querySelector('.chat-name').textContent = sanitizeHTML(name);
-                li.querySelector('.last-message').textContent = sanitizeHTML(shortMessage);
-                li.querySelector('.timestamp').textContent = formattedTime;
-                li.dataset.chatName = name; // Update dataset in case name changed
-
-                // Update pick status and unread indicator for the existing item
-                updateChatListItemPickStatus(chatId);
-                updateUnreadIndicator(chatId); // Re-evaluate unread status
-
-                // Update the status display for the existing item
-                updateChatListItemStatus(chatId, chatStatus);
-
-                // If it's a new incoming message (and not during initial load), move it to the top
-                if (!isInitialLoad && chatId !== currentChatId) { // Don't move if current chat or during initial load
-                    // Find the correct position based on the new timestamp (newest first)
-                    const currentItems = Array.from(chatList.children).filter(item => item.tagName === 'LI');
-                    let insertBeforeElement = chatList.firstChild; // Default to placing at the beginning
-                    const newItemTime = messageTimestamp.getTime();
-
-                    for (let i = 0; i < currentItems.length; i++) {
-                        const existingItemId = currentItems[i].dataset.chatId;
-                        const existingChatEntry = chatHistory[existingItemId];
-                        const existingMessagesArray = existingChatEntry?.messages || [];
-                        const lastExistingMessage = existingMessagesArray.length > 0 ? existingMessagesArray[existingMessagesArray.length - 1] : null;
-                        const existingItemTime = lastExistingMessage ? new Date(lastExistingMessage.timestamp).getTime() : 0;
-
-                        // If the new item is newer than or equal to the current one in the list, insert before that one
-                        if (newItemTime >= existingItemTime) {
-                             // Handle case where new message is exactly the same time as the last one in the list
-                            if (newItemTime === existingItemTime && i === currentItems.length - 1) {
-                                 insertBeforeElement = currentItems[i].nextSibling; // Append after the last if same timestamp
-                            } else {
-                                insertBeforeElement = currentItems[i]; // Insert before the current one
-                            }
-                            break; // Found the position
-                        }
-                         // If we are at the last element and the new item is older, it goes after
-                         if (i === currentItems.length - 1) {
-                             insertBeforeElement = currentItems[i].nextSibling;
-                         }
-                    }
-                     // Only move if the item is not already in the correct position
-                    if (li !== insertBeforeElement) {
-                         chatList.insertBefore(li, insertBeforeElement);
-                     }
-                }
-            }
-        }
-
-
-        function markChatAsRead(chatId) {
-            const listItem = chatListItems[chatId];
-            if (listItem) {
-                 const unreadIndicator = listItem.querySelector('.unread-indicator');
-                 if (unreadIndicator) {
-                      unreadIndicator.style.display = 'none'; // Hide immediately in UI
-                 }
-            }
-
-             // Update state and notify server
-             if (chatHistory[chatId]?.messages) {
-                 let changed = false;
-                 for (let i = chatHistory[chatId].messages.length - 1; i >= 0; i--) {
-                     // Only mark incoming and unread
-                     if (chatHistory[chatId].messages[i].type === 'incoming' && chatHistory[chatId].messages[i].unread) {
-                         chatHistory[chatId].messages[i].unread = false;
-                         changed = true;
-                     } else if (chatHistory[chatId].messages[i].type === 'outgoing') {
-                         // Stop when we see an outgoing message (means admin handled it previously)
-                         break;
-                     }
-                 }
-                 if (changed) {
-                      console.log(`Marking chat ${chatId} as read.`);
-                      socket.emit('mark_as_read', { chatId });
-                 }
-             }
-        }
-
-        function loadChatMessages(chatId) {
-             // Clear messages area and show loading placeholder
-            messagesDiv.innerHTML = '<div class="placeholder">Memuat pesan...</div>';
-            console.log(`Requesting history for ${chatId}`);
-             // Request chat history from the server
-            socket.emit('get_chat_history', chatId);
-        }
-
-        function sanitizeHTML(str) {
-             if (str === null || str === undefined) return '';
-             const temp = document.createElement('div');
-             temp.textContent = str; // Use textContent to escape HTML
-             return temp.innerHTML.replace(/\n/g, '<br>'); // Convert newlines to <br>
-         }
-
-        // Helper to determine the MIME type for data URL/blob based on original type or filename
-        function getMimeTypeForDisplay(mediaType, mimeType, fileName) {
-             // Use the actual MIME type if available from backend
-             if (mimeType) return mimeType;
-
-             // Fallback based on Baileys message type or filename extension
-             if (mediaType === 'imageMessage') return 'image/jpeg';
-             if (mediaType === 'videoMessage') return 'video/mp4';
-             if (mediaType === 'audioMessage') return 'audio/mpeg'; // Common fallback, might need specific codecs
-             if (mediaType === 'stickerMessage') return 'image/webp';
-
-             // Try to guess based on file extension for documents/unknowns
-             if (fileName) {
-                 const ext = fileName.split('.').pop().toLowerCase();
-                 if (ext === 'pdf') return 'application/pdf';
-                 if (ext === 'doc' || ext === 'docx') return 'application/msword';
-                 if (ext === 'xls' || ext === 'xlsx') return 'application/vnd.ms-excel';
-                 if (ext === 'ppt' || ext === 'pptx') return 'application/vnd.ms-powerpoint';
-                 if (ext === 'txt') return 'text/plain';
-                 // Add more common types as needed
-             }
-
-             // Default generic type
-             return 'application/octet-stream';
-        }
-
-
-        function appendMessage(msgData) {
-          // Basic validation
-          if (!msgData || !msgData.id || !msgData.type || !msgData.chatId) {
-              console.error("Invalid message data received:", msgData);
-              return;
-          }
-
-          const { id, from, text, type, mediaData, mediaType, mimeType, timestamp, fileName, initials, chatId } = msgData; // Include chatId, mimeType
-
-          // Check if this message is for the currently active chat
-          if (chatId !== currentChatId) {
-             // console.log(`Message for chat ${chatId} received, but current chat is ${currentChatId}. Ignoring append.`);
-             return; // Only append messages for the currently viewed chat
-          }
-
-          // Prevent adding duplicate messages to the UI
-          if (messagesDiv.querySelector(`[data-message-id="${id}"]`)) {
-            // console.warn(`Pesan dengan ID ${id} sudah ditampilkan, diabaikan penambahannya ke UI.`);
-            return;
-          }
-
-          const messageDiv = document.createElement('div');
-          messageDiv.className = `message ${type}`;
-          messageDiv.dataset.messageId = id;
-          messageDiv.dataset.timestamp = timestamp; // Store timestamp for sorting
-
-
-          let contentHTML = '';
-
-          // Add sender info for outgoing messages (Admin's initials)
-          // Display initials and a colon for outgoing messages, including the hyphen prefix
-          // Format: -[INITIALS]:
-          if (type === 'outgoing' && initials) {
-               contentHTML += `<strong>-${sanitizeHTML(initials)}:</strong> `;
-          }
-
-          // Handle media content
-          if (mediaData) {
-            // Determine the appropriate MIME type for displaying the data URL
-            const displayMmeType = getMimeTypeForDisplay(mediaType, mimeType, fileName);
-            let dataUrl = mediaData;
-            // Ensure dataUrl has the correct format if it's just the base64 string
-            if (!mediaData.startsWith('data:')) {
-                 dataUrl = `data:${displayMmeType};base64,${mediaData}`;
-            }
-
-            // Display media based on its general type or MIME type
-            if (displayMmeType.startsWith('image/')) {
-              // Use onclick to open the image in the modal
-              contentHTML += `<img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer;" onclick="openMediaModal('${dataUrl}', 'image')">`;
-            } else if (displayMmeType.startsWith('video/')) {
-              // Use <video> tag for videos
-              contentHTML += `<video controls src="${dataUrl}" preload="metadata"></video>`;
-            } else if (displayMmeType.startsWith('audio/')) {
-              // Use <audio> tag for audio
-              contentHTML += `<audio controls src="${dataUrl}" type="${displayMmeType}" preload="metadata"></audio>`;
-            } else if (displayMmeType === 'application/pdf' || displayMmeType.startsWith('application/') || displayMmeType.startsWith('text/')) {
-              // Handle documents and text files - provide a link to open in modal or download
-              const docName = fileName || `${mediaType?.replace('Message', '') || 'Dokumen'}`;
-               // Use onclick to open the document info in the modal
-              contentHTML += `<a href="#" class="document-link" onclick="event.preventDefault(); openMediaModal('${dataUrl}', 'document', '${sanitizeHTML(docName)}')"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
-            } else if (mediaType === 'stickerMessage') {
-                 contentHTML += `<img src="${dataUrl}" alt="Stiker" style="max-width: 150px; max-height: 150px; border-radius: 5px;">`;
-            }
-            else {
-              // Fallback for unsupported media types
-              contentHTML += `[Media tidak didukung: ${mediaType || 'Unknown'}]`;
-            }
-          }
-
-          // Handle text content (caption for media, or plain text message)
-           // Check if text exists and is not just whitespace
-          if (text && text.trim().length > 0) {
-              // Add text content div. Apply appropriate margin-top if it follows previous content.
-               // The CSS rules (.message img + .caption, etc.) handle the margin-top based on siblings.
-               // We just need to add the div with the content.
-               // Ensure text is sanitized and newlines are converted.
-               contentHTML += `<div class="${mediaData ? 'caption' : 'text-content'}">${sanitizeHTML(text)}</div>`;
-          } else if (!mediaData && type === 'incoming' && (!text || text.trim().length === 0)) {
-               // Handle case where incoming message has no text and no recognized media
-               contentHTML += `<div class="text-content">[Pesan Kosong/Tidak Dikenal]</div>`;
-           }
-
-
-           // Add timestamp at the bottom right of the bubble
-           const msgTime = new Date(timestamp);
-           if (!isNaN(msgTime.getTime())) {
-                contentHTML += `<span class="message-timestamp">${msgTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
-           }
-
-
-          messageDiv.innerHTML = contentHTML;
-
-           // Remove any placeholder text in the messages area
-           const placeholder = messagesDiv.querySelector('.placeholder');
-           if (placeholder) placeholder.remove();
-
-           // Append the new message div
-           // Insert messages in chronological order based on timestamp
-           const messages = Array.from(messagesDiv.children);
-           let inserted = false;
-           const newMessageTime = new Date(timestamp).getTime();
-
-           // Iterate from the latest message currently displayed
-           for (let i = messages.length - 1; i >= 0; i--) {
-               const existingMsg = messages[i];
-                // Use dataset.timestamp for comparison
-               const existingMsgTime = new Date(existingMsg.dataset.timestamp).getTime();
-
-               // If the new message is newer than or equal to the current one in the list, insert after it
-               if (newMessageTime >= existingMsgTime) {
-                   messagesDiv.insertBefore(messageDiv, existingMsg.nextSibling);
-                   inserted = true;
-                   break;
-               }
-           }
-           // If the new message is older than all displayed messages, insert at the beginning
-           if (!inserted) {
-               messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
-           }
-
-           // --- START: Logika Scroll Automatis ---
-           // Hanya lakukan scroll jika pesan ini untuk chat yang sedang aktif
-           if (chatId === currentChatId) {
-                const scrollThreshold = 50; // Scroll jika kurang dari 50px dari bawah
-                // Periksa apakah pengguna saat ini berada di dekat bagian bawah
-                const isNearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop <= messagesDiv.clientHeight + scrollThreshold;
-
-                // Gulir ke bawah jika:
-                // 1. Pesan yang baru saja ditambahkan adalah pesan *keluar* (outgoing).
-                // 2. ATAU Pesan yang baru saja ditambahkan adalah pesan *masuk* (incoming), tetapi pengguna sudah berada di dekat bagian bawah.
-                // Menggunakan setTimeout memberikan browser waktu untuk merender elemen baru (terutama jika berisi gambar/media)
-                // sebelum menghitung scrollHeight yang benar dan melakukan scroll.
-                if (type === 'outgoing' || isNearBottom) {
-                    setTimeout(() => {
-                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                    }, 50); // Delay 50 milidetik
-                }
-           }
-           // --- END: Logika Scroll Automatis ---
-
-        }
-
-
-        function openMediaModal(src, type, name = null) {
-            // Reset all modal content displays
-            modalMediaContent.style.display = 'none';
-            modalVideoContent.style.display = 'none';
-            modalAudioContent.style.display = 'none';
-            modalDocumentContent.style.display = 'none';
-            // Pause any playing media
-            modalVideoContent.pause();
-            modalAudioContent.pause();
-
-
-            let displayElement = null;
-
-            if (type === 'image') {
-                modalMediaContent.src = src;
-                modalMediaContent.style.display = 'block';
-                displayElement = modalMediaContent;
-            } else if (type === 'video') {
-                 modalVideoContent.src = src;
-                 modalVideoContent.style.display = 'block';
-                 displayElement = modalVideoContent;
-            } else if (type === 'audio') {
-                 modalAudioContent.src = src;
-                 modalAudioContent.style.display = 'block';
-                 displayElement = modalAudioContent;
-            } else if (type === 'document') {
-                 modalDocumentName.textContent = name || 'Dokumen';
-                 modalDocumentLink.href = src;
-                 // Suggest filename for download - basic sanitization
-                 const cleanName = (name || 'document').replace(/[^\w.-]/g, '_'); // Replace invalid chars with underscore
-                 modalDocumentLink.download = cleanName;
-                 modalDocumentContent.style.display = 'block';
-                 displayElement = modalDocumentContent;
-            } else {
-                 console.warn(`Unsupported media type for modal: ${type}`);
-                 alert(`Tidak bisa menampilkan media tipe: ${type}`);
-            }
-
-            // Show the modal overlay if a display element was selected
-            if (displayElement) {
-                 mediaModal.style.display = 'flex';
-            }
-        }
-        // Close modal using the 'x' button (Media Modal only)
-        closeModal.addEventListener('click', () => {
-            mediaModal.style.display = 'none';
-            modalVideoContent.pause();
-            modalAudioContent.pause();
-            modalMediaContent.src = ''; // Clear src to prevent loading issues
-             modalVideoContent.src = '';
-             modalAudioContent.src = '';
-        });
-        // Close modal by clicking outside the content (Media Modal only)
-        mediaModal.addEventListener('click', (e) => {
-             if (e.target === mediaModal) { // Ensure click is directly on the overlay
-                 mediaModal.style.display = 'none';
-                 modalVideoContent.pause();
-                 modalAudioContent.pause();
-                 modalMediaContent.src = '';
-                 modalVideoContent.src = '';
-                 modalAudioContent.src = '';
-             }
-        });
-
-
-        function showSendError(message) {
-             sendErrorSpan.textContent = `Gagal mengirim: ${message}`;
-             sendErrorSpan.style.display = 'block';
-             setTimeout(hideSendError, 4000); // Hide after 4 seconds
-        }
-        function hideSendError() {
-             sendErrorSpan.textContent = '';
-             sendErrorSpan.style.display = 'none';
-        }
-
-        // Function to update the UI preview for selected media file before sending
-        function updateMediaPreview() {
-            mediaPreviewContainer.innerHTML = ''; // Clear previous preview
-            if (selectedMedia) {
-                mediaPreviewContainer.style.display = 'flex';
-
-                let previewElement = null;
-                // Create appropriate preview element based on file type
-                if (selectedMedia.type.startsWith('image/')) {
-                    const img = document.createElement('img');
-                    img.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
-                    img.alt = 'Thumbnail Gambar';
-                    previewElement = img;
-                } else if (selectedMedia.type.startsWith('video/')) {
-                    const video = document.createElement('video');
-                    video.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
-                    video.controls = false; // No controls in preview
-                    video.muted = true; // Mute video preview
-                    video.autoplay = true; // Autoplay video preview
-                    video.loop = true; // Loop video preview
-                    previewElement = video;
-                } else if (selectedMedia.type.startsWith('audio/')) {
-                    const audioIcon = document.createElement('i');
-                    audioIcon.className = 'fas fa-file-audio';
-                    audioIcon.style.fontSize = '30px';
-                    audioIcon.style.color = getCssVariable('--text-dark');
-                    previewElement = audioIcon;
-                } else { // Generic file icon
-                    const fileIcon = document.createElement('i');
-                    fileIcon.className = 'fas fa-file-alt';
-                     fileIcon.style.fontSize = '30px';
-                    fileIcon.style.color = getCssVariable('--text-dark');
-                    previewElement = fileIcon;
-                }
-
-                // Add the preview element to the container
-                if (previewElement) {
-                    mediaPreviewContainer.appendChild(previewElement);
-                }
-
-                 // Add file info text
-                 const fileInfo = document.createElement('span');
-                 fileInfo.className = 'file-info';
-                 fileInfo.textContent = selectedMedia.name || selectedMedia.type; // Use original name
-                 mediaPreviewContainer.appendChild(fileInfo);
-
-                // Add the clear button
-                const clearButton = document.createElement('button');
-                clearButton.className = 'clear-media-button';
-                clearButton.innerHTML = '<i class="fas fa-times-circle"></i>';
-                clearButton.title = 'Hapus media terpilih';
-                clearButton.style.color = getCssVariable('--button-danger-bg');
-                clearButton.addEventListener('click', () => {
-                    selectedMedia = null; // Clear the state
-                    updateMediaPreview(); // Update UI (hide preview)
-                     mediaInput.value = null; // Clear the file input value
-                });
-                mediaPreviewContainer.appendChild(clearButton);
-
-
-            } else {
-                // Hide the container if no media is selected
-                mediaPreviewContainer.style.display = 'none';
-            }
-        }
-
-        // Function to update the QR Modal content based on stored state
-        function updateQrModalContent() {
-             // Only update if the modal is currently open
-             if (qrModal.style.display === 'flex') {
-                 if (currentQrCode) {
-                      qrCodeDiv.innerHTML = ''; // Clear previous content
-                      try {
-                          const typeNumber = 0; // Auto-detect
-                          const errorCorrectionLevel = 'L'; // Low error correction
-                          const qr = qrcode(typeNumber, errorCorrectionLevel);
-                          qr.addData(currentQrCode);
-                          qr.make();
-                          const qrImg = qr.createImgTag(6, 6); // Module size 6, margin 6
-                          qrCodeDiv.innerHTML = qrImg;
-                           // Add basic styling to the image
-                          const qrImgElement = qrCodeDiv.querySelector('img');
-                          if(qrImgElement) {
-                              qrImgElement.style.maxWidth = '100%'; // Make it responsive
-                              qrImgElement.style.height = 'auto';
-                          }
-                      } catch (e) {
-                          console.error('[WA] Failed to render QR code in modal:', e);
-                          qrCodeDiv.innerHTML = '<p style="color:red;">Error rendering QR</p>'; // Show error message
-                      }
-                     qrStatus.textContent = 'Silakan pindai QR Code di atas menggunakan aplikasi WhatsApp.'; // Specific QR message
-                 } else {
-                      qrCodeDiv.innerHTML = ''; // Clear QR code area
-                      qrStatus.textContent = currentQrStatus; // Show general status
-                 }
-                 // Update WhatsApp status text in the modal as well
-                 qrModal.querySelector('h3').textContent = `WhatsApp Connection: ${currentQrStatus}`; // Optional: Add status to modal title
-             }
-        }
-
-         // --- New Quick Reply Functions ---
-
-         // Render quick reply buttons in the chat area reply box
-        function renderQuickReplyButtons() {
-             quickRepliesContainer.innerHTML = ''; // Clear existing buttons or placeholder
-
-             if (!quickReplies || quickReplies.length === 0) {
-                 quickRepliesContainer.innerHTML = '<span style="color: var(--text-muted); font-size: 0.9em;">Tidak ada pesan cepat yang tersedia.</span>';
-             } else {
-                 quickReplies.forEach(item => { // item is now { shortcut, text }
-                     const button = document.createElement('button');
-                     // Display the shortcut on the button
-                     button.textContent = item.shortcut;
-                     // Use the full text as the title (hover text)
-                     button.title = item.text;
-                     // Store the full text in a data attribute for easy access on click
-                     button.dataset.fullText = item.text;
-
-
-                     // Add click listener to insert text into the reply input
-                     button.addEventListener('click', () => {
-                         // Check if reply input is enabled
-                         if (!replyInput.disabled) {
-                             const currentText = replyInput.value.trim();
-                             // Get the full text from the data attribute
-                             const textToAppend = button.dataset.fullText;
-                             // Append the template text, add space if input is not empty
-                             replyInput.value = currentText ? `${currentText}\n${textToAppend}` : textToAppend; // Append with newline
-
-                             // Trigger input event to auto-resize textarea
-                             replyInput.dispatchEvent(new Event('input', { bubbles: true }));
-                             replyInput.focus(); // Put focus back on the input
-                         }
-                     });
-
-                     quickRepliesContainer.appendChild(button);
-                 });
-             }
-             // Ensure buttons are disabled/enabled based on current chat pick status
-             updateChatAreaForCurrentChat(); // This call handles button disabled state
-         }
-
-         // Render quick reply list in the Super Admin modal for editing
-         function renderEditableQuickReplies() {
-             quickReplyListEditable.innerHTML = ''; // Clear existing list items
-
-             if (!editingQuickReplies || editingQuickReplies.length === 0) {
-                 quickReplyListEditable.innerHTML = '<li class="placeholder">Tidak ada template</li>';
-             } else {
-                 editingQuickReplies.forEach(item => { // item is now { shortcut, text }
-                     const listItem = document.createElement('li');
-                     // Store the full text AND shortcut on the list item for deletion lookup
-                     listItem.dataset.templateText = item.text;
-                     listItem.dataset.templateShortcut = item.shortcut;
-
-                     // Display format in the list item: Shortcut (bold) + Text
-                     const displayDiv = document.createElement('div');
-                     displayDiv.className = 'template-text';
-                     // Using innerHTML to allow the strong tag for bold shortcut
-                     displayDiv.innerHTML = `<strong>${sanitizeHTML(item.shortcut)}:</strong> ${sanitizeHTML(item.text)}`;
-
-
-                     const deleteButton = document.createElement('button');
-                     deleteButton.className = 'delete-template-button';
-                     deleteButton.innerHTML = '<i class="fas fa-trash"></i>'; // Trash icon
-                     deleteButton.title = 'Hapus template ini';
-
-                     // Event listener for deletion is handled by delegation on the parent UL
-
-
-                     listItem.appendChild(displayDiv);
-                     listItem.appendChild(deleteButton);
-                     quickReplyListEditable.appendChild(listItem);
-                 });
-             }
-         }
-
-        // --- Event Delegation for Delete Buttons in Quick Reply Modal ---
-        quickReplyListEditable.addEventListener('click', (e) => {
-             // Find the delete button element that was clicked or is a parent of the clicked element
-            const deleteButton = e.target.closest('.delete-template-button');
-
-            if (deleteButton) { // Check if a delete button was clicked
-                 // Find the parent list item of the button
-                const listItem = deleteButton.closest('li');
-
-                 // Ensure it's a valid template item and not the placeholder
-                if (listItem && !listItem.classList.contains('placeholder')) {
-                     // Get the full template text AND shortcut from data attributes on the list item
-                     const textToDelete = listItem.dataset.templateText;
-                     const shortcutToDelete = listItem.dataset.templateShortcut;
-
-                     // Store the item details for the confirmation modal
-                     templateToDelete = { shortcut: shortcutToDelete, text: textToDelete };
-
-                     // Show the custom confirmation modal
-                     confirmDeleteQRMessage.textContent = `Anda yakin ingin menghapus template "${shortcutToDelete}"?`; // Customize message
-                     confirmDeleteQRModal.style.display = 'flex'; // Show the modal
-
-                     // Note: The actual deletion from editingQuickReplies happens when 'Yes, Delete' is clicked in the *confirmation* modal.
-                }
-            }
-        });
-
-         // --- Event Listeners for Custom Delete Confirmation Modal ---
-         confirmDeleteQRYesButton.addEventListener('click', () => {
-             if (templateToDelete) { // Ensure there's a template pending deletion
-                 console.log(`[UI] User confirmed deletion of template: "${templateToDelete.shortcut}"`);
-
-                 // Find the index of the item to delete in the *current* editingQuickReplies array
-                 // Use BOTH shortcut and text for a more reliable match
-                 const indexToDelete = editingQuickReplies.findIndex(item =>
-                     item.shortcut === templateToDelete.shortcut && item.text === templateToDelete.text
-                 );
-
-                 if (indexToDelete > -1) {
-                     editingQuickReplies.splice(indexToDelete, 1); // Remove from temporary array
-                     renderEditableQuickReplies(); // Re-render the list in the main quick reply modal
-                     quickReplyFormStatusDiv.textContent = 'Template dihapus (belum tersimpan).'; // Temporary status
-                     quickReplyFormStatusDiv.className = 'quick-reply-form-status';
-                     console.log(`[UI] Template "${templateToDelete.shortcut}" removed from editing list.`);
-                 } else {
-                      console.warn(`[UI] Gagal menghapus template (di modal konfirmasi): "${templateToDelete.shortcut}" tidak ditemukan di editingQuickReplies.`);
-                      quickReplyFormStatusDiv.textContent = 'Gagal menghapus template. Mohon coba lagi.';
-                      quickReplyFormStatusDiv.className = 'quick-reply-form-status error';
-                 }
-             }
-             // Hide the confirmation modal and reset state
-             confirmDeleteQRModal.style.display = 'none';
-             templateToDelete = null;
-         });
-
-         confirmDeleteQRNoButton.addEventListener('click', () => {
-             console.log('[UI] User cancelled template deletion.');
-             // Hide the confirmation modal and reset state
-             confirmDeleteQRModal.style.display = 'none';
-             templateToDelete = null;
-              // Clear any temporary status message set by the delete click
-             quickReplyFormStatusDiv.textContent = '';
-             quickReplyFormStatusDiv.className = 'quick-reply-form-status';
-         });
-
-
-        // --- Socket Event Handlers ---
-
-        socket.on('connect', () => {
-            console.log('[SOCKET] WebSocket connected.');
-            const storedUsername = localStorage.getItem('loggedInUsername');
-            if (storedUsername) {
-                 console.log('[SOCKET] Found logged in user in storage:', storedUsername);
-                 showLoginError('Menghubungkan kembali...'); // Show connection message
-                 // Attempt to reconnect to the server with the stored username
-                 socket.emit('admin_reconnect', { username: storedUsername });
-            } else {
-                 console.log('[SOCKET] No user logged in in localStorage.');
-                 // Show login form
-                 setLoginState(false);
-                 showLoginError(''); // Clear any old messages
-             }
-             // On connect, update WA status but don't show QR modal unless explicitly requested/needed later
-             updateWhatsappStatus('Connected (WebSocket)', true);
-        });
-
-        socket.on('reconnect_success', ({ username, role, currentPicks }) => {
-            console.log(`[SOCKET] Reconnect successful for ${username}. Role: ${role}. Current picks:`, currentPicks);
-            // Set the login state and initial picks
-            setLoginState(true, username, role, currentPicks);
-            updateWhatsappStatus('Connected', true);
-            // Request the rest of the initial data (chat history, registered admins, quick replies)
-            socket.emit('request_initial_data');
-             socket.emit('get_quick_replies'); // Also request quick replies
-
-
-             // On successful reconnect, ensure QR modal is hidden and state cleared
-             currentQrCode = null;
-             qrCodeDiv.innerHTML = '';
-             qrModal.style.display = 'none';
-        });
-
-        socket.on('reconnect_failed', () => {
-            console.log('[SOCKET] Reconnect failed (session invalid?). Forcing logout.');
-             showLoginError('Sesi tidak valid atau koneksi terputus terlalu lama. Silakan login kembali.');
-             // Wait a moment before showing the login form to allow user to read the message
-             setTimeout(() => setLoginState(false), 1500);
-        });
-
-        socket.on('connect_error', (error) => {
-            console.error('[SOCKET] WebSocket connection error:', error);
-             updateWhatsappStatus('Disconnected (Server Error)', false);
-            showLoginError('Koneksi ke server gagal. Memeriksa ulang...');
-             // If not already logged in, show the login form
-             if (!currentUser) {
-                  setLoginState(false);
-             }
-             // If logged in as Super Admin, update QR modal status, but don't auto-show
-             if (currentUserRole === 'superadmin') {
-                 currentQrCode = null; // Clear QR code
-                 qrCodeDiv.innerHTML = ''; // Clear QR display
-                 updateWhatsappStatus('Koneksi WebSocket error. Periksa log server.', false); // Update status variable and sidebar
-                 updateQrModalContent(); // Update modal content if open
-             }
-        });
-
-        socket.on('disconnect', (reason) => {
-            console.log('[SOCKET] WebSocket disconnected:', reason);
-            updateWhatsappStatus('Disconnected', false);
-             // If the user was logged in, and the disconnect was not initiated by the client (e.g., logout button)
-             // and the reason is not 'transport close' which can happen during reconnects,
-             // set UI state to logged out.
-             // The server cleanupAdminState handles emitting state updates to other clients.
-            if (currentUser && reason !== 'io client disconnect' && reason !== 'transport close') {
-                 console.log('[SOCKET] Server disconnected or network issue. Changing UI to logged out.');
-                 // setLoginState(false); // This is now handled by cleanupAdminState receiving on the same socket
-            } else if (reason === 'io server disconnect') {
-                 // Server explicitly closed the connection (e.e.g., another login elsewhere)
-                  console.log('[SOCKET] Server explicitly disconnected the socket.');
-                 setLoginState(false);
-            }
-             // Clear any active chat if disconnected
-             if (currentChatId) {
-                  currentChatId = null;
-                  resetChatArea();
-             }
-             // If logged in as Super Admin, update QR modal status, don't auto-show
-             if (currentUserRole === 'superadmin') {
-                 currentQrCode = null; // Clear QR code
-                 qrCodeDiv.innerHTML = ''; // Clear QR display
-                 updateWhatsappStatus(`WebSocket terputus: ${reason}`, false); // Update status variable and sidebar
-                 updateQrModalContent(); // Update modal content if open
-             }
-        });
-
-        socket.on('login_success', ({ username, initials, role, currentPicks }) => {
-            console.log('[SOCKET] Login successful via server.');
-            // Set the login state, including role and initial picks
-            setLoginState(true, username, role, currentPicks);
-            // WhatsApp status will be updated by a separate WA event handler
-            // updateWhatsappStatus('Connected', true); // Let WA event handle this
-
-            // Request initial chat data and quick replies after successful login
-            socket.emit('request_initial_data');
-             socket.emit('get_quick_replies'); // Also request quick replies
-
-             // On successful login, ensure QR modal is hidden and state cleared
-             currentQrCode = null;
-             qrCodeDiv.innerHTML = '';
-             qrModal.style.display = 'none';
-        });
-
-        socket.on('login_failed', (data) => {
-            console.log('[SOCKET] Login failed:', data?.message || 'Invalid credentials.');
-            showLoginError(data?.message || 'Username atau password salah.');
-            loginButton.disabled = false; // Re-enable login button
-        });
-
-        // --- WhatsApp Connection Status Updates ---
-        socket.on('whatsapp_connected', (data) => {
-            console.log('[WA] WhatsApp Connected:', data?.username);
-            updateWhatsappStatus('Connected', true); // Update status variable and sidebar
-             // On connected, clear QR code and hide modal (if Super Admin and it was open)
-             if (currentUserRole === 'superadmin' && qrModal.style.display !== 'none') {
-                 qrCodeDiv.innerHTML = ''; // Clear QR code display in the modal
-                 qrModal.style.display = 'none'; // Hide modal
-             }
-             currentQrCode = null; // Clear stored QR data
-             updateQrModalContent(); // Update modal content if it happens to be open (should be hidden)
-
-        });
-
-         socket.on('whatsapp_connecting', () => {
-             console.log('[WA] WhatsApp Status: Connecting...');
-             updateWhatsappStatus('Connecting...', false); // Update status variable and sidebar
-             // Update QR modal status if open (Super Admin only)
-             if (currentUserRole === 'superadmin') {
-                 currentQrCode = null; // Clear QR code display
-                 qrCodeDiv.innerHTML = '';
-                 updateQrModalContent(); // Update modal content if open
-             }
-         });
-
-
-        socket.on('whatsapp_disconnected', (data) => {
-            console.warn('[WA] WhatsApp Disconnected:', data?.reason, data?.statusCode);
-             updateWhatsappStatus(`Disconnected (${data?.reason || 'Unknown'})`, false); // Update status variable and sidebar
-             // Update QR modal status if open (Super Admin only)
-             if (currentUserRole === 'superadmin') {
-                 currentQrCode = null; // Clear QR code display
-                 qrCodeDiv.innerHTML = '';
-                 // Only show modal on disconnect if it requires QR (401, 419) which fatal handler handles
-                 // For normal disconnect, just update status in modal if open
-                 if (data?.statusCode !== 401 && data?.statusCode !== 419) {
-                     updateQrModalContent(); // Update modal content if open
-                 }
-             } else {
-                  // Non-superadmins get a server alert for significant disconnects
-                   if (data?.statusCode !== 401 && data?.statusCode !== 419 && data?.reason !== 'intentional') { // Don't alert for session expiry or manual disconnect
-                        showServerAlert(`Koneksi WhatsApp terputus: ${data?.message || 'Hubungi Super Admin.'}`, false);
-                   }
-             }
-
-        });
-
-         socket.on('whatsapp_fatal_disconnected', (data) => {
-            console.error('[WA] WhatsApp Fatal Disconnect:', data?.reason, data?.statusCode, data?.message);
-             updateWhatsappStatus(`FATAL Disconnected (${data?.reason || 'Unknown'})`, false); // Update status variable and sidebar
-
-             // If logged in as Super Admin and it requires a new QR (401, 419)
-             if (currentUserRole === 'superadmin') {
-                 currentQrCode = null; // Clear stored QR data
-                 qrCodeDiv.innerHTML = ''; // Clear QR display
-                 // The 'whatsapp_qr' event will follow shortly to display the QR.
-                 // Set temporary status message in modal state
-                 currentQrStatus = data.message || 'Sesi invalid. Menunggu QR Code baru...';
-                 updateQrModalContent(); // Update modal content if open
-                 // No need to auto-show modal here, user clicks button to see it.
-             } else {
-                  // If not Super Admin, just show a global alert
-                  showServerAlert(`Koneksi WhatsApp terputus secara fatal: ${data?.message || 'Hubungi Super Admin untuk memulihkan.'}`, false);
-             }
-         });
-
-        socket.on('whatsapp_qr', (qrCodeData) => {
-             console.log('[WA] Received QR Code data.');
-             updateWhatsappStatus('Waiting for Scan', false); // Update status variable and sidebar
-
-             // Store the QR code data (only if Super Admin, but store anyway for consistency)
-             currentQrCode = qrCodeData;
-             currentQrStatus = 'Silakan pindai QR Code di atas menggunakan aplikasi WhatsApp.'; // Specific QR status text
-
-             // If the QR modal is currently open AND user is Super Admin, render the QR
-             if (currentUserRole === 'superadmin' && qrModal.style.display === 'flex') { // Only show if modal is open
-                  updateQrModalContent(); // Update modal content to show QR
-             } else if (currentUserRole === 'superadmin') {
-                  // If Super Admin but modal is not open, update modal content state without showing it
-                  // A simple message might be useful in the sidebar status? No, whatsappStatusDiv handles that.
-                   updateQrModalContent(); // Still update the content, just don't show the modal
-             } else {
-                 console.log('[WA] Received QR but user is not Super Admin. Ignoring display.');
-                  currentQrCode = null; // Ensure state is cleared for non-superadmin
-                  qrCodeDiv.innerHTML = '';
-                  qrStatus.textContent = '';
-             }
-        });
-
-        // --- Initial Data & Message Handling ---
-
-        socket.on('initial_data', ({ chatHistory: initialChatHistory, admins: registeredAdminList, currentUserRole: role, currentPicks }) => { // Added currentPicks
-            console.log('[SOCKET] Received initial data:', Object.keys(initialChatHistory).length, 'chats');
-            console.log('[SOCKET] Received registered admins:', registeredAdminList);
-            console.log('[SOCKET] Received initial pick status:', currentPicks); // Log currentPicks
-             registeredAdmins = registeredAdminList || {}; // Store registered admins
-             currentUserRole = role; // Ensure current user role is set
-             pickedChatsStatus = currentPicks || {}; // Initialize or update pick status
-
-            // Update admin dropdowns and super admin panel visibility
-            populateDelegateChatSelect(); // Populate delegate select now that registered admins are known
-             populateDeleteAdminSelect(); // Populate delete admin select
-             superadminPanel.style.display = (currentUserRole === 'superadmin') ? 'flex' : 'none'; // Show/hide panel
-
-             // Ensure QR button and Quick Reply manage button are shown only for Super Admin
-             if (currentUserRole === 'superadmin') {
-                 showQrButton.style.display = 'flex'; // Use flex for icon alignment
-                  manageQuickRepliesButton.style.display = 'flex'; // Use flex for icon alignment
-             } else {
-                 showQrButton.style.display = 'none';
-                 manageQuickRepliesButton.style.display = 'none';
-             }
-
-
-            // On receiving initial data after login/reconnect, clear any old QR display state
-             currentQrCode = null; // Clear stored QR data
-             qrCodeDiv.innerHTML = ''; // Clear QR code display in the modal
-             // qrStatus text will be updated by updateWhatsappStatus which should fire after initial_data
-             qrModal.style.display = 'none'; // Ensure QR modal is hidden
-
-          chatHistory = initialChatHistory || {}; // Store chat history
-
-          // Clear current chat list UI and state
-          chatList.innerHTML = '';
-          chatListItems = {};
-
-          // Sort chat IDs by the timestamp of their last message (newest first)
-          const sortedChatIds = Object.keys(chatHistory).sort((a, b) => {
-            const messagesA = chatHistory[a]?.messages || [];
-            const messagesB = chatHistory[b]?.messages || [];
-             // Get timestamp of last message, default to epoch start if no messages
-            const lastMsgTimeA = messagesA.length > 0 ? new Date(messagesA[messagesA.length - 1].timestamp).getTime() : 0;
-            const lastMsgTimeB = messagesB.length > 0 ? new Date(messagesB[messagesB.length - 1].timestamp).getTime() : 0;
-            return lastMsgTimeB - lastMsgTimeA; // Descending order
-          });
-
-          // Populate the chat list UI
-          sortedChatIds.forEach(chatId => {
-            const chatEntry = chatHistory[chatId];
-            const messages = chatEntry?.messages || []; // Ensure messages is an array
-            const chatName = chatId.split('@')[0]; // Simple name extraction
-            const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-            updateChatList(
-              chatId,
-              chatName,
-              lastMessage?.text || (lastMessage?.mediaType ? `[${lastMessage.mediaType.replace('Message', '')}]` : ''), // Snippet text
-              lastMessage?.timestamp || new Date(0).toISOString(), // Use a default timestamp if none exists (epoch start)
-              chatEntry?.status || 'open', // Use status from history, default open
-              true // Indicate this is part of initial load
-            );
-          });
-
-           // After populating list, update pick status and unread indicators for all items
-          updateAllChatListItemsPickStatus(); // Updates pick status display on list items
-
-           // If there was a previously selected chat (e.g. after reconnect), load its messages
-           // Otherwise, reset the chat area to the default state
-           if (currentChatId && chatListItems[currentChatId]) {
-                chatListItems[currentChatId].classList.add('selected'); // Reselect the item
-                loadChatMessages(currentChatId); // Load messages for that chat
-           } else {
-                currentChatId = null; // Ensure currentChatId is null if no chat selected or found
-                resetChatArea(); // Show default state
-           }
-
-        });
-
-
-        socket.on('chat_history', ({ chatId, messages, status }) => {
-           console.log(`[SOCKET] Received history for chat ${chatId}:`, messages.length, 'messages', 'status:', status);
-           // Update the chat history state for this specific chat
-           if (!chatHistory[chatId]) chatHistory[chatId] = {}; // Ensure the chat entry exists
-           chatHistory[chatId].status = status || 'open'; // Update/set status
-           chatHistory[chatId].messages = messages || []; // Update messages (ensure it's an array)
-
-
-           // Only update the UI if this is the currently viewed chat
-           if (chatId === currentChatId) {
-            messagesDiv.innerHTML = ''; // Clear current messages display
-            if (chatHistory[chatId].messages.length === 0) {
-              messagesDiv.innerHTML = '<div class="placeholder">Belum ada pesan di percakapan ini.</div>';
-            } else {
-              // Append messages to the UI
-              chatHistory[chatId].messages.forEach(msg => {
-                 // Ensure essential fields are present, add chatId if missing
-                 if (!msg.chatId) msg.chatId = chatId;
-                 if (!msg.type) msg.type = msg.from === currentUser ? 'outgoing' : 'incoming'; // Guess type if missing
-                 if (!msg.id) msg.id = `${msg.timestamp}-${msg.from}-${Math.random().toString(36).substring(7)}`; // Generate fallback ID
-                 if (!msg.timestamp) msg.timestamp = new Date().toISOString(); // Fallback timestamp
-                 // Add other fallbacks if needed
-
-                appendMessage(msg);
-              });
-            }
-            // --- START: Scroll Automatis ---
-            // Gulir ke bawah setelah memuat seluruh riwayat
-             // Gunakan penundaan singkat untuk memastikan semua gambar/media dimuat dan scrollHeight akurat
-            if (chatHistory[chatId].messages.length > 0) { // Pastikan hanya scroll jika ada pesan
-                 setTimeout(() => {
-                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                 }, 100); // Delay 100ms
-            }
-            // --- END: Scroll Automatis ---
-
-
-             // Ensure the chat area header and buttons are updated based on the loaded chat's state
-             updateChatAreaForCurrentChat();
-          } else {
-               console.warn(`[SOCKET] Received history for non-active chat ${chatId}. Updating state only.`);
-               // If history is loaded for a non-active chat, ensure its state (like status) is updated
-               updateChatListItemStatus(chatId, status);
-               updateUnreadIndicator(chatId); // Re-evaluate unread based on updated messages
-           }
-        });
-
-
-        // --- Main Message Receiving Handler ---
-        socket.on('new_message', (data) => {
-          const chatId = data.chatId; // Get chatId from message data
-          const messageId = data.id;
-
-          // Ensure chat entry exists in state, default to open status
-          if (!chatHistory[chatId]) {
-            chatHistory[chatId] = { status: 'open', messages: [] };
-             console.log(`[HISTORY] New chat detected: ${chatId}`);
-          }
-           // Ensure messages array exists
-           if (!chatHistory[encodedChatId].messages) { // Corrected to use encodedChatId
-               chatHistory[encodedChatId].messages = [];
-           }
-             // Ensure status exists
-            if (!chatHistory[encodedChatId].status) { // Corrected to use encodedChatId
-                chatHistory[encodedChatId].status = 'open';
-            }
-
-           const encodedChatId = encodeFirebaseKey(chatId); // Define encodedChatId
-
-
-          // Add the new message to the history state if it's not a duplicate
-          if (!chatHistory[encodedChatId].messages.some(m => m.id === messageId)) { // Corrected to use encodedChatId
-             chatHistory[encodedChatId].messages.push(data); // Corrected to use encodedChatId
-             console.log(`[HISTORY] Added new message (ID: ${messageData.id}, Type: ${data.type}) to history for chat ${chatId}`);
-
-             // Update the chat list item for this chat
-             const chatName = chatListItems[chatId]?.dataset.chatName || chatId.split('@')[0]; // Get existing name or use ID
-             const chatStatus = chatHistory[encodedChatId].status; // Get status from updated state (Corrected to use encodedChatId)
-
-             updateChatList(
-                 chatId,
-                 chatName,
-                 data.text || (data.mediaType ? `[${data.mediaType.replace('Message', '')}]` : ''), // Snippet
-                 data.timestamp,
-                 chatStatus // Pass the current status
-             );
-
-             // If this message is for the currently active chat, append it to the messages UI
-             if (chatId === currentChatId) {
-                 // Ensure chatId is on the message object
-                 if (!data.chatId) data.chatId = chatId;
-                 // Ensure essential fields are present for appendMessage
-                 if (!data.type) data.type = data.from === currentUser ? 'outgoing' : 'incoming'; // Guess type if missing
-                 if (!data.id) data.id = `${data.timestamp}-${data.from}-${Math.random().toString(36).substring(7)}`; // Generate fallback ID
-                 if (!data.timestamp) data.timestamp = new Date().toISOString(); // Fallback timestamp
-
-                appendMessage(data); // <--- appendMessage will now handle the scroll internally
-
-                 // If it's an incoming message for the chat currently picked by THIS user, mark as read immediately
-                 const pickedBy = pickedChatsStatus[chatId];
-                 if (data.type === 'incoming' && pickedBy === currentUser) {
-                      // Use a slight delay to allow the message to render before marking as read
-                     setTimeout(() => markChatAsRead(chatId), 500);
-                 }
-             } else {
-                 // If the message is for a non-active chat, just update the unread indicator
-                 updateUnreadIndicator(chatId);
-                 // Show a desktop notification for incoming messages in non-active chats
-                 if (data.type === 'incoming') {
-                      const notificationBody = data.text || (data.mediaType ? `[${data.mediaType.replace('Message', '')}]` : '[Pesan Baru]');
-                      showNotification(`Pesan Baru (${chatName})`, notificationBody, { chatId: chatId });
-                 }
-             }
-
-          } else {
-             // Message is a duplicate, but if it's for the current chat and not displayed, add it.
-             if (chatId === currentChatId && !messagesDiv.querySelector(`[data-message-id="${messageId}"]`)) {
-                 console.warn(`Duplicate message ID ${messageId} found in history but not in UI for current chat, adding.`);
-                  // Ensure essential fields are present for appendMessage
-                  if (!data.chatId) data.chatId = chatId;
-                  if (!data.type) data.type = data.from === currentUser ? 'outgoing' : 'incoming'; // Guess type if missing
-                  if (!data.id) data.id = `${data.timestamp}-${data.from}-${Math.random().toString(36).substring(7)}`; // Generate fallback ID
-                  if (!data.timestamp) data.timestamp = new Date().toISOString(); // Fallback timestamp
-
-                 appendMessage(data); // <--- Append duplicate if missing in UI, scroll logic inside
-             } else {
-                // console.log(`Duplicate message ${messageId} for chat ${chatId} already in history and UI, ignoring.`);
-             }
-          }
-        });
-
-
-        socket.on('update_pick_status', ({ chatId, pickedBy }) => {
-            console.log(`[SOCKET] Pick status update: Chat ${chatId} -> ${pickedBy || 'released'}`);
-            // Update the local state for picked chats
-            const previousPicker = pickedChatsStatus[chatId]; // Store previous picker
-            if (pickedBy) {
-                pickedChatsStatus[chatId] = pickedBy; // Set the new picker
-            } else {
-                delete pickedChatsStatus[chatId]; // Remove pick status if released
-            }
-            // Update the visual pick status on the chat list item
-            updateChatListItemPickStatus(chatId);
-             // Update the unread indicator (might change if chat becomes picked by user)
-            updateUnreadIndicator(chatId);
-
-            // If the updated chat is the one currently viewed, update the header/actions area
-            if (chatId === currentChatId) {
-                updateChatAreaForCurrentChat();
-                 // If the chat is now picked by the current user and wasn't before, focus the input
-                 if(pickedBy === currentUser && previousPicker !== currentUser) {
-                    replyInput.focus();
-                 }
-            }
-             // The initial_pick_status event (sent by server on any pick/unpick/delegate)
-             // will also update the entire pickedChatsStatus state, which is handled below.
-        });
-
-         socket.on('initial_pick_status', (fullPickedStatus) => {
-             console.log('[SOCKET] Received full initial pick status:', fullPickedStatus);
-             pickedChatsStatus = fullPickedStatus || {}; // Update the entire state
-             // Update UI elements that depend on the global pick state
-             updateAllChatListItemsPickStatus(); // Updates pick status display on list items
-             if (currentChatId) {
-                  updateChatAreaForCurrentChat(); // Update header/actions for current chat
-             }
-             // No need to populateDelegateChatSelect here, as update_online_admins/registered_admins do that.
-         });
-
-
-        socket.on('pick_error', ({ chatId, message }) => {
-            console.error(`Pick/Unpick error for chat ${chatId}: ${message}`);
-            // If the error is for the current chat, show it in the header
-            if (chatId === currentChatId) {
-                 chatPickedStatus.textContent = `Error mengambil chat: ${message}`;
-                 chatPickedStatus.style.color = getCssVariable('--error-color');
-                 // Reset UI after a short delay to reflect actual state (which update_pick_status should handle)
-                 setTimeout(() => {
-                    updateChatAreaForCurrentChat(); // Re-evaluate UI state
-                 }, 3000); // Adjust delay as needed
-            } else {
-                 // For errors on non-active chats, show a general server alert
-                  showServerAlert(`Gagal mengambil chat ${chatId?.split('@')[0] || 'ID tidak valid'}: ${message}`, false);
-            }
-             // Ensure pick button is re-enabled if it was disabled
-             pickChatButton.disabled = false;
-             pickChatButton.textContent = 'Ambil Chat Ini'; // Reset text
-             releaseChatButton.disabled = false; // Also re-enable release if it was the one pressed
-             releaseChatButton.textContent = 'Lepas Chat'; // Reset text
-        });
 
         socket.on('send_error', ({ to, text, media, message }) => {
             console.error(`Failed to send message to ${to}: ${message}`);
@@ -3008,7 +1657,7 @@
                 replyInput.value = text || '';
                 selectedMedia = media; // Restore selected media object (should be stored before sending)
                 updateMediaPreview();
-                // Re-enable input and send button
+                // Re-enable input and button while sending to prevent double sends
                  replyInput.disabled = false;
                  replyButton.disabled = false;
                  mediaButton.disabled = false;
@@ -3110,7 +1759,7 @@
             console.log('[SOCKET] Received updated registered admins:', registeredAdminList);
             registeredAdmins = registeredAdminList || {}; // Update the registered admins state
              // Repopulate the delegate select dropdown as the list of potential delegates has changed
-            populateDelegateAdminSelect(); // Also update delete admin select
+            populateDeleteAdminSelect(); // Also update delete admin select
              // Also update Super Admin panel visibility if needed (though should be set on login)
              if (currentUserRole === 'superadmin') {
                  superadminPanel.style.display = 'flex';
@@ -3123,12 +1772,17 @@
              console.log('[SOCKET] Received updated quick replies:', templates);
              // Ensure templates is an array of objects { shortcut, text }
              quickReplies = Array.isArray(templates) ? templates.filter(item => item && typeof item.shortcut === 'string' && typeof item.text === 'string') : [];
+             // Sort quick replies by shortcut alphabetically
+             quickReplies.sort((a, b) => a.shortcut.localeCompare(b.shortcut));
+
              renderQuickReplyButtons(); // Re-render the quick reply buttons in the chat area
 
              // If the quick reply modal is open, update the editable list as well
              if (quickReplyModal.style.display !== 'none') {
-                  // Deep copy for editing state
+                  // Deep copy for editing state and sort it
                   editingQuickReplies = quickReplies.map(item => ({ ...item }));
+                  editingQuickReplies.sort((a, b) => a.shortcut.localeCompare(b.shortcut));
+
                   renderEditableQuickReplies(); // Re-render the list in the modal
                    quickReplyFormStatusDiv.textContent = 'Template berhasil diperbarui dari server.'; // Show status
                    quickReplyFormStatusDiv.className = 'quick-reply-form-status success';
@@ -3146,21 +1800,17 @@
             console.error(`Super Admin Error: ${message}`);
              showServerAlert(message, false); // Show error as a server alert
 
-             // If add admin modal is open, show error there too
-             const addAdminStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
-             if (addAdminModal.style.display !== 'none') {
+             // If a Super Admin modal is open, show error there too
+              if (addAdminModal.style.display !== 'none') {
+                 const addAdminStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
                  addAdminStatusDiv.textContent = message;
                  addAdminStatusDiv.className = 'add-admin-form-status error';
                  // Do not close the modal on error
-             }
-              // If delete admin modal is open, show error there too
-              const deleteAdminStatusDiv = deleteAdminModal.querySelector('.delete-admin-form-status');
-              if (deleteAdminModal.style.display !== 'none') {
+             } else if (deleteAdminModal.style.display !== 'none') {
+                  const deleteAdminStatusDiv = deleteAdminModal.querySelector('.delete-admin-form-status');
                    deleteAdminStatusDiv.textContent = message;
                    deleteAdminStatusDiv.className = 'delete-admin-form-status error';
-              }
-              // If quick reply modal is open, show error there too
-              if (quickReplyModal.style.display !== 'none') {
+              } else if (quickReplyModal.style.display !== 'none') {
                    quickReplyFormStatusDiv.textContent = message;
                    quickReplyFormStatusDiv.className = 'quick-reply-form-status error';
                     // Re-enable save button and inputs
@@ -3168,26 +1818,37 @@
                     newQuickReplyShortcutInput.disabled = false; // Enable shortcut input
                     newQuickReplyTextarea.disabled = false;
                     addQuickReplyButton.disabled = false;
+              } else if (confirmDeleteAllChatsModal.style.display !== 'none') {
+                   // Show error in the delete all modal and re-enable buttons
+                   confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').textContent = `Gagal menghapus: ${message}`;
+                   confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').style.color = getCssVariable('--error-color');
+                   confirmDeleteAllChatsModal.querySelector('.modal-content .modal-buttons').style.display = 'flex'; // Show buttons again
               }
-             // Re-enable admin action buttons if they were disabled
-              submitAddAdminButton.disabled = false;
-              newAdminUsernameInput.disabled = false;
-              newAdminPasswordInput.disabled = false;
-              newAdminInitialsInput.disabled = false;
-              newAdminRoleSelect.disabled = false;
-              submitAddAdminButton.disabled = false;
 
-               submitDeleteAdminButton.disabled = deleteAdminSelect.value === "" || !registeredAdmins || Object.keys(registeredAdmins).filter(u => u !== currentUser).length === 0; // Re-evaluate disable state
-               deleteAdminSelect.disabled = false;
+             // Re-enable admin action buttons if they were disabled (assuming they were disabled before emit)
+              // This needs to be more specific based on which action failed if multiple actions are involved
+              // For simplicity here, assuming general error state might need these re-enabled:
+               submitAddAdminButton.disabled = false;
+               newAdminUsernameInput.disabled = false; // Might be disabled if Add Admin modal open
+               newAdminPasswordInput.disabled = false; // Might be disabled
+               newAdminInitialsInput.disabled = false; // Might be disabled
+               newAdminRoleSelect.disabled = false; // Might be disabled
+
+               submitDeleteAdminButton.disabled = deleteAdminSelect.value === "" || !registeredAdmins || Object.keys(registeredAdmins).filter(u => u !== currentUser).length === 0; // Re-evaluate delete admin button state
+               deleteAdminSelect.disabled = false; // Might be disabled
+
+               // The save button in quick reply modal is re-enabled above if that modal is open.
+               // Delete all chats button:
+               deleteAllChatsButton.disabled = false;
         });
 
         socket.on('superadmin_success', ({ message }) => {
              console.log(`Super Admin Success: ${message}`);
              showServerAlert(message, true); // Show success as a server alert
 
-             // If add admin modal is open, show success there and close after a delay
-             const addAdminStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
+             // If a Super Admin modal is open, show success there and close after a delay
               if (addAdminModal.style.display !== 'none') {
+                 const addAdminStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
                  addAdminStatusDiv.textContent = message;
                  addAdminStatusDiv.className = 'add-admin-form-status success';
                  // Re-enable input fields just in case
@@ -3198,17 +1859,40 @@
                   submitAddAdminButton.disabled = false;
 
                   setTimeout(() => addAdminModal.style.display = 'none', 1500); // Close modal on success
-             }
-              // If delete admin modal is open, show success there and close after a delay
-              const deleteAdminStatusDiv = deleteAdminModal.querySelector('.delete-admin-form-status');
-              if (deleteAdminModal.style.display !== 'none') {
+             } else if (deleteAdminModal.style.display !== 'none') {
+                  const deleteAdminStatusDiv = deleteAdminModal.querySelector('.delete-admin-form-status');
                    deleteAdminStatusDiv.textContent = message;
                    deleteAdminStatusDiv.className = 'delete-admin-form-status success';
                    // Re-enable button just in case
                     submitDeleteAdminButton.disabled = false;
                      deleteAdminSelect.disabled = false;
                     setTimeout(() => deleteAdminModal.style.display = 'none', 1500); // Close modal on success
+               } else if (quickReplyModal.style.display !== 'none') {
+                   quickReplyFormStatusDiv.textContent = message;
+                   quickReplyFormStatusDiv.className = 'quick-reply-form-status success';
+                   // Update the main state from editing state on successful save
+                    quickReplies = editingQuickReplies.map(item => ({ ...item })); // Deep copy
+                    quickReplies.sort((a, b) => a.shortcut.localeCompare(b.shortcut)); // Keep sorted
+                    renderQuickReplyButtons(); // Re-render chat area buttons
+
+                   // Re-enable save button and inputs
+                    saveQuickRepliesButton.disabled = false;
+                    newQuickReplyShortcutInput.disabled = false;
+                    newQuickReplyTextarea.disabled = false;
+                    addQuickReplyButton.disabled = false;
+
+                   setTimeout(() => quickReplyModal.style.display = 'none', 1500); // Close modal on success
+               } else if (confirmDeleteAllChatsModal.style.display !== 'none') {
+                   // Show success in the delete all modal before closing
+                    confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').textContent = message;
+                   confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').style.color = getCssVariable('--light-green'); // Success color
+                    confirmDeleteAllChatsModal.querySelector('.modal-content .modal-buttons').style.display = 'none'; // Hide buttons
+
+                   // Close the modal after a delay. The UI will be fully reset by 'all_chat_history_deleted' event.
+                    setTimeout(() => confirmDeleteAllChatsModal.style.display = 'none', 1500);
                }
+
+
              // After success, re-populate relevant dropdowns just in case
              populateDelegateChatSelect();
              populateDeleteAdminSelect();
@@ -3242,6 +1926,10 @@
 
         socket.on('all_chat_history_deleted', () => {
             console.log('All chat history deleted.');
+             // Show a success alert *before* resetting the UI if confirm modal was open
+            // This alert is already handled by superadmin_success if the modal was open.
+            // If action triggered otherwise (e.g. server restart logic), the alert might show globally.
+
             // Reset all UI elements and state
             resetUI();
              // Show the empty chat list placeholder
@@ -3466,8 +2154,8 @@
                   return;
              }
              // Basic check if initials are alphanumeric (optional)
-             if (!/^[A-Z]+$/.test(initials)) {
-                  addAdminFormStatusDiv.textContent = 'Initials hanya boleh berisi huruf.';
+             if (!/^[A-Z]+$/.test(initials)) { // Check for uppercase letters only
+                  addAdminFormStatusDiv.textContent = 'Initials hanya boleh berisi huruf besar.'; // Updated message
                   addAdminFormStatusDiv.className = 'add-admin-form-status error';
                   return;
              }
@@ -3532,47 +2220,65 @@
 
 
         // Close modal buttons handler (generic)
-        document.querySelectorAll('.close-modal-button').forEach(button => {
-             button.addEventListener('click', (e) => {
-                 const modalElement = e.target.closest('.modal-overlay'); // Find the parent modal overlay
-                 if (modalElement) {
-                      const modalId = modalElement.id;
+        // Handles closing modals that have a button with class="close-modal-button" inside modal-content
+        document.querySelectorAll('.modal-overlay').forEach(modalOverlay => {
+            const closeButton = modalOverlay.querySelector('.modal-content .close-modal-button');
+            if (closeButton) {
+                 closeButton.addEventListener('click', (e) => {
+                     // Get the parent modal overlay element
+                     const modalElement = e.target.closest('.modal-overlay');
+                     if (modalElement) {
+                         const modalId = modalElement.id;
 
-                      modalElement.style.display = 'none'; // Hide the target modal
+                         modalElement.style.display = 'none'; // Hide the target modal
 
-                      // Re-enable buttons specific to delete admin modal if closing it
-                      if (modalId === 'deleteAdminModal') {
-                           submitDeleteAdminButton.disabled = deleteAdminSelect.value === "" || !registeredAdmins || Object.keys(registeredAdmins).filter(u => u !== currentUser).length === 0; // Re-evaluate disable state
-                           deleteAdminSelect.disabled = false;
-                      }
-                       // Re-enable buttons specific to add admin modal if closing it
-                      if (modalId === 'addAdminModal') {
-                            newAdminUsernameInput.disabled = false;
-                            newAdminPasswordInput.disabled = false;
-                            newAdminInitialsInput.disabled = false;
-                            newAdminRoleSelect.disabled = false;
-                            submitAddAdminButton.disabled = false;
-                      }
-                       // If closing Quick Reply modal, reset state and re-enable
-                      if (modalId === 'quickReplyModal') {
-                           editingQuickReplies = quickReplies.map(item => ({ ...item })); // Revert changes made in modal (Deep Copy)
-                            renderEditableQuickReplies(); // Render the list to show original state again
-                           quickReplyFormStatusDiv.textContent = '';
-                           quickReplyFormStatusDiv.className = 'quick-reply-form-status';
-                           saveQuickRepliesButton.disabled = false;
-                           newQuickReplyShortcutInput.disabled = false; // Enable shortcut input
-                           newQuickReplyTextarea.disabled = false;
-                           addQuickReplyButton.disabled = false;
-                           newQuickReplyShortcutInput.value = ''; // Clear new template inputs
-                           newQuickReplyTextarea.value = '';
-                      }
-                       // If closing QR modal, clear QR display? No, keep it in state.
-                       if (modalId === 'qrModal') {
-                            // Optional: clear the rendered QR if closing, but keep data in currentQrCode
-                            // qrCodeDiv.innerHTML = '';
-                       }
-                 }
-             });
+                         // --- Reset state specific to each modal when closing via X ---
+                         if (modalId === 'deleteAdminModal') {
+                              // Re-evaluate disable state based on current registered admins
+                              submitDeleteAdminButton.disabled = deleteAdminSelect.value === "" || !registeredAdmins || Object.keys(registeredAdmins).filter(u => u !== currentUser).length === 0;
+                              deleteAdminSelect.disabled = false;
+                         } else if (modalId === 'addAdminModal') {
+                               newAdminUsernameInput.disabled = false;
+                               newAdminPasswordInput.disabled = false;
+                               newAdminInitialsInput.disabled = false;
+                               newAdminRoleSelect.disabled = false;
+                               submitAddAdminButton.disabled = false;
+                         } else if (modalId === 'quickReplyModal') {
+                               editingQuickReplies = quickReplies.map(item => ({ ...item })); // Revert changesmade in modal (Deep Copy)
+                                editingQuickReplies.sort((a, b) => a.shortcut.localeCompare(b.shortcut)); // Keep sorted
+                                renderEditableQuickReplies(); // Render the list to show original state again
+                                quickReplyFormStatusDiv.textContent = '';
+                                quickReplyFormStatusDiv.className = 'quick-reply-form-status';
+                                saveQuickRepliesButton.disabled = false;
+                                newQuickReplyShortcutInput.disabled = false;
+                                newQuickReplyTextarea.disabled = false;
+                                addQuickReplyButton.disabled = false;
+                                newQuickReplyShortcutInput.value = ''; // Clear new template inputs
+                                newQuickReplyTextarea.value = '';
+                         } else if (modalId === 'confirmDeleteQRModal') {
+                             // Reset pending deletion state
+                             templateToDelete = null;
+                             // Clear any temporary status message set by the delete click (in the main QR modal)
+                              const qrMainStatusDiv = quickReplyModal.querySelector('.quick-reply-form-status');
+                              if (qrMainStatusDiv) {
+                                 qrMainStatusDiv.textContent = '';
+                                 qrMainStatusDiv.className = 'quick-reply-form-status';
+                              }
+
+                         } else if (modalId === 'confirmDeleteAllChatsModal') {
+                             // Reset the content of the delete all chats modal for the next time it's opened
+                             confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').textContent = 'Lanjutkan?'; // Reset text
+                             confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').style.color = getCssVariable('--button-danger-bg'); // Reset color
+                             confirmDeleteAllChatsModal.querySelector('.modal-content .modal-buttons').style.display = 'flex'; // Show buttons again
+                         } else if (modalId === 'qrModal') {
+                              // Optional: clear the rendered QR if closing, but keep data in currentQrCode
+                              // qrCodeDiv.innerHTML = '';
+                         } else if (modalId === 'offlineAdminModal') {
+                             // Nothing specific to reset here, just hide.
+                         }
+                     }
+                 });
+            }
         });
 
 
@@ -3599,151 +2305,36 @@
                   showServerAlert('Akses ditolak.', false);
                   return;
              }
-             // Show double confirmation dialogs for critical action
-            if (confirm('Anda yakin ingin menghapus SEMUA riwayat chat? Tindakan ini tidak bisa dibatalkan dan akan menghapus data secara permanen.')) {
-                 if (confirm('INI TINDAKAN KRITIS! Konfirmasi sekali lagi untuk menghapus SEMUA chat history?')) {
-                      console.log(`[UI] Super Admin ${currentUser} menghapus SEMUA chat history.`);
-                      socket.emit('delete_all_chats'); // Emit delete all event
-                 }
-            }
-         });
+              // Show the custom confirmation modal
+             confirmDeleteAllChatsModal.style.display = 'flex';
 
-         // Close chat button click handler
-         closeChatButton.addEventListener('click', () => {
-             // Check if a chat is selected
-            if (!currentChatId) return;
-
-             // Get chat name for confirmation message
-             const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
-              // Show confirmation dialog
-              // Role check is done on the server side as well.
-              if (confirm(`Tutup percakapan dengan ${chatName}? Ini akan melepaskan chat dari admin yang menanganinya.`)) {
-                  console.log(`[UI] Admin ${currentUser} menutup chat ${currentChatId}`);
-                  socket.emit('close_chat', { chatId: currentChatId }); // Emit close chat event
-              }
-         });
-
-         // Open chat button click handler (Super Admin function)
-         openChatButton.addEventListener('click', () => {
-              // Check role and if a chat is selected
-             if (currentUserRole !== 'superadmin' || !currentChatId) {
-                  showServerAlert('Akses ditolak atau chat tidak dipilih.', false);
-                  return;
-             }
-             const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
-             // Show confirmation dialog
-             if (confirm(`Buka kembali percakapan dengan ${chatName}?`)) {
-                  console.log(`[UI] Super Admin ${currentUser} membuka kembali chat ${currentChatId}`);
-                  socket.emit('open_chat', { chatId: currentChatId }); // Emit open chat event
-             }
-         });
-
-         // NEW: Show QR Button click handler (Super Admin Function)
-         showQrButton.addEventListener('click', () => {
-             // Only allow Super Admin to click this button (HTML display handled by setLoginState)
-             if (currentUserRole === 'superadmin') {
-                 qrModal.style.display = 'flex'; // Show the QR modal
-                 updateQrModalContent(); // Populate the modal content based on current state
-             } else {
-                  // This shouldn't happen if button is hidden, but for safety
-                  showServerAlert('Akses ditolak. Anda bukan Super Admin.', false);
-             }
-         });
-
-         // NEW: Manage Quick Replies Button click handler (Super Admin Function)
-         manageQuickRepliesButton.addEventListener('click', () => {
-             // Only allow Super Admin (HTML display handled by setLoginState)
-             if (currentUserRole === 'superadmin') {
-                 quickReplyModal.style.display = 'flex'; // Show the quick reply modal
-                 editingQuickReplies = quickReplies.map(item => ({ ...item })); // Deep copy current quick replies to temporary state
-                 renderEditableQuickReplies(); // Render the list in the modal
-                 newQuickReplyShortcutInput.value = ''; // Clear new shortcut input
-                 newQuickReplyTextarea.value = ''; // Clear the new template input
-                 quickReplyFormStatusDiv.textContent = ''; // Clear status
-                 quickReplyFormStatusDiv.className = 'quick-reply-form-status'; // Reset class
-
-                 // Re-enable buttons and input
-                 saveQuickRepliesButton.disabled = false;
-                 newQuickReplyShortcutInput.disabled = false;
-                 newQuickReplyTextarea.disabled = false;
-                 addQuickReplyButton.disabled = false;
-
-                 newQuickReplyShortcutInput.focus(); // Focus first input
-
-             } else {
-                  showServerAlert('Akses ditolak. Anda bukan Super Admin.', false);
-             }
-         });
-
-         // NEW: Add Quick Reply Button click handler (Inside Modal)
-         addQuickReplyButton.addEventListener('click', () => {
-             const newShortcut = newQuickReplyShortcutInput.value.trim();
-             const newText = newQuickReplyTextarea.value.trim();
-
-             if (!newShortcut || !newText) {
-                 quickReplyFormStatusDiv.textContent = 'Pintasan dan Isi Pesan tidak boleh kosong.';
-                 quickReplyFormStatusDiv.className = 'quick-reply-form-status error';
-                 return;
-             }
-
-             // Optional: Check for duplicate shortcuts before adding (frontend check)
-             if (editingQuickReplies.some(item => item.shortcut === newShortcut)) {
-                  quickReplyFormStatusDiv.textContent = `Pintasan "${newShortcut}" sudah ada. Gunakan pintasan lain.`;
-                  quickReplyFormStatusDiv.className = 'quick-reply-form-status error';
-                  newQuickReplyShortcutInput.focus();
-                  return;
-             }
-
-
-             // Add new template to temporary array as an object
-             editingQuickReplies.push({ shortcut: newShortcut, text: newText });
-
-             renderEditableQuickReplies(); // Re-render the editable list
-             newQuickReplyShortcutInput.value = ''; // Clear the input fields
-             newQuickReplyTextarea.value = '';
-             quickReplyFormStatusDiv.textContent = 'Template ditambahkan (belum tersimpan).';
-             quickReplyFormStatusDiv.className = 'quick-reply-form-status';
-             newQuickReplyShortcutInput.focus(); // Keep focus on the shortcut input
+             // Reset modal content visibility/text in case it was previously used for error/success message
+             confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').textContent = 'Lanjutkan?';
+             confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').style.color = getCssVariable('--button-danger-bg'); // Ensure warning color is applied
+             confirmDeleteAllChatsModal.querySelector('.modal-content .modal-buttons').style.display = 'flex'; // Ensure buttons are visible
 
          });
 
-         // NEW: Save Quick Replies Button click handler (Inside Modal)
-         saveQuickRepliesButton.addEventListener('click', () => {
-              // Re-validate role just in case
-              if (currentUserRole !== 'superadmin') {
-                   showServerAlert('Akses ditolak.', false);
-                   quickReplyModal.style.display = 'none'; // Close modal
-                   return;
-              }
+         // NEW: Event Listeners for Custom Delete ALL Chats Confirmation Modal
+         confirmDeleteAllChatsYesButton.addEventListener('click', () => {
+              console.log('[UI] User confirmed deletion of ALL chats.');
+              // Emit the socket event to delete all chats
+              socket.emit('delete_all_chats');
+              // The modal will be closed by the 'superadmin_success' or 'superadmin_error' handler
+              // after the server responds.
+              // For immediate feedback, show a "Processing..." message and hide buttons
+               confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').textContent = 'Memproses penghapusan...';
+               confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').style.color = getCssVariable('--text-dark'); // Change color while processing
+               confirmDeleteAllChatsModal.querySelector('.modal-content .modal-buttons').style.display = 'none'; // Hide buttons
+         });
 
-              // Filter out any items with empty shortcut or text just in case
-              const templatesToSave = editingQuickReplies.filter(item => item && item.shortcut?.trim().length > 0 && item.text?.trim().length > 0);
-
-              // Optional: Final check for duplicate shortcuts before sending to server
-              const shortcuts = templatesToSave.map(item => item.shortcut);
-              const hasDuplicates = (new Set(shortcuts)).size !== shortcuts.length;
-               if (hasDuplicates) {
-                   quickReplyFormStatusDiv.textContent = 'Ada pintasan duplikat. Harap perbaiki sebelum menyimpan.';
-                   quickReplyFormStatusDiv.className = 'quick-reply-form-status error';
-                   return; // Stop save process
-               }
-
-
-              console.log('[UI] Super Admin saving quick replies:', templatesToSave);
-              quickReplyFormStatusDiv.textContent = 'Menyimpan template...';
-               quickReplyFormStatusDiv.className = 'quick-reply-form-status'; // Clear other classes
-
-               // Disable buttons and input while saving
-               saveQuickRepliesButton.disabled = true;
-               newQuickReplyShortcutInput.disabled = true; // Disable shortcut input
-               newQuickReplyTextarea.disabled = true;
-               addQuickReplyButton.disabled = true;
-
-
-              // Emit event to server to save the new list
-              socket.emit('update_quick_replies', templatesToSave);
-              // Server will broadcast 'quick_replies_updated' on success, which updates the UI.
-              // Server will respond with superadmin_success/error.
+         confirmDeleteAllChatsNoButton.addEventListener('click', () => {
+             console.log('[UI] User cancelled deletion of ALL chats.');
+             // Hide the confirmation modal
+             confirmDeleteAllChatsModal.style.display = 'none';
+              // Reset modal content visibility/text for next time it's opened (handled by deleteAllChatsButton click now)
+              // confirmDeleteAllChatsModal.querySelector('.modal-content .modal-buttons').style.display = 'flex';
+              // confirmDeleteAllChatsModal.querySelector('.modal-content p:last-of-type').textContent = 'Lanjutkan?';
          });
 
 
@@ -3891,7 +2482,8 @@
                  // Ensure QR modal and Quick Reply modal are hidden on initial load
                  qrModal.style.display = 'none';
                  quickReplyModal.style.display = 'none'; // Hide quick reply modal
-                 confirmDeleteQRModal.style.display = 'none'; // Hide confirmation modal
+                 confirmDeleteQRModal.style.display = 'none'; // Hide quick reply confirmation modal
+                 confirmDeleteAllChatsModal.style.display = 'none'; // Hide delete ALL confirmation modal
              }
 
              // Fetch application version from config.json (if it exists)
@@ -3946,6 +2538,39 @@
              renderQuickReplyButtons();
 
 
+        });
+
+        // Socket connection
+        // Deklarasi socket sudah ada di bagian atas file
+        socket.connect();
+        
+        // Socket connection status handling
+        socket.on('connect', () => {
+            console.log('[SOCKET] Connected to server');
+            document.getElementById('connection-status').textContent = 'Connected';
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('[SOCKET] Disconnected from server');
+            document.getElementById('connection-status').textContent = 'Disconnected';
+        });
+        
+        socket.on('connect_error', (error) => {
+            console.error('[SOCKET] Connection error:', error);
+            document.getElementById('connection-status').textContent = 'Connection Error';
+        });
+        
+        socket.on('reconnect', (attemptNumber) => {
+            console.log(`[SOCKET] Reconnected after ${attemptNumber} attempts`);
+            document.getElementById('connection-status').textContent = 'Connected';
+            
+            // Request initial data if we're logged in
+            if (currentUser) {
+                socket.emit('request_initial_data');
+            }
+            
+            // Show reconnection success message
+            showServerAlert('Reconnected to server successfully!', false);
         });
 
     </script>
