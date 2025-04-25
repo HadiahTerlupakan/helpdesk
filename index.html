@@ -417,22 +417,929 @@
     <!-- Pastikan path ini benar -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io('http://localhost:3000'); // Ensure this matches your backend server's address
-        // Example function to handle unread indicator logic
-        function updateUnreadIndicator(unreadIndicator, chatId, isUnread) {
-            if (unreadIndicator) {
-                const pickedBy = pickedChatsStatus[chatId];
-                const shouldShowUnread = isUnread && chatId !== currentChatId && (!pickedBy || pickedBy === currentUser);
-                unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';
+        // --- Socket.IO Setup ---
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            randomizationFactor: 0.5
+        });
+
+        // --- UI Elements ---
+        const loginContainer = document.getElementById('login-container');
+        const appContainer = document.getElementById('app-container');
+        const usernameInput = document.getElementById('username-input');
+        const passwordInput = document.getElementById('password-input');
+        const loginButton = document.getElementById('login-button');
+        const loginError = document.getElementById('login-error');
+        const adminUsernameDisplay = document.getElementById('admin-username-display');
+        const logoutButton = document.getElementById('logout-button');
+        const chatList = document.getElementById('chat-list');
+        const messagesDiv = document.getElementById('messages');
+        const replyInput = document.getElementById('reply-input');
+        const replyButton = document.getElementById('reply-button');
+        const replyBox = document.getElementById('reply-box'); // For error message
+        const currentChatIdDisplay = document.getElementById('current-chat-id-display');
+        const chatPickedStatus = document.getElementById('chat-picked-status');
+        const pickChatButton = document.getElementById('pick-chat-button');
+        const delegateChatContainer = document.getElementById('delegate-chat-container');
+        const delegateChatSelect = document.getElementById('delegate-chat-select');
+        const delegateChatButton = document.getElementById('delegate-chat-button');
+        const mediaModal = document.getElementById('mediaModal');
+        const modalMediaContent = document.getElementById('modalMediaContent');
+        const closeModal = document.getElementById('closeModal');
+
+        // Modal elements
+        const offlineAdminModal = document.getElementById('offlineAdminModal');
+        const offlineAdminMessage = document.getElementById('offlineAdminMessage');
+        const offlineAdminModalClose = document.getElementById('offlineAdminModalClose');
+
+        // Add file input for media upload
+        const mediaInput = document.createElement('input');
+        mediaInput.type = 'file';
+        mediaInput.accept = 'image/*,video/*,audio/*,application/pdf'; // Acceptable media types
+        mediaInput.style.display = 'none';
+        document.body.appendChild(mediaInput);
+
+        const mediaButton = document.getElementById('media-button');
+        let selectedMedia = null;
+
+        // Add a container for media preview
+        const mediaPreviewContainer = document.createElement('div');
+        mediaPreviewContainer.style.display = 'none';
+        mediaPreviewContainer.style.marginTop = '10px';
+        mediaPreviewContainer.style.border = '1px solid var(--border-color)';
+        mediaPreviewContainer.style.borderRadius = '8px';
+        mediaPreviewContainer.style.padding = '10px';
+        mediaPreviewContainer.style.backgroundColor = 'var(--input-bg)';
+        replyBox.appendChild(mediaPreviewContainer);
+
+        // Function to update media preview
+        function updateMediaPreview() {
+            mediaPreviewContainer.innerHTML = ''; // Clear previous preview
+            if (selectedMedia) {
+                mediaPreviewContainer.style.display = 'block';
+                if (selectedMedia.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
+                    img.alt = 'Thumbnail Gambar';
+                    img.style.width = '50px'; // Thumbnail size
+                    img.style.height = '50px'; // Thumbnail size
+                    img.style.objectFit = 'cover'; // Maintain aspect ratio
+                    img.style.borderRadius = '5px';
+                    mediaPreviewContainer.appendChild(img);
+                } else if (selectedMedia.type.startsWith('video/')) {
+                    const video = document.createElement('video');
+                    video.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
+                    video.style.width = '50px'; // Thumbnail size
+                    video.style.height = '50px'; // Thumbnail size
+                    video.style.objectFit = 'cover'; // Maintain aspect ratio
+                    video.controls = false; // Disable controls for thumbnail
+                    mediaPreviewContainer.appendChild(video);
+                } else if (selectedMedia.type.startsWith('audio/')) {
+                    const audioIcon = document.createElement('i');
+                    audioIcon.className = 'fas fa-file-audio';
+                    audioIcon.style.fontSize = '30px';
+                    audioIcon.style.color = 'var(--text-dark)';
+                    mediaPreviewContainer.appendChild(audioIcon);
+                } else {
+                    const fileInfo = document.createElement('p');
+                    fileInfo.textContent = `File: ${selectedMedia.name}`;
+                    fileInfo.style.fontSize = '12px';
+                    fileInfo.style.color = 'var(--text-dark)';
+                    mediaPreviewContainer.appendChild(fileInfo);
+                }
+            } else {
+                mediaPreviewContainer.style.display = 'none';
             }
         }
 
-        // ...existing code...
-        if (unreadIndicator) {
-            const pickedBy = pickedChatsStatus[chatId];
-            const shouldShowUnread = isUnread && chatId !== currentChatId && (!pickedBy || pickedBy === currentUser);
-            unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';
+        // Handle media selection
+        mediaInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    selectedMedia = {
+                        data: reader.result.split(',')[1], // Base64 data
+                        type: file.type,
+                        name: file.name
+                    };
+                    alert(`Media "${file.name}" telah dipilih.`);
+                    updateMediaPreview(); // Show preview
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Open file picker when media button is clicked
+        mediaButton.addEventListener('click', () => {
+            mediaInput.click();
+        });
+
+        // --- Application State ---
+        let currentChatId = null;
+        let currentUser = null;
+        let chatHistory = {}; // { chatId: [messages] }
+        let chatListItems = {}; // { chatId: liElement }
+        let pickedChatsStatus = {}; // { chatId: adminUsername }
+
+        // Track offline admin notifications to avoid repeated alerts
+        const offlineAdminNotified = new Set();
+
+        // --- Helper Functions ---
+
+        function showLoginError(message) {
+            loginError.textContent = message;
+            loginError.style.color = message.toLowerCase().includes('berhasil') ? 'green' : 'var(--error-color)';
         }
+
+        function setLoginState(isLoggedIn, username = null, initialPicks = {}) {
+            if (isLoggedIn) {
+                currentUser = username;
+                localStorage.setItem('loggedInUsername', username);
+                adminUsernameDisplay.textContent = `Admin: ${username}`;
+                pickedChatsStatus = initialPicks || {}; // Set initial picks received
+                loginContainer.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                console.log(`Login state set: Logged in as ${username}`);
+                showLoginError(''); // Clear any previous login messages
+                requestNotificationPermission();
+                socket.emit('request_initial_data'); // Always request initial data on login
+            } else {
+                currentUser = null;
+                localStorage.removeItem('loggedInUsername');
+                loginContainer.classList.remove('hidden');
+                appContainer.classList.add('hidden');
+                resetUI();
+                usernameInput.value = '';
+                passwordInput.value = '';
+                console.log('Login state set: Logged out.');
+                showLoginError('Silakan login kembali.');
+            }
+        }
+
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission !== "granted" && Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    console.log(`Notification permission: ${permission}`);
+                });
+            }
+        }
+
+        function showNotification(title, body) {
+            if ('Notification' in window && Notification.permission === "granted") {
+                 const notification = new Notification(title, {
+                     body: body,
+                     icon: '/favicon.ico' // Ganti dengan path ikon Anda
+                     // tag: title // Optional: replaces existing notifications with the same tag
+                 });
+                 // Optional: Auto-close notification after some time
+                 // setTimeout(notification.close.bind(notification), 5000);
+            }
+        }
+
+        function resetChatArea() {
+            messagesDiv.innerHTML = '<div class="placeholder">Pilih percakapan untuk memulai</div>';
+            currentChatIdDisplay.textContent = 'Pilih percakapan dari daftar';
+            chatPickedStatus.textContent = '';
+            pickChatButton.style.display = 'none';
+            delegateChatContainer.style.display = 'none';
+            replyInput.disabled = true;
+            replyButton.disabled = true;
+            replyInput.placeholder = 'Pilih atau ambil chat untuk membalas...';
+            document.title = 'WhatsApp Helpdesk';
+            // Hapus pesan error kirim jika ada
+            const existingError = replyBox.querySelector('.send-error-span');
+            if(existingError) existingError.remove();
+        }
+
+        function resetUI() {
+            resetChatArea();
+            chatList.innerHTML = '';
+            chatHistory = {};
+            chatListItems = {};
+            pickedChatsStatus = {};
+            currentChatId = null;
+            currentUser = null;
+            adminUsernameDisplay.textContent = '';
+            showLoginError(''); // Clear login error specifically
+        }
+
+        function updateChatAreaForCurrentChat() {
+            if (!currentChatId || !currentUser) {
+                resetChatArea();
+                return;
+            }
+
+            const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
+            const pickedBy = pickedChatsStatus[currentChatId];
+
+            currentChatIdDisplay.textContent = `Chat: ${chatName}`;
+            document.title = `Chat: ${chatName}`;
+            chatPickedStatus.style.color = 'var(--text-muted)'; // Reset error color
+
+            if (pickedBy) {
+                pickChatButton.style.display = 'none';
+                chatPickedStatus.textContent = `Diambil oleh: ${pickedBy}`;
+                if (pickedBy === currentUser) {
+                    replyInput.disabled = false;
+                    replyButton.disabled = false;
+                    replyInput.placeholder = 'Ketik balasan...';
+                    replyInput.focus(); // Auto-focus input when chat is yours
+                    delegateChatContainer.style.display = 'flex'; // Show delegation dropdown and button
+                    populateDelegateChatSelect(); // Populate the dropdown
+                } else {
+                    replyInput.disabled = true;
+                    replyButton.disabled = true;
+                    replyInput.placeholder = `Ditangani oleh ${pickedBy}`;
+                    delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
+                }
+            } else {
+                pickChatButton.style.display = 'inline-block';
+                pickChatButton.disabled = false; // Ensure enabled
+                pickChatButton.textContent = 'Ambil Chat Ini'; // Reset text
+                chatPickedStatus.textContent = 'Belum diambil';
+                replyInput.disabled = true;
+                replyButton.disabled = true;
+                replyInput.placeholder = 'Ambil chat ini untuk membalas';
+                delegateChatContainer.style.display = 'none'; // Hide delegation dropdown and button
+            }
+            // Hapus pesan error kirim jika ada (saat ganti chat)
+            const existingError = replyBox.querySelector('.send-error-span');
+            if(existingError) existingError.remove();
+        }
+
+        function populateDelegateChatSelect() {
+            delegateChatSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>';
+            const onlineAdmins = new Set(socket.onlineAdmins || []);
+            Object.keys(socket.registeredAdmins || {}).forEach(admin => {
+                const isOnline = onlineAdmins.has(admin);
+                const option = document.createElement('option');
+                option.value = admin;
+                option.textContent = `${admin} ${isOnline ? '(Online)' : '(Offline)'}`;
+                option.className = isOnline ? 'online' : 'offline'; // Add class for styling
+                option.disabled = admin === currentUser; // Disable current user
+                delegateChatSelect.appendChild(option);
+            });
+        }
+
+        function updateChatListItemPickStatus(chatId) {
+            const listItem = chatListItems[chatId];
+            if (!listItem) return;
+
+            let statusSpan = listItem.querySelector('.chat-item-picked-by');
+            if (!statusSpan) {
+                console.warn("Elemen .chat-item-picked-by tidak ditemukan untuk chat:", chatId);
+                return;
+            }
+
+            const pickedBy = pickedChatsStatus[chatId];
+            if (pickedBy) {
+                statusSpan.textContent = `(Oleh: ${pickedBy})`;
+                statusSpan.style.display = 'inline';
+            } else {
+                statusSpan.textContent = '';
+                statusSpan.style.display = 'none';
+            }
+        }
+
+        function updateAllChatListItemsPickStatus() {
+            Object.keys(chatListItems).forEach(updateChatListItemPickStatus);
+        }
+
+        function updateChatList(chatId, name, isUnread = false, lastMessageText = '', timestamp = new Date().toISOString(), isInitialLoad = false) {
+            let li = chatListItems[chatId];
+            const messageTimestamp = new Date(timestamp);
+            // Handle invalid dates gracefully
+            const formattedTime = !isNaN(messageTimestamp)
+                ? messageTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '--:--';
+            const messageTextToShow = lastMessageText || '[Media / Pesan Kosong]'; // More descriptive placeholder
+            // Adjust substring length based on typical sidebar width
+            const shortMessage = messageTextToShow.substring(0, 30) + (messageTextToShow.length > 30 ? '...' : '');
+
+            if (!li) {
+                li = document.createElement('li');
+                li.dataset.chatId = chatId;
+                li.dataset.chatName = name;
+                li.innerHTML = `
+                    <div class="chat-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span class="chat-name">${name}</span>
+                        <span class="timestamp">${formattedTime}</span>
+                    </div>
+                    <div class="message-snippet">
+                        <span class="last-message">${shortMessage}</span>
+                        <span class="unread-indicator" style="display: ${isUnread ? 'inline' : 'none'};">(Baru)</span>
+                        <span class="chat-item-picked-by" style="display: none;"></span>
+                    </div>
+                `;
+
+                li.addEventListener('click', () => {
+                    if (currentChatId === chatId) return;
+
+                    if (currentChatId && chatListItems[currentChatId]) {
+                        chatListItems[currentChatId].classList.remove('selected');
+                    }
+
+                    currentChatId = chatId;
+                    li.classList.add('selected');
+                    markChatAsRead(chatId); // Mark read visually immediately
+                    loadChatMessages(chatId); // Load messages from server/cache
+                    updateChatAreaForCurrentChat();
+                });
+
+                chatListItems[chatId] = li;
+
+                // Insert based on timestamp for initial load, or at top for new messages
+                if (isInitialLoad) {
+                     // Find correct position based on timestamp (descending)
+                     let inserted = false;
+                     const currentItems = Array.from(chatList.children);
+                     const newItemTime = messageTimestamp.getTime();
+                     for (let i = 0; i < currentItems.length; i++) {
+                         const existingItemId = currentItems[i].dataset.chatId;
+                         const existingMessages = chatHistory[existingItemId] || [];
+                         const lastExistingMsg = existingMessages.length > 0 ? existingMessages[existingMessages.length - 1] : null;
+                         const existingItemTime = lastExistingMsg ? new Date(lastExistingMsg.timestamp).getTime() : 0;
+                         if (newItemTime > existingItemTime) {
+                             chatList.insertBefore(li, currentItems[i]);
+                             inserted = true;
+                             break;
+                         }
+                     }
+                     if (!inserted) {
+                         chatList.appendChild(li);
+                     }
+                 } else {
+                     chatList.insertBefore(li, chatList.firstChild);
+                 }
+                updateChatListItemPickStatus(chatId); // Update pick status for the new item
+
+            } else {
+                // --- Update Existing Item ---
+                li.querySelector('.chat-name').textContent = name;
+                li.querySelector('.last-message').textContent = shortMessage;
+                li.querySelector('.timestamp').textContent = formattedTime;
+                li.dataset.chatName = name; // Ensure name is updated in dataset
+
+                const unreadIndicator = li.querySelector('.unread-indicator');
+                if (unreadIndicator) {
+                    const pickedBy = pickedChatsStatus[chatId];
+                    const shouldShowUnread = isUnread && chatId !== currentChatId && (!pickedBy || pickedBy === currentUser);
+                    unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';
+                }
+
+                updateChatListItemPickStatus(chatId); // Update pick status in case it changed
+
+                // Move to top if new activity (and not initial load)
+                if (!isInitialLoad && chatList.firstChild !== li) {
+                    chatList.insertBefore(li, chatList.firstChild);
+                }
+            }
+        }
+
+        function markChatAsRead(chatId) {
+            const listItem = chatListItems[chatId];
+            if (!listItem) return;
+
+            const unreadIndicator = listItem.querySelector('.unread-indicator');
+            // Only proceed if it was actually unread visually
+            if (unreadIndicator && unreadIndicator.style.display !== 'none') {
+                unreadIndicator.style.display = 'none';
+
+                const pickedBy = pickedChatsStatus[chatId];
+                if (!pickedBy || pickedBy === currentUser) {
+                    console.log(`Marking chat ${chatId} as read by ${currentUser}`);
+                    socket.emit('mark_as_read', { chatId });
+                } else {
+                     console.log(`Chat ${chatId} viewed, but mark_as_read event not sent (picked by ${pickedBy})`);
+                }
+            }
+        }
+
+        function loadChatMessages(chatId) {
+            messagesDiv.innerHTML = '<div class="placeholder">Memuat pesan...</div>'; // Show loading
+            console.log(`Requesting history for ${chatId}`);
+            socket.emit('get_chat_history', chatId);
+            // markChatAsRead is called when the list item is clicked
+        }
+
+        function getMimeType(mediaType, base64Data = null) {
+            // Basic implementation - needs adjustment based on actual Baileys data
+            if (mediaType === 'imageMessage') return 'image/jpeg';
+            if (mediaType === 'stickerMessage') return 'image/webp';
+            if (mediaType === 'videoMessage') return 'video/mp4'; // Common, but could be others
+            if (mediaType === 'audioMessage') return 'audio/ogg; codecs=opus'; // Common for WhatsApp voice notes
+            if (mediaType === 'documentMessage') {
+                 // Try to infer from base64 prefix if available
+                 if (base64Data?.startsWith('data:application/pdf')) return 'application/pdf';
+                 if (base64Data?.startsWith('data:application/vnd.openxmlformats-officedocument.wordprocessingml.document')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; // .docx
+                 // Add more common types if needed
+                 return 'application/octet-stream'; // Generic fallback
+            }
+            return 'application/octet-stream';
+        }
+
+        // Basic HTML sanitizer
+        function sanitizeHTML(str) {
+             if (!str) return '';
+             const temp = document.createElement('div');
+             temp.textContent = str;
+             return temp.innerHTML.replace(/\n/g, '<br>'); // Keep line breaks
+         }
+
+        function appendMessage(msgData) {
+            const { from, text, type, mediaData, mediaType, timestamp, fileName } = msgData; // type: 'incoming'/'outgoing', fileName for documents
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            const senderName = type === 'incoming' ? (from ? from.split('@')[0] : 'Unknown') : 'Anda';
+            let contentHTML = `<strong>${senderName}</strong>`;
+
+            // Handle Media
+            if (mediaData && mediaType) {
+                const mimeType = getMimeType(mediaType, mediaData);
+                const dataUrl = mediaData.startsWith('data:') ? mediaData : `data:${mimeType};base64,${mediaData}`;
+
+                if (mediaType === 'imageMessage') { // <-- Perubahan di sini
+                    contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 150px; max-height: 150px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
+                } else if (mediaType === 'videoMessage') { // <-- Ubah dari startsWith ke ===
+                    contentHTML += `<br><video controls src="${dataUrl}" preload="metadata" style="max-width: 150px; max-height: 150px; border-radius: 5px;"></video>`;
+                } else if (mediaType === 'audioMessage') { // <-- Ubah dari startsWith ke ===
+                    contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata" style="max-width: 100%;"></audio>`;
+                } else if (mediaType === 'stickerMessage') { // <-- Tambahkan penanganan stiker
+                    contentHTML += `<br><img src="${dataUrl}" alt="Media Stiker" style="max-width: 100px; max-height: 100px;">`;
+                } else if (mediaType === 'documentMessage') { // <-- Ubah dari application/pdf ke ===
+                    const docName = fileName || "Dokumen";
+                    contentHTML += `<br><a href="${dataUrl}" download="${docName}" target="_blank" class="document-link"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
+                } else {
+                    contentHTML += `<br>[Media tidak didukung: ${mediaType}]`;
+                }
+            }
+
+            // Handle Text (Caption or regular message)
+            if (text) {
+                const textClass = (mediaData && mediaType) ? 'caption' : 'text-content';
+                contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
+            } else if (!mediaData && type === 'incoming') {
+                contentHTML += `<div class="text-content">[Pesan Kosong]</div>`;
+            }
+
+            messageDiv.innerHTML = contentHTML;
+
+            // Remove placeholder if it exists
+            const placeholder = messagesDiv.querySelector('.placeholder');
+            if (placeholder) placeholder.remove();
+
+            messagesDiv.appendChild(messageDiv);
+
+            // Scroll logic
+            const isScrolledToBottom = messagesDiv.scrollHeight - messagesDiv.clientHeight <= messagesDiv.scrollTop + 150;
+            if (isScrolledToBottom || type === 'outgoing') {
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        }
+
+        function openMediaModal(src, type) {
+            if (type === 'image') {
+                modalMediaContent.src = src;
+                modalMediaContent.style.display = 'block';
+            }
+            mediaModal.style.display = 'flex';
+        }
+
+        // --- Socket Event Handlers ---
+
+        socket.on('connect', () => {
+            console.log('WebSocket connected.');
+            const storedUsername = localStorage.getItem('loggedInUsername');
+            if (storedUsername) {
+                console.log('Found logged in user in storage:', storedUsername);
+                showLoginError('Menghubungkan kembali...'); // Update status
+                socket.emit('admin_reconnect', { username: storedUsername });
+            } else {
+                console.log('No user logged in.');
+                setLoginState(false); // Ensure login page is shown
+                 showLoginError(''); // Clear 'Connecting...' if no user
+            }
+        });
+
+        socket.on('reconnect_success', ({ username, currentPicks }) => {
+            console.log(`Reconnect successful for ${username}. Current picks:`, currentPicks);
+            setLoginState(true, username, currentPicks);
+        });
+
+        socket.on('reconnect_failed', () => {
+            console.log('Reconnect failed (session invalid?). Forcing logout.');
+             showLoginError('Sesi tidak valid, silakan login kembali.');
+             // Delay logout slightly to allow user to see message
+             setTimeout(() => setLoginState(false), 1500);
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('WebSocket connection error:', error);
+            showLoginError('Koneksi ke server gagal. Memeriksa ulang...');
+             // Could implement a more robust offline indicator here
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log('WebSocket disconnected:', reason);
+            if (reason === 'io server disconnect') {
+                console.log('Server disconnected the socket.');
+                 showLoginError('Koneksi diputus oleh server. Silakan login kembali.');
+                 setTimeout(() => setLoginState(false), 2000);
+            } else if (reason === 'io client disconnect') {
+                console.log('Client disconnected the socket (expected on logout).');
+            } else {
+                 // Network error, Socket.IO will attempt to reconnect automatically
+                 console.log('Network disconnection. Attempting to reconnect...');
+                 if (!currentUser) { // Only show error if not logged in
+                     showLoginError('Koneksi terputus. Mencoba menyambungkan ulang...');
+                 } else {
+                     // Optionally show a non-blocking reconnecting indicator within the app
+                     adminUsernameDisplay.textContent = `Admin: ${currentUser} (Menyambungkan ulang...)`;
+                 }
+            }
+        });
+
+        socket.on('login_success', ({ username, currentPicks }) => {
+            console.log('Login successful via server.');
+            setLoginState(true, username, currentPicks);
+        });
+
+        socket.on('login_failed', (data) => {
+            console.log('Login failed:', data?.message || 'Invalid credentials.');
+            showLoginError(data?.message || 'Username atau password salah.');
+        });
+
+        socket.on('logout_success', () => {
+            setLoginState(false); // Reset state and show login page
+        });
+
+        socket.on('initial_data', (initialHistory) => {
+            console.log('Received initial_data with', Object.keys(initialHistory).length, 'chats');
+            chatHistory = initialHistory || {};
+            chatList.innerHTML = ''; // Clear list
+            chatListItems = {}; // Reset list items map
+
+            // Sort chats by last message timestamp (most recent first)
+             const sortedChatIds = Object.keys(chatHistory).sort((a, b) => {
+                 const messagesA = chatHistory[a] || [];
+                 const messagesB = chatHistory[b] || [];
+                 const lastMsgTimeA = messagesA.length > 0 ? new Date(messagesA[messagesA.length - 1].timestamp).getTime() : 0;
+                 const lastMsgTimeB = messagesB.length > 0 ? new Date(messagesB[messagesB.length - 1].timestamp).getTime() : 0;
+                 // Ensure invalid timestamps are handled (e.g., put at the end)
+                 const timeA = isNaN(lastMsgTimeA) ? 0 : lastMsgTimeA;
+                 const timeB = isNaN(lastMsgTimeB) ? 0 : lastMsgTimeB;
+                 return timeB - timeA;
+             });
+
+            // Populate the chat list
+            sortedChatIds.forEach(chatId => {
+                const messages = chatHistory[chatId] || [];
+                const chatName = chatId.split('@')[0];
+                const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+                 // Determine initial unread status (complex, simplified here: assume read initially)
+                 const isUnreadInitially = false; // Or implement logic based on backend state if available
+                updateChatList(
+                    chatId,
+                    chatName,
+                    isUnreadInitially,
+                    lastMessage?.text || (lastMessage?.mediaType ? `[${lastMessage.mediaType}]` : ''), // Show media type if text is empty
+                    lastMessage?.timestamp || new Date(0).toISOString(),
+                    true // isInitialLoad = true
+                );
+            });
+
+            updateAllChatListItemsPickStatus(); // Apply pick status after list is built
+
+            // Restore selected chat state if applicable (e.g., after refresh)
+            if (currentChatId && chatHistory[currentChatId]) {
+                if (chatListItems[currentChatId]) {
+                    chatListItems[currentChatId].classList.add('selected');
+                    loadChatMessages(currentChatId); // Reload messages
+                    updateChatAreaForCurrentChat(); // Update header/input
+                } else {
+                     currentChatId = null; // Chat no longer exists? Reset.
+                     resetChatArea();
+                }
+            } else if (!currentChatId) {
+                 resetChatArea(); // Ensure clean state if no chat should be selected
+            }
+        });
+
+        socket.on('chat_history', ({ chatId, messages }) => {
+            chatHistory[chatId] = messages || []; // Update local cache
+
+            if (chatId === currentChatId) {
+                console.log(`Received history for active chat ${chatId}:`, messages.length, 'messages');
+                 // Clear loading message or existing messages before appending new history
+                 messagesDiv.innerHTML = ''; // Clear completely
+                if (messages.length === 0) {
+                     messagesDiv.innerHTML = '<div class="placeholder">Belum ada pesan di percakapan ini.</div>';
+                 } else {
+                    messages.forEach(msg => appendMessage(msg));
+                 }
+                 // Scroll to bottom after loading history
+                 requestAnimationFrame(() => {
+                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                 });
+            } else {
+                console.log(`Received history for non-active chat ${chatId}`);
+            }
+        });
+
+        socket.on('new_message', (data) => {
+            console.log('New message received:', data);
+             if (!data || !data.from || !data.timestamp) {
+                 console.error("Received invalid message data:", data);
+                 return;
+             }
+            const chatId = data.from;
+            const chatName = chatId.split('@')[0];
+
+            // Add to history cache
+            if (!chatHistory[chatId]) {
+                chatHistory[chatId] = [];
+            }
+            // Simple duplicate check based on timestamp and sender (adjust if backend provides unique ID)
+             if (!chatHistory[chatId].some(msg => msg.timestamp === data.timestamp && msg.from === data.from && msg.text === data.text)) {
+                 chatHistory[chatId].push(data);
+             } else {
+                 console.warn("Potential duplicate message ignored:", data);
+                 // return; // Optional: skip processing duplicate
+             }
+
+
+            if (chatId === currentChatId) {
+                appendMessage(data);
+                // Mark as read visually and potentially notify server (logic inside markChatAsRead)
+                markChatAsRead(chatId);
+            } else {
+                const pickedBy = pickedChatsStatus[chatId];
+                const shouldBeUnread = !pickedBy || pickedBy === currentUser; // Mark unread if not picked by others
+                updateChatList(chatId, chatName, shouldBeUnread, data.text || (data.mediaType ? `[${data.mediaType}]` : ''), data.timestamp);
+                // Show browser notification for non-active chats
+                 showNotification(`Pesan dari ${chatName}`, data.text || (data.mediaType ? `[${data.mediaType}]` : '[Pesan Kosong]'));
+            }
+        });
+
+        socket.on('update_pick_status', ({ chatId, pickedBy }) => {
+            console.log(`Pick status update: Chat ${chatId} -> ${pickedBy || 'released'}`);
+            const previousPicker = pickedChatsStatus[chatId];
+            if (pickedBy) {
+                pickedChatsStatus[chatId] = pickedBy;
+            } else {
+                delete pickedChatsStatus[chatId];
+            }
+            updateChatListItemPickStatus(chatId);
+            if (chatId === currentChatId) {
+                updateChatAreaForCurrentChat();
+                 // If *this* user just picked it, focus input
+                 if(pickedBy === currentUser && previousPicker !== currentUser) {
+                    replyInput.focus();
+                 }
+            }
+            // Optional: Update unread status if chat was released
+             if (!pickedBy && chatListItems[chatId]) {
+                 // Check if there are actually unread messages (requires more complex state)
+                 // Simple approach: If released, ensure unread indicator reflects last message status
+                 // const lastMsg = chatHistory[chatId]?.[chatHistory[chatId].length - 1];
+                 // if(lastMsg && lastMsg.type === 'incoming' && chatId !== currentChatId) {
+                 //    chatListItems[chatId].querySelector('.unread-indicator').style.display = 'inline';
+                 // }
+             }
+        });
+
+        socket.on('pick_error', ({ chatId, message }) => {
+            console.error(`Pick/Unpick error for chat ${chatId}: ${message}`);
+            if (chatId === currentChatId) {
+                 chatPickedStatus.textContent = `Error: ${message}`;
+                 chatPickedStatus.style.color = 'var(--error-color)';
+                 // Re-enable button and reset text after delay
+                 setTimeout(() => {
+                    updateChatAreaForCurrentChat(); // Reset to correct state based on actual pickedStatus
+                 }, 2500);
+            } else {
+                 // Show a general notification?
+                 // console.warn(`Pick error for non-active chat ${chatId}: ${message}`);
+            }
+        });
+
+        socket.on('send_error', ({ to, text, message }) => {
+            console.error(`Failed to send message to ${to}: ${message}`);
+            if (to === currentChatId) {
+                // Display error message near reply box
+                const existingError = replyBox.querySelector('.send-error-span');
+                if(existingError) existingError.remove(); // Remove previous error
+
+                const errorSpan = document.createElement('span');
+                errorSpan.className = 'send-error-span';
+                errorSpan.textContent = `Gagal mengirim: ${message}`;
+                replyBox.appendChild(errorSpan);
+
+                // Restore text to input field
+                replyInput.value = text;
+
+                // Remove the error message after a few seconds
+                setTimeout(() => errorSpan.remove(), 4000);
+            }
+        });
+
+        socket.on('update_chat_status', ({ chatId, read }) => {
+            // Handle status updates initiated by *other* admins (e.g., they marked it read)
+            if (read && chatListItems[chatId] && chatId !== currentChatId) {
+                 const unreadIndicator = chatListItems[chatId].querySelector('.unread-indicator');
+                 if (unreadIndicator && unreadIndicator.style.display !== 'none') {
+                     console.log(`Chat ${chatId} marked as read by another admin.`);
+                     unreadIndicator.style.display = 'none';
+                 }
+            }
+        });
+
+        socket.on('delegate_success', ({ chatId, targetAdminUsername }) => {
+            if (chatId === currentChatId) {
+                alert(`Chat berhasil didelegasikan ke ${targetAdminUsername}.`);
+            }
+        });
+
+        socket.on('delegate_error', ({ chatId, message }) => {
+            if (chatId === currentChatId) {
+                alert(`Gagal mendelegasikan chat: ${message}`);
+            }
+        });
+
+        socket.on('chat_delegated_to_you', ({ chatId, fromAdmin, message }) => {
+            if (chatId === currentChatId) {
+                alert(message);
+                updateChatAreaForCurrentChat();
+            }
+        });
+
+        socket.on('update_online_admins', (onlineAdmins) => {
+            socket.onlineAdmins = onlineAdmins;
+            populateDelegateChatSelect(); // Update dropdown when online status changes
+        });
+
+        socket.on('registered_admins', (registeredAdmins) => {
+            socket.registeredAdmins = registeredAdmins;
+            populateDelegateChatSelect(); // Update dropdown when registered admins are received
+        });
+
+        // --- UI Event Listeners ---
+
+        loginButton.addEventListener('click', () => {
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
+            showLoginError(''); // Clear previous error
+            if (username && password) {
+                showLoginError('Memproses login...');
+                loginButton.disabled = true; // Prevent double click
+                socket.emit('admin_login', { username, password });
+            } else {
+                showLoginError('Username dan password harus diisi.');
+            }
+            // Re-enable button if login fails (handled in login_failed)
+            setTimeout(() => { loginButton.disabled = false; }, 1000); // Failsafe re-enable
+        });
+        socket.on('login_failed', (data) => { // Also re-enable button on failure
+             loginButton.disabled = false;
+             console.log('Login failed:', data?.message || 'Invalid credentials.');
+             showLoginError(data?.message || 'Username atau password salah.');
+         });
+
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loginButton.click();
+            }
+        });
+
+        logoutButton.addEventListener('click', () => {
+            console.log('Logout initiated.');
+            if (socket.connected) {
+                socket.emit('admin_logout');
+            }
+        });
+
+        pickChatButton.addEventListener('click', () => {
+            if (currentChatId && currentUser && !pickedChatsStatus[currentChatId]) {
+                console.log(`Attempting to pick chat: ${currentChatId}`);
+                pickChatButton.disabled = true;
+                pickChatButton.textContent = 'Mengambil...';
+                socket.emit('pick_chat', { chatId: currentChatId });
+                 // Button state will be updated by 'update_pick_status' or 'pick_error'
+            } else {
+                 console.warn("Pick button clicked in invalid state:", { currentChatId, currentUser, picked: pickedChatsStatus[currentChatId] });
+            }
+        });
+
+        delegateChatButton.addEventListener('click', () => {
+            const targetAdminUsername = delegateChatSelect.value;
+            const isOnline = delegateChatSelect.options[delegateChatSelect.selectedIndex]?.classList.contains('online');
+
+            if (!targetAdminUsername) {
+                alert('Pilih admin tujuan untuk delegasi.');
+                return;
+            }
+
+            if (!isOnline && !offlineAdminNotified.has(targetAdminUsername)) {
+                offlineAdminNotified.add(targetAdminUsername); // Mark as notified
+                offlineAdminMessage.textContent = `Admin ${targetAdminUsername} sedang offline. Delegasi akan tetap dilakukan, tetapi admin tersebut mungkin tidak segera menangani chat.`;
+                offlineAdminModal.style.display = 'flex'; // Show modal
+            }
+
+            console.log(`Mendelegasikan chat ${currentChatId} ke ${targetAdminUsername}`);
+            socket.emit('delegate_chat', { chatId: currentChatId, targetAdminUsername });
+        });
+
+        offlineAdminModalClose.addEventListener('click', () => {
+            offlineAdminModal.style.display = 'none';
+        });
+
+        replyButton.addEventListener('click', () => {
+            const text = replyInput.value.trim();
+
+            if (!text && !selectedImageFile) return; // Do nothing if both are empty
+
+            if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
+                const messageData = {
+                    to: currentChatId,
+                    text: text || null,
+                    media: selectedMedia || null // Include media if selected
+                };
+                socket.emit('reply_message', messageData);
+
+                // Optimistic UI update
+                const tempOutgoingMsg = {
+                    from: currentUser,
+                    type: 'outgoing',
+                    text: text || null,
+                    mediaType: selectedMedia?.type?.startsWith('image/') ? 'imageMessage' : selectedMedia?.type || null,
+                    mediaData: selectedMedia?.data || null, // <-- Tambahkan baris ini
+                    fileName: selectedMedia?.name || null,
+                    timestamp: new Date().toISOString()
+                };
+                appendMessage(tempOutgoingMsg);
+
+                replyInput.value = ''; // Clear input
+                selectedMedia = null; // Clear selected media
+                updateMediaPreview(); // Clear preview
+                replyInput.focus(); // Keep focus on input
+            } else {
+                console.warn("Send attempt in invalid state:", { text, currentChatId, picked: pickedChatsStatus[currentChatId], currentUser });
+            }
+        });
+
+        replyInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault(); // Prevent newline
+                replyButton.click();
+            }
+             // Optional: Auto-resize textarea if using it
+             // if (replyInput.tagName === 'TEXTAREA') {
+             //    setTimeout(() => {
+             //        replyInput.style.height = 'auto';
+             //        replyInput.style.height = replyInput.scrollHeight + 'px';
+             //    }, 0);
+             // }
+        });
+
+        // Media Modal Listeners
+        closeModal.addEventListener('click', () => {
+            mediaModal.style.display = 'none';
+            modalMediaContent.src = '';
+        });
+        mediaModal.addEventListener('click', (e) => {
+             if (e.target === mediaModal) { // Click on background
+                 mediaModal.style.display = 'none';
+                 modalMediaContent.src = '';
+             }
+        });
+
+        // --- Initial Check & Setup ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const storedUsername = localStorage.getItem('loggedInUsername');
+            if (storedUsername) {
+                 console.log('DOM Loaded. Found user in localStorage:', storedUsername);
+                 // UI will wait for socket 'connect' and 'reconnect_success'
+                 showLoginError('Menghubungkan...'); // Initial message
+             } else {
+                 console.log('DOM Loaded. No user in localStorage.');
+                 setLoginState(false); // Show login page
+                 showLoginError(''); // Clear connecting message
+             }
+
+            // Set versi aplikasi di footer
+            fetch('/config.json')
+                .then(response => response.json())
+                .then(config => {
+                    document.getElementById('app-version').textContent = config.version;
+                })
+                .catch(err => console.error('Gagal memuat versi aplikasi:', err));
+        });
+
     </script>
     <!-- Pastikan tag </script> ini ada dan benar-benar menutup blok JavaScript -->
 
