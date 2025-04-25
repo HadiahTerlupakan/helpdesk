@@ -2,7 +2,12 @@ const { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } = 
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const io = require('socket.io')(http, {
+    cors: {
+        origin: "*", // Allow all origins; replace with specific origin if needed
+        methods: ["GET", "POST"]
+    }
+});
 const qrcode = require('qrcode-terminal');
 const session = require('express-session');
 const fs = require('fs');

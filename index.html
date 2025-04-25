@@ -417,6 +417,7 @@
     <!-- Pastikan path ini benar -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        const socket = io('http://localhost:3000'); // Ensure this matches your backend server's address
         // Example function to handle unread indicator logic
         function updateUnreadIndicator(unreadIndicator, chatId, isUnread) {
             if (unreadIndicator) {
