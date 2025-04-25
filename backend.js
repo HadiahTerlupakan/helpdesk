@@ -897,7 +897,7 @@ io.on('connection', (socket) => {
         // Append initials only if there is actual text or if it's an audio/media message without caption
       const textForSendingToWA = text ? `${text.trim()}
 
--${adminInitials}_` : (media && !text ? `-${adminInitials}_` : ''); // Add initials with '-' prefix and '_' suffix
+-${adminInitials}` : (media && !text ? `-${adminInitials}` : ''); // Add initials with '-' prefix and '_' suffix
 
 
       let sentMsgResult;
