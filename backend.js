@@ -1,4 +1,4 @@
-// backend.js atau server.js
+// backend.js atau server.js (atau file yang sesuai)
 
 import { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } from 'baileys';
 import express from 'express';
@@ -26,13 +26,9 @@ import { app as firebaseApp, database } from './firebaseConfig.js'; // Pastikan 
 
 // --- Konfigurasi & State ---
 let admins = {}; // { username: { password, initials, role } } - Akan dimuat dari Firebase
-// NEW: Struktur quickReplies sekarang adalah array of objects { shortcut: string, text: string }
-let quickReplies = []; // Array of { shortcut: string, text: string } - Akan dimuat dari Firebase
-
 const adminSockets = {}; // socket ID -> { username: '...', role: '...' } // Menyimpan info admin login
 const usernameToSocketId = {}; // username -> socket ID
-// PERBAIKAN: Mengubah const menjadi let karena variabel ini akan ditugaskan ulang
-let pickedChats = {}; // chatId (normalized) -> username // State di backend untuk chat yang diambil
+const pickedChats = {}; // chatId (normalized) -> username // State di backend untuk chat yang diambil
 const chatReleaseTimers = {}; // chatId (normalized) -> setTimeout ID
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,11 +39,18 @@ const superAdminUsername = config.superAdminUsername; // Ambil superadmin userna
 let sock; // Variabel global untuk instance socket Baileys
 let qrDisplayed = false;
 
+// --- QUICK REPLY TEMPLATES ---
+// Struktur quickReplyTemplates: { shortcut: { text: string } }
+// Kunci map ini adalah shortcut yang sebenarnya (sudah didecode)
+let quickReplyTemplates = {};
+// --- END QUICK REPLY TEMPLATES ---
+
+
 // --- Fungsi Helper ---
 
 const logger = pino({ level: config.baileysOptions?.logLevel ?? 'warn' });
 
-// Memuat Data dari Firebase (History, Admins, Quick Replies)
+// Memuat Data dari Firebase (History, Admins, Templates)
 async function loadDataFromFirebase() {
     console.log("[FIREBASE] Memuat data dari Firebase...");
     const dbRef = ref(database); // Root reference
@@ -102,27 +105,40 @@ async function loadDataFromFirebase() {
              admins = config.admins;
              console.log('[FIREBASE] Menggunakan admin dari config.js.');
              // Opsional: Simpan admin dari config ke Firebase untuk pertama kali
-             saveAdminsToFirebase(); // Panggil ini sekali saat tidak ada admin di DB
+             // Hanya lakukan ini jika ANDA YAKIN ingin menimpa Firebase jika kosong
+             // saveAdminsToFirebase(); // Panggil ini sekali saat tidak ada admin di DB
         }
 
-        // NEW: Muat Quick Replies
-        const quickRepliesSnapshot = await get(child(dbRef, 'quickReplies')); // Path khusus untuk quick replies
-        if (quickRepliesSnapshot.exists()) {
-            const templates = quickRepliesSnapshot.val();
-            // Validasi dasar: pastikan itu array of objects dengan shortcut dan text (string)
-            if (Array.isArray(templates) && templates.every(item =>
-                item && typeof item === 'object' && typeof item.shortcut === 'string' && typeof item.text === 'string'
-            )) {
-                quickReplies = templates;
-                console.log('[FIREBASE] Template pesan cepat berhasil dimuat dari Firebase.');
-            } else {
-                 console.warn('[FIREBASE] Data template pesan cepat di Firebase tidak valid atau formatnya salah. Menggunakan daftar kosong.');
-                 quickReplies = []; // Reset jika data malformed
+        // --- QUICK REPLY TEMPLATES ---
+        // Muat Quick Reply Templates
+        const templatesSnapshot = await get(child(dbRef, 'quickReplyTemplates'));
+        if (templatesSnapshot.exists()) {
+            const firebaseTemplates = templatesSnapshot.val();
+            quickReplyTemplates = {}; // Reset in-memory state
+            // Convert Firebase data (encoded keys) to in-memory state (decoded keys)
+            for (const encodedShortcut in firebaseTemplates) {
+                const templateData = firebaseTemplates[encodedShortcut];
+                const shortcut = decodeFirebaseKey(encodedShortcut);
+                // Basic validation for loaded data structure
+                if (shortcut && templateData && typeof templateData.text === 'string') {
+                    // Validate shortcut format even after decoding, just in case old data was bad
+                     if (!shortcut.startsWith('/')) {
+                         console.warn(`[FIREBASE] Template dengan shortcut tidak valid '${shortcut}' (encoded: ${encodedShortcut}) diabaikan saat memuat.`);
+                          continue; // Skip invalid templates
+                     }
+                    quickReplyTemplates[shortcut] = { text: templateData.text };
+                } else {
+                     console.warn(`[FIREBASE] Entri template tidak valid ditemukan dan dihapus: ${encodedShortcut}`, templateData);
+                     // Optionally delete invalid entry from Firebase if you encounter it here frequently
+                     // remove(child(dbRef, `quickReplyTemplates/${encodedShortcut}`));
+                }
             }
+            console.log(`[FIREBASE] ${Object.keys(quickReplyTemplates).length} quick reply templates berhasil dimuat dari Firebase.`);
         } else {
-             console.log('[FIREBASE] Tidak ada template pesan cepat di Firebase.');
-             quickReplies = []; // Default ke array kosong
+            console.log('[FIREBASE] Tidak ada quick reply templates di Firebase.');
+            quickReplyTemplates = {}; // Ensure state is empty
         }
+        // --- END QUICK REPLY TEMPLATES ---
 
 
     } catch (error) {
@@ -167,27 +183,35 @@ function saveAdminsToFirebase() {
         });
 }
 
-// NEW: Menyimpan Template Pesan Cepat ke Firebase
-function saveQuickRepliesToFirebase() {
-    const dbRef = ref(database, 'quickReplies'); // Path khusus
-    // Firebase tidak mengizinkan undefined atau null sebagai nilai elemen array.
-    // Filter atau pastikan semua elemen adalah objek valid dengan properti string
-     const sanitizedTemplates = quickReplies.filter(item => item && typeof item === 'object' && typeof item.shortcut === 'string' && typeof item.text === 'string');
+// --- QUICK REPLY TEMPLATES ---
+// Menyimpan Quick Reply Templates ke Firebase
+function saveQuickReplyTemplatesToFirebase() {
+    const dbRef = ref(database, 'quickReplyTemplates');
+    // Firebase requires valid keys (no ., $, #, [, ], /)
+    // We store in-memory state with actual shortcuts (decoded),
+    // but need to encode keys when saving to Firebase.
+    const firebaseData = {};
+    for (const shortcut in quickReplyTemplates) {
+        const template = quickReplyTemplates[shortcut];
+         // Basic validation before saving
+        if (shortcut && shortcut.startsWith('/') && template && typeof template.text === 'string') {
+             firebaseData[encodeFirebaseKey(shortcut)] = { text: template.text };
+        } else {
+             console.warn(`[FIREBASE] Mengabaikan template dengan struktur atau shortcut tidak valid saat menyimpan: ${shortcut}`, template);
+        }
+    }
 
-
-    set(dbRef, sanitizedTemplates) // Menyimpan array of { shortcut, text }
+    set(dbRef, firebaseData)
         .then(() => {
-            console.log('[FIREBASE] Template pesan cepat berhasil disimpan ke Firebase.');
-            // Broadcast template terbaru ke semua admin yang terhubung
-             // Broadcast data yang sudah bersih
-             io.emit('quick_replies_updated', sanitizedTemplates);
+            console.log('[FIREBASE] Quick reply templates berhasil disimpan ke Firebase.');
+            // Broadcast updated templates to all clients
+            io.emit('quick_reply_templates_updated', quickReplyTemplates); // Broadcast the decoded state
         })
         .catch((error) => {
-            console.error('[FIREBASE] Gagal menyimpan template pesan cepat ke Firebase:', error);
-            // Jika gagal, mungkin perlu memberi tahu admin Super Admin yang melakukan update?
-            // Untuk saat ini, cukup log error di server. Frontend akan menerima error via event superadmin_error.
+            console.error('[FIREBASE] Gagal menyimpan quick reply templates ke Firebase:', error);
         });
 }
+// --- END QUICK REPLY TEMPLATES ---
 
 
 // Menghapus Chat History dari Firebase
@@ -249,7 +273,7 @@ function startAutoReleaseTimer(chatId, username) {
           io.to(targetSocketId).emit('auto_release_notification', { chatId: normalizedChatId, message: `Chat ${normalizedChatId.split('@')[0]} dilepas otomatis (tidak aktif).` });
         }
       } else {
-          // Jika chat sudah tidak diambil oleh admin ini (mungkin diambil admin lain/manual unpick), timer ini sudah kadaluarga
+          // Jika chat sudah tidak diambil oleh admin ini (mungkin diambil admin lain/manual unpick), timer ini sudah kadaluarsa
           console.log(`[TIMER] Timer auto-release untuk ${normalizedChatId} oleh ${username} habis, tetapi chat sudah tidak diambil oleh admin ini. Timer dibersihkan.`);
           delete chatReleaseTimers[normalizedChatId];
       }
@@ -321,13 +345,16 @@ function decodeFirebaseKey(encodedKey) {
 // Fungsi untuk meng-encode kunci agar valid di Firebase
 function encodeFirebaseKey(key) {
    if (!key) return null;
+    // Firebase disallow ., $, #, [, ], /
+    // We also need to handle '/' in shortcuts for encoding.
    return key
     .replace(/\./g, '_dot_')
     .replace(/@/g, '_at_')
     .replace(/\$/g, '_dollar_')
-    .replace(/\//g, '_slash_')
+    .replace(/\//g, '_slash_') // Encode forward slash specifically for shortcuts
     .replace(/\[/g, '_openbracket_')
-    .replace(/\]/g, '_closebracket_');
+    .replace(/\]/g, '_closebracket_')
+    .replace(/#/g, '_hash_'); // Add hash encoding
 }
 
 // Fungsi untuk mengecek apakah admin adalah Super Admin
@@ -340,23 +367,22 @@ function isSuperAdmin(username) {
 // --- Setup Express & Server ---
 
 // Muat data awal saat server mulai
-loadDataFromFirebase()
-   .then(() => {
-      console.log("[SERVER] Data Firebase siap. Memulai koneksi WhatsApp dan Server HTTP.");
-       connectToWhatsApp().catch(err => {
-        console.error("[WA] Gagal memulai koneksi WhatsApp awal:", err);
-        // Mungkin perlu keluar atau mencoba lagi dengan strategi berbeda
-      });
+loadDataFromFirebase().then(() => {
+    console.log("[SERVER] Data Firebase siap. Memulai koneksi WhatsApp dan Server HTTP.");
+     connectToWhatsApp().catch(err => {
+      console.error("[WA] Gagal memulai koneksi WhatsApp awal:", err);
+      // Mungkin perlu keluar atau mencoba lagi dengan strategi berbeda
+    });
 
-      server.listen(PORT, () => {
-        console.log(`[SERVER] Server Helpdesk berjalan di http://localhost:${PORT}`);
-        console.log(`[SERVER] Versi Aplikasi: ${config.version || 'N/A'}`);
-      });
+    server.listen(PORT, () => {
+      console.log(`[SERVER] Server Helpdesk berjalan di http://localhost:${PORT}`);
+      console.log(`[SERVER] Versi Aplikasi: ${config.version || 'N/A'}`);
+    });
 
-   }).catch(err => {
-       console.error("[SERVER] Gagal memuat data awal dari Firebase. Server tidak dapat dimulai.", err);
-       process.exit(1); // Keluar jika gagal memuat data penting
-   });
+}).catch(err => {
+    console.error("[SERVER] Gagal memuat data awal dari Firebase. Server tidak dapat dimulai.", err);
+    process.exit(1); // Keluar jika gagal memuat data penting
+});
 
 
 expressApp.use(express.static(__dirname));
@@ -607,13 +633,20 @@ async function connectToWhatsApp() {
 io.on('connection', (socket) => {
   console.log(`[SOCKET] Admin terhubung: ${socket.id}`);
 
-  // Send initial state to the newly connected client (before auth)
-  // These will be re-sent or updated after login_success/reconnect_success
-  socket.emit('registered_admins', admins); // Kirim daftar admin
-  socket.emit('update_online_admins', getOnlineAdminUsernames()); // Kirim daftar admin online
-  socket.emit('initial_pick_status', pickedChats); // Kirim status pick chat
-  // NEW: Kirim template quick reply saat koneksi
-  socket.emit('quick_replies_updated', quickReplies); // Kirim template quick reply
+  // Send initial state to the newly connected client
+  socket.emit('registered_admins', admins);
+  socket.emit('update_online_admins', getOnlineAdminUsernames());
+  socket.emit('initial_pick_status', pickedChats); // Send current picked status
+  // --- QUICK REPLY TEMPLATES ---
+  socket.emit('quick_reply_templates_updated', quickReplyTemplates); // Send current templates
+  // --- END QUICK REPLY TEMPLATES ---
+
+
+  if (sock?.user) {
+      socket.emit('whatsapp_connected', { username: sock.user?.id || 'N/A' });
+  } else {
+      socket.emit('whatsapp_disconnected', { reason: 'Connecting...', statusCode: 'N/A' });
+  }
 
 
   socket.on('request_initial_data', () => {
@@ -639,31 +672,18 @@ io.on('connection', (socket) => {
                };
          }
       }
-      socket.emit('initial_data', { chatHistory: decodedChatHistory, admins: admins, currentUserRole: adminInfo.role, currentPicks: pickedChats }); // Include currentPicks in initial_data
-      // Redundant events below, initial_data includes them now or they are sent on connect
+      // --- QUICK REPLY TEMPLATES ---
+      socket.emit('initial_data', { chatHistory: decodedChatHistory, admins: admins, currentUserRole: adminInfo.role, quickReplyTemplates: quickReplyTemplates });
+      // --- END QUICK REPLY TEMPLATES ---
+
+      // Redundant, initial_pick_status already sent on connect/reconnect_success
       // socket.emit('initial_pick_status', pickedChats);
-      // io.emit('update_online_admins', getOnlineAdminUsernames());
-       // socket.emit('quick_replies_updated', quickReplies); // Also redundant, sent on connect
+      // io.emit('update_online_admins', getOnlineAdminUsernames()); // Redundant, already sent on login/reconnect
     } else {
       console.warn(`[SOCKET] Socket ${socket.id} meminta data awal sebelum login.`);
-      // Instead of requesting login, maybe just do nothing or send limited data
-      // socket.emit('request_login'); // Tell frontend to show login - better handled by reconnect_failed
+      socket.emit('request_login'); // Tell frontend to show login
     }
   });
-
-  // NEW: Handler for requesting quick replies
-  socket.on('get_quick_replies', () => {
-      const adminInfo = getAdminInfoBySocketId(socket.id);
-      if (adminInfo) {
-          console.log(`[SOCKET] Admin ${adminInfo.username} meminta template pesan cepat.`);
-          socket.emit('quick_replies_updated', quickReplies); // Send the current state
-      } else {
-          console.warn(`[SOCKET] Socket ${socket.id} mencoba meminta template pesan cepat sebelum login.`);
-          // Send empty list if not logged in
-          socket.emit('quick_replies_updated', []);
-      }
-  });
-
 
   socket.on('get_chat_history', (chatId) => {
     const adminInfo = getAdminInfoBySocketId(socket.id);
@@ -711,10 +731,12 @@ io.on('connection', (socket) => {
       adminSockets[socket.id] = { username: username, role: adminUser.role || 'admin' };
       usernameToSocketId[username] = socket.id;
 
-      socket.emit('login_success', { username: username, initials: adminUser.initials, role: adminUser.role || 'admin', currentPicks: pickedChats }); // Send current picks on login
+      // --- QUICK REPLY TEMPLATES ---
+      socket.emit('login_success', { username: username, initials: adminUser.initials, role: adminUser.role || 'admin', currentPicks: pickedChats, quickReplyTemplates: quickReplyTemplates }); // Send current picks AND templates on login
+      // --- END QUICK REPLY TEMPLATES ---
+
       io.emit('update_online_admins', getOnlineAdminUsernames()); // Notify everyone about new online admin
-       // initial data (incl. chat history, admins) will be requested by frontend after login_success
-       // Quick replies are already sent on initial connection.
+       // initial data will be requested by frontend after login_success
 
     } else {
       console.log(`[ADMIN] Login gagal untuk username: ${username}. Username atau password salah.`);
@@ -743,11 +765,11 @@ io.on('connection', (socket) => {
         console.log(`[ADMIN] Reconnect berhasil untuk ${username} (Socket ID: ${socket.id})`);
         adminSockets[socket.id] = { username: username, role: adminUser.role || 'admin' };
         usernameToSocketId[username] = socket.id;
-        socket.emit('reconnect_success', { username: username, currentPicks: pickedChats, role: adminUser.role || 'admin' }); // Send current picks on reconnect
+        // --- QUICK REPLY TEMPLATES ---
+        socket.emit('reconnect_success', { username: username, currentPicks: pickedChats, role: adminUser.role || 'admin', quickReplyTemplates: quickReplyTemplates }); // Send picks and templates on reconnect
+        // --- END QUICK REPLY TEMPLATES ---
         io.emit('update_online_admins', getOnlineAdminUsernames()); // Notify everyone about online status
-        // initial data (incl. chat history, admins) will be requested by frontend after reconnect_success
-        // Quick replies are already sent on initial connection.
-
+        // initial data will be requested by frontend after reconnect_success
     } else {
         console.warn(`[ADMIN] Reconnect failed: Admin ${username} not found in registered admins.`);
         socket.emit('reconnect_failed');
@@ -950,22 +972,18 @@ io.on('connection', (socket) => {
      // Cek status chat
      if (chatHistory[encodedChatId]?.status === 'closed') {
         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan ke chat tertutup ${chatId}.`);
-        return socket.emit('send_error', { to: chatId, text, media, message: 'Chat sudah ditutup. Tidak bisa mengirim balasan.' });
+        return socket.emit('send_error', { to: chatId, text, message: 'Chat sudah ditutup. Tidak bisa mengirim balasan.' });
     }
 
 
     try {
       const adminInfoFromAdmins = admins[username];
-      // Ambil inisial, pastikan max 3 huruf
+      // Ambil inisial, pastikan max 3 huruf dan selalu tambahkan strip di depan untuk format WA
       const adminInitials = (adminInfoFromAdmins?.initials || username.substring(0, 3).toUpperCase()).substring(0,3); // Max 3 chars
-        // Format teks yang dikirim ke WhatsApp:
-        // Teks Asli (jika ada)
-        //
-        // -[INISIAL]
-        // Jika hanya media tanpa teks, hanya kirim -[INISIAL]
-        // Jika hanya teks, kirim Teks Asli\n\n-[INISIAL]
-        // Jika ada teks dan media, kirim Teks Asli\n\n-[INISIAL] sebagai caption (jika media support caption)
-      const textWithInitials = text ? `${text.trim()}\n\n-${adminInitials}` : (media ? `-${adminInitials}` : '');
+        // Append initials only if there is actual text or if it's an audio/media message without caption
+      const textForSendingToWA = text ? `${text.trim()}
+
+-${adminInitials}` : (media && !text ? `-${adminInitials}` : ''); // Add initials with '-' prefix and '_' suffix
 
 
       let sentMsgResult;
@@ -982,38 +1000,35 @@ io.on('connection', (socket) => {
         const mediaOptions = {
           mimetype: mediaMimeType,
           fileName: media.name || 'file',
-           // Use textWithInitials as caption if it exists, otherwise undefined.
-           // Note: Not all media types support captions, and some ignore them (like PTT audio).
-           caption: textWithInitials || undefined
+           // Use textForSendingToWA as caption if it exists, otherwise undefined
+          caption: textForSendingToWA || undefined
         };
 
         console.log(`[WA] Mengirim media (${mediaMimeType}) ke ${chatId} oleh ${username}...`);
 
-        // Baileys `sendMessage` documentation per type is needed for precise implementation
-        // This is a basic implementation. More complex handling might be needed (e.g. for PTT audio).
-        if (media.type.startsWith('image/')) {
+        if (media.type.startsWith('image/')) { // Use media.type from frontend state for general category
           sentMsgResult = await sock.sendMessage(chatId, { image: mediaBuffer, ...mediaOptions });
         } else if (media.type.startsWith('video/')) {
           sentMsgResult = await sock.sendMessage(chatId, { video: mediaBuffer, ...mediaOptions });
         } else if (media.type.startsWith('audio/')) {
-            // Handle audio. PTT audio typically ignores captions.
-            const isVoiceNote = mediaOptions.mimetype === 'audio/ogg; codecs=opus' || mediaOptions.mimetype === 'audio/mpeg' || mediaOptions.mimetype === 'audio/wav' || mediaOptions.mimetype === 'audio/3gpp';
-
-            if (isVoiceNote) {
-                 // Send as PTT, caption will be ignored by most clients
-                 sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: true });
-                 // If there was text, send it as a separate message AFTER the voice note.
-                 // The initials will be appended to this separate text message.
-                 if (text && text.trim().length > 0) {
-                      await sock.sendMessage(chatId, { text: textWithInitials });
-                 }
-
-            } else {
-                 // Send as standard audio, caption might be supported depending on client/type
-                 sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, ...mediaOptions, ptt: false });
-            }
+            // Baileys recommends ptt: true for voice notes, standard audio needs mimetype
+            // If ptt is true, caption is usually ignored by WA clients
+           const isVoiceNote = mediaOptions.mimetype === 'audio/ogg; codecs=opus' || mediaOptions.mimetype === 'audio/mpeg' || mediaOptions.mimetype === 'audio/wav'; // Common voice note mimetypes
+           // Send text separately if it was provided as caption AND it's a voice note type where caption is ignored
+           if (textForSendingToWA && textForSendingToWA.trim().length > 0 && isVoiceNote) {
+               // Send audio first
+               sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: true });
+               // Then send text separately
+               await sock.sendMessage(chatId, { text: textForSendingToWA });
+           } else {
+                // Send audio with potential caption (if supported by type)
+               sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: isVoiceNote, caption: isVoiceNote ? undefined : mediaOptions.caption });
+           }
         } else if (media.type === 'application/pdf' || media.type.startsWith('application/') || media.type.startsWith('text/')) { // Handle documents and text files
-            // Documents usually support captions.
+            // Use a generic file icon if the specific type is not handled
+             if (media.type === 'application/pdf') {
+                 // Specific handling for PDF? Unlikely needed at send time.
+             }
              sentMsgResult = await sock.sendMessage(chatId, { document: mediaBuffer, ...mediaOptions });
 
         } else {
@@ -1023,9 +1038,9 @@ io.on('connection', (socket) => {
         }
 
       } else { // Only text message
-        if (textWithInitials.trim().length > 0) { // Ensure text with initials is not empty
+        if (textForSendingToWA.trim().length > 0) {
            console.log(`[WA] Mengirim teks ke ${chatId} oleh ${username}...`);
-           sentMsgResult = await sock.sendMessage(chatId, { text: textWithInitials });
+           sentMsgResult = await sock.sendMessage(chatId, { text: textForSendingToWA });
         } else {
             console.warn(`[REPLY] Admin ${username} mencoba kirim pesan kosong.`);
             socket.emit('send_error', { to: chatId, text, media, message: 'Tidak ada konten untuk dikirim.' });
@@ -1038,20 +1053,22 @@ io.on('connection', (socket) => {
 
       if (!sentMsg || !sentMsg.key || !sentMsg.key.id) {
           console.error('[WA] sock.sendMessage gagal mengembalikan objek pesan terkirim yang valid.', sentMsgResult);
-          socket.emit('send_error', { to: chatId, text: text, media: media, message: 'Gagal mendapatkan info pesan terkirim dari WhatsApp.' }); // Send back original text/media on error
+          socket.emit('send_error', { to: chatId, text, media, message: 'Gagal mendapatkan info pesan terkirim dari WhatsApp.' });
           return;
       }
 
       // Store the outgoing message in history
-      // Store the original text, media details, AND initials used.
+      // IMPORTANT: Store the text *as it was sent to WA* (including initials) or store original text + initials separately.
+      // Let's store original text + initials separately for clarity in history data structure,
+      // and frontend will decide how to display it.
       const outgoingMessageData = {
         id: sentMsg.key.id,
         from: username, // Store admin username as sender for outgoing
         to: chatId,
-        text: text?.trim() || null, // Store ORIGINAL text input (without added initials)
+        text: text?.trim() || null, // Store original text input
         mediaType: media?.type || null, // Store Baileys type string from frontend
         mimeType: media?.mimeType || media?.type || null, // Store MIME type if known
-        mediaData: media?.data || null, // Store media data in history (Base64) - Consider NOT storing large media in DB
+        mediaData: media?.data || null, // Store media data in history (Base64)
         fileName: media?.name || null,
         initials: adminInitials, // Store initials used
         timestamp: sentMsg.messageTimestamp
@@ -1063,7 +1080,7 @@ io.on('connection', (socket) => {
 
       if (!encodedChatId) {
            console.error('[FIREBASE] Gagal meng-encode chatId untuk menyimpan pesan keluar:', chatId);
-           return socket.emit('send_error', { to: chatId, text: text, media: media, message: 'Kesalahan internal saat menyimpan history.' }); // Send back original text/media on error
+           return socket.emit('send_error', { to: chatId, text, media, message: 'Kesalahan internal saat menyimpan history.' });
       }
 
       // Ensure chat entry and messages array exist before pushing
@@ -1099,8 +1116,7 @@ io.on('connection', (socket) => {
 
     } catch (error) {
       console.error(`[REPLY] Gagal mengirim pesan ke ${chatId} oleh ${username}:`, error);
-      // Emit send error back to the original sender, restoring their input
-      socket.emit('send_error', { to: chatId, text: text, media: media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
+      socket.emit('send_error', { to: chatId, text, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
     }
   });
 
@@ -1135,6 +1151,13 @@ io.on('connection', (socket) => {
                         // Stop marking as read once we hit an outgoing message (sent by an admin)
                        break;
                    }
+               // If the message is before the last outgoing message sent by an admin, it's considered read.
+               // This logic needs careful consideration. For now, just mark *all* incoming messages as read when chat is picked or manually marked.
+               // Let's simplify: mark *all* incoming messages as read in this chat.
+                if (chatEntry.messages[i].type === 'incoming' && chatEntry.messages[i].unread) {
+                    chatEntry.messages[i].unread = false;
+                    changed = true;
+                }
               }
               if (changed) {
                   console.log(`[MARK] Mark incoming messages as read for chat ${normalizedChatId} by ${adminInfo.username}.`);
@@ -1245,15 +1268,10 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: 'Username, password, dan initials harus diisi.' });
         }
          // Server-side validation for initials length
-         if (initials.length === 0 || initials.length > 3) {
-              console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} initials tidak valid atau terlalu panjang.`);
-              return socket.emit('superadmin_error', { message: 'Initials harus 1-3 karakter.' });
+         if (initials.length > 3) {
+              console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} initials terlalu panjang.`);
+              return socket.emit('superadmin_error', { message: 'Initials maksimal 3 karakter.' });
          }
-         if (!/^[a-zA-Z]+$/.test(initials)) { // Initials must be letters
-               console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} initials mengandung karakter tidak valid.`);
-              return socket.emit('superadmin_error', { message: 'Initials hanya boleh berisi huruf (A-Z).' });
-         }
-
         if (admins[username]) {
             console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba menambah admin '${username}' yang sudah ada.`);
             return socket.emit('superadmin_error', { message: `Admin dengan username '${username}' sudah ada.` });
@@ -1277,7 +1295,7 @@ io.on('connection', (socket) => {
 
         admins[username] = {
             password: password, // CONSIDER HASHING PASSWORDS IN A REAL APPLICATION!
-            initials: initials.substring(0,3).toUpperCase(), // Store initials, ensure uppercase and max 3
+            initials: initials, // Store raw initials
             role: role
         };
 
@@ -1430,47 +1448,79 @@ io.on('connection', (socket) => {
 
      });
 
-
-    // NEW: Handler for updating quick replies (Super Admin only)
-    socket.on('update_quick_replies', (templates) => {
-        console.log(`[SUPERADMIN] Menerima permintaan update template pesan cepat.`);
+    // --- QUICK REPLY TEMPLATES ---
+    socket.on('save_quick_reply_template', ({ shortcut, text }) => {
         const adminInfo = getAdminInfoBySocketId(socket.id);
         if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
-             console.warn(`[SUPERADMIN] Akses ditolak: Admin ${adminInfo?.username} mencoba update template pesan cepat.`);
-            // Use the specific superadmin_error event already handled by frontend
-            return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa mengelola template pesan cepat.' });
+            console.warn(`[TEMPLATES] Akses ditolak: Admin ${adminInfo?.username} mencoba menyimpan template.`);
+            return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa mengelola template.' });
         }
 
-        // Validasi: Pastikan itu array of objects dengan shortcut (string non-empty) dan text (string non-empty)
-        if (!Array.isArray(templates) || !templates.every(item =>
-            item && typeof item === 'object' && typeof item.shortcut === 'string' && item.shortcut.trim().length > 0 && typeof item.text === 'string' && item.text.trim().length > 0
-        )) {
-             console.warn(`[SUPERADMIN] Permintaan update template dari ${adminInfo.username} data tidak valid.`);
-            return socket.emit('superadmin_error', { message: 'Data template tidak valid. Mohon refresh halaman.' });
+        console.log(`[TEMPLATES] Permintaan simpan template dari Super Admin ${adminInfo.username}: ${shortcut}`);
+
+        // Server-side validation
+        if (!shortcut || !text || typeof shortcut !== 'string' || typeof text !== 'string') {
+            console.warn(`[TEMPLATES] Data template tidak lengkap atau format salah dari ${adminInfo.username}.`);
+            return socket.emit('superadmin_error', { message: 'Data template tidak lengkap (shortcut dan text diperlukan).' });
         }
-
-        // Server-side check for duplicate shortcuts before saving
-         const shortcuts = templates.map(item => item.shortcut.trim()); // Trim for comparison
-         const hasDuplicates = (new Set(shortcuts)).size !== shortcuts.length;
-          if (hasDuplicates) {
-              console.warn(`[SUPERADMIN] Ditemukan pintasan duplikat saat update dari ${adminInfo.username}. Menolak simpan.`);
-              return socket.emit('superadmin_error', { message: 'Ada pintasan duplikat. Simpan ditolak.' });
-          }
-
-
-        console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} memperbarui template pesan cepat. Jumlah: ${templates.length}`);
-
-        // Update the backend state with the valid, trimmed templates
-        quickReplies = templates.map(item => ({ shortcut: item.shortcut.trim(), text: item.text.trim() }));
+        if (!shortcut.startsWith('/')) {
+             console.warn(`[TEMPLATES] Shortcut template tidak valid dari ${adminInfo.username}: '${shortcut}' tidak diawali '/'.`);
+             return socket.emit('superadmin_error', { message: 'Shortcut harus diawali dengan "/".' });
+        }
+         // Check if shortcut contains invalid Firebase key characters BEFORE encoding
+         const invalidChars = /[.#$\/\[\]]/;
+         // We are encoding /, so we only need to check for ., $, #, [, ]
+         const firebaseReservedChars = /[.#$\[\]]/;
+         if (firebaseReservedChars.test(shortcut)) {
+            console.warn(`[TEMPLATES] Shortcut template tidak valid dari ${adminInfo.username}: '${shortcut}' mengandung karakter terlarang Firebase (. # $ [ ]).`);
+             return socket.emit('superadmin_error', { message: 'Shortcut tidak boleh mengandung karakter . # $ [ ].' });
+         }
 
 
-        // Save to Firebase (which also broadcasts 'quick_replies_updated' on success)
-        saveQuickRepliesToFirebase(); // Ini akan menyimpan array of { shortcut, text }
+        // Check for duplicate shortcut (case-sensitive based on how it's stored)
+        // If quickReplyTemplates[shortcut] exists, it's an update. If not, it's new.
+        // The map structure naturally handles preventing duplicates during *addition*
+        // if the key (shortcut) is the same. No need for a loop to check duplicates.
 
-         // Success message will be handled by the broadcast 'quick_replies_updated' -> superadmin_success in frontend
-         // socket.emit('superadmin_success', { message: 'Template pesan cepat berhasil disimpan.' }); // Ini bisa dihapus atau dipertimbangkan kembali
+        // Store/Update in-memory state using the decoded shortcut as the key
+        quickReplyTemplates[shortcut] = { text: text };
 
+        // Save to Firebase (uses encoded keys)
+        saveQuickReplyTemplatesToFirebase(); // This function also broadcasts updates
+
+        socket.emit('superadmin_success', { message: `Template '${shortcut}' berhasil disimpan.` });
     });
+
+    socket.on('delete_quick_reply_template', ({ shortcut }) => {
+         const adminInfo = getAdminInfoBySocketId(socket.id);
+        if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
+            console.warn(`[TEMPLATES] Akses ditolak: Admin ${adminInfo?.username} mencoba menghapus template.`);
+            return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa mengelola template.' });
+        }
+
+        console.log(`[TEMPLATES] Permintaan hapus template dari Super Admin ${adminInfo.username}: ${shortcut}`);
+
+        // Server-side validation
+        if (!shortcut || typeof shortcut !== 'string') {
+             console.warn(`[TEMPLATES] Shortcut template tidak valid dari ${adminInfo.username} untuk dihapus.`);
+            return socket.emit('superadmin_error', { message: 'Shortcut template tidak valid.' });
+        }
+
+        // Check if template exists
+        if (!quickReplyTemplates[shortcut]) {
+            console.warn(`[TEMPLATES] Template '${shortcut}' tidak ditemukan untuk dihapus oleh ${adminInfo.username}.`);
+            return socket.emit('superadmin_error', { message: `Template dengan shortcut '${shortcut}' tidak ditemukan.` });
+        }
+
+        // Delete from in-memory state
+        delete quickReplyTemplates[shortcut];
+
+        // Save to Firebase (uses encoded keys)
+        saveQuickReplyTemplatesToFirebase(); // This function also broadcasts updates
+
+        socket.emit('superadmin_success', { message: `Template '${shortcut}' berhasil dihapus.` });
+    });
+    // --- END QUICK REPLY TEMPLATES ---
 
 
   socket.on('disconnect', (reason) => {
