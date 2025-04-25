@@ -40,14 +40,14 @@ import { getDatabase, ref, child, get, set } from 'firebase/database';
 import { app as firebaseApp, database } from './firebaseConfig.js';
 
 function loadChatHistory() {
-  const dbRef = ref(database); // Gunakan instance database yang benar
+  const dbRef = ref(database);
   get(child(dbRef, 'chatHistory'))
     .then((snapshot) => {
       if (snapshot.exists()) {
         const encodedChatHistory = snapshot.val();
         chatHistory = {};
         for (const encodedKey in encodedChatHistory) {
-          const decodedKey = decodeFirebaseKey(encodedKey);
+          const decodedKey = decodeFirebaseKey(encodedKey); // Decode hanya saat membaca
           chatHistory[decodedKey] = encodedChatHistory[encodedKey];
         }
         console.log('Riwayat chat berhasil dimuat dari Firebase.');
@@ -78,11 +78,11 @@ function decodeFirebaseKey(encodedKey) {
 function saveChatHistory() {
   const encodedChatHistory = {};
   for (const chatId in chatHistory) {
-    const encodedKey = encodeFirebaseKey(chatId);
+    const encodedKey = encodeFirebaseKey(chatId); // Encode hanya saat menyimpan
     encodedChatHistory[encodedKey] = chatHistory[chatId];
   }
 
-  const dbRef = ref(database, 'chatHistory'); // Gunakan instance database yang benar
+  const dbRef = ref(database, 'chatHistory');
   set(dbRef, encodedChatHistory)
     .then(() => {
       console.log('Riwayat chat berhasil disimpan ke Firebase.');
@@ -156,6 +156,14 @@ function cleanupAdminState(socketId) {
     return null;
 }
 
+// Fungsi untuk memastikan chatId dalam format lengkap
+function normalizeChatId(chatId) {
+  if (!chatId.includes('@')) {
+    return `${chatId}@s.whatsapp.net`;
+  }
+  return chatId;
+}
+
 // --- Setup Express & Server ---
 loadChatHistory(); // Muat history saat mulai
 
@@ -220,15 +228,18 @@ async function connectToWhatsApp() {
     }
   });
 
+  // Tambahkan variabel untuk melacak pesan keluar yang sudah ditangani
+  const outgoingMessageIds = new Set();
+
   sock.ev.on('messages.upsert', async ({ messages }) => {
     for (const message of messages) {
-      // Abaikan notifikasi status, pesan dari diri sendiri, atau pesan tanpa konten
-      if (message.key.remoteJid === 'status@broadcast' || message.key.fromMe || !message.message) {
-        continue;
-      }
+      const chatId = normalizeChatId(message.key.remoteJid); // Pastikan format asli
 
-      console.log('Pesan masuk dari:', message.key.remoteJid);
-      const chatId = message.key.remoteJid;
+      // Abaikan pesan keluar yang sudah ditangani
+      if (message.key.fromMe) {
+        console.log(`Pesan keluar dengan ID ${message.key.id} diabaikan dalam upsert.`);
+        continue; // Abaikan pesan keluar
+      }
 
       // Inisialisasi variabel untuk konten pesan
       let messageContent = null;
@@ -271,11 +282,10 @@ async function connectToWhatsApp() {
           ? new Date(parseInt(message.messageTimestamp) * 1000).toISOString()
           : new Date().toISOString(),
         unread: true,
-        type: 'incoming'
+        type: 'incoming' // Pastikan hanya pesan masuk yang diberi tipe 'incoming'
       };
 
-      // Simpan ke history menggunakan chatId yang di-encode
-      const encodedChatId = encodeFirebaseKey(chatId);
+      const encodedChatId = encodeFirebaseKey(chatId); // Encode hanya untuk penyimpanan
       if (!chatHistory[encodedChatId]) {
         chatHistory[encodedChatId] = [];
       }
@@ -283,14 +293,14 @@ async function connectToWhatsApp() {
       // Hindari duplikasi sederhana (cek ID jika ada)
       if (!chatHistory[encodedChatId].some(m => m.id === messageData.id)) {
         chatHistory[encodedChatId].push(messageData);
-        saveChatHistory(); // Simpan setelah menambahkan
+        saveChatHistory();
       } else {
         console.warn(`Pesan duplikat terdeteksi (ID: ${messageData.id}), diabaikan.`);
-        continue; // Jangan proses lebih lanjut jika duplikat
+        continue;
       }
 
       // Kirim ke semua admin yang terhubung
-      io.emit('new_message', { ...messageData, chatId }); // Sertakan chatId untuk frontend
+      io.emit('new_message', { ...messageData, chatId }); // Kirim format asli ke frontend
 
       // Notifikasi browser (hanya jika chat tidak sedang di-pick oleh siapapun ATAU di-pick oleh admin lain)
       const pickedBy = pickedChats[chatId];
@@ -300,6 +310,11 @@ async function connectToWhatsApp() {
         icon: '/favicon.ico', // Ganti jika perlu
         chatId: chatId // Sertakan chatId agar frontend bisa filter
       });
+
+      if (message.key.fromMe) {
+        // Tandai pesan keluar sebagai sudah ditangani
+        outgoingMessageIds.add(message.key.id);
+      }
     }
   });
 
@@ -325,7 +340,12 @@ io.on('connection', (socket) => {
     const username = adminSockets[socket.id];
     if (username) {
       console.log(`Admin ${username} meminta data awal.`);
-      socket.emit('initial_data', chatHistory);
+      const decodedChatHistory = {};
+      for (const encodedKey in chatHistory) {
+        const decodedKey = decodeFirebaseKey(encodedKey); // Decode chatId sebelum mengirim ke frontend
+        decodedChatHistory[decodedKey] = chatHistory[encodedKey];
+      }
+      socket.emit('initial_data', decodedChatHistory); // Kirim data histori yang sudah di-decode
       socket.emit('initial_pick_status', pickedChats); // Kirim lagi pick status
       socket.emit('update_online_admins', getOnlineAdminUsernames()); // Kirim lagi admin online
     } else {
@@ -338,9 +358,9 @@ io.on('connection', (socket) => {
   socket.on('get_chat_history', (chatId) => {
     const username = adminSockets[socket.id];
     if (username && chatId) {
-      const encodedChatId = encodeFirebaseKey(chatId); // Encode chatId untuk pencarian
+      const encodedChatId = encodeFirebaseKey(chatId); // Encode untuk pencarian
       const history = chatHistory[encodedChatId] || [];
-      socket.emit('chat_history', { chatId, messages: history });
+      socket.emit('chat_history', { chatId, messages: history }); // Kirim format asli ke frontend
     }
   });
 
@@ -479,16 +499,17 @@ io.on('connection', (socket) => {
 
   // Mengirim balasan
   socket.on('reply_message', async ({ to, text, media }) => {
+    const chatId = normalizeChatId(to); // Normalisasi chatId
     const username = adminSockets[socket.id];
     if (!username) return socket.emit('send_error', { to, text, message: 'Login diperlukan.' });
-    if (!to || (!text && !media)) return socket.emit('send_error', { to, text, message: 'Data tidak lengkap.' });
+    if (!chatId || (!text && !media)) return socket.emit('send_error', { to, text, message: 'Data tidak lengkap.' });
     if (!sock) return socket.emit('send_error', { to, text, message: 'Koneksi WhatsApp belum siap.' });
 
-    if (!pickedChats[to]) {
+    if (!pickedChats[chatId]) {
       return socket.emit('send_error', { to, text, message: 'Ambil chat ini terlebih dahulu.' });
     }
-    if (pickedChats[to] !== username) {
-      return socket.emit('send_error', { to, text, message: `Sedang ditangani oleh ${pickedChats[to]}.` });
+    if (pickedChats[chatId] !== username) {
+      return socket.emit('send_error', { to, text, message: `Sedang ditangani oleh ${pickedChats[chatId]}.` });
     }
 
     try {
@@ -508,51 +529,59 @@ _${adminInitials}_` : null;
         };
 
         if (media.type.startsWith('image/')) {
-          sentMsg = await sock.sendMessage(to, { image: mediaBuffer, ...mediaOptions });
+          sentMsg = await sock.sendMessage(chatId, { image: mediaBuffer, ...mediaOptions });
         } else if (media.type.startsWith('video/')) {
-          sentMsg = await sock.sendMessage(to, { video: mediaBuffer, ...mediaOptions });
+          sentMsg = await sock.sendMessage(chatId, { video: mediaBuffer, ...mediaOptions });
         } else if (media.type.startsWith('audio/')) {
-          sentMsg = await sock.sendMessage(to, { audio: mediaBuffer, mimetype: media.type });
+          sentMsg = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: media.type });
           if (replyTextWithInitials && !text) {
-            await sock.sendMessage(to, { text: `_${adminInitials}_` });
+            await sock.sendMessage(chatId, { text: `_${adminInitials}_` });
           }
         } else if (media.type === 'application/pdf' || media.type.startsWith('document/')) {
-          sentMsg = await sock.sendMessage(to, { document: mediaBuffer, ...mediaOptions });
+          sentMsg = await sock.sendMessage(chatId, { document: mediaBuffer, ...mediaOptions });
         } else {
           console.warn(`Tipe media tidak didukung untuk dikirim: ${media.type}`);
           socket.emit('send_error', { to, text, media, message: 'Tipe media tidak didukung.' });
           return;
         }
       } else {
-        sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
+        sentMsg = await sock.sendMessage(chatId, { text: replyTextWithInitials });
       }
 
-      clearAutoReleaseTimer(to);
+      // Tambahkan ID pesan keluar ke set untuk mencegah duplikasi
+      outgoingMessageIds.add(sentMsg.key.id);
 
       const outgoingMessageData = {
         id: sentMsg.key.id,
         from: username,
-        to: to, // Pastikan `to` adalah chatId yang benar
+        to: chatId,
         text: text?.trim() || null,
         mediaType: media?.type || null,
-        mediaData: media?.data || null, // Pastikan media data dikirim ke frontend
+        mediaData: media?.data || null,
         fileName: media?.name || null,
         initials: adminInitials,
-        timestamp: sentMsg.messageTimestamp ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
+        timestamp: sentMsg.messageTimestamp
+          ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString()
+          : new Date().toISOString(),
         type: 'outgoing'
       };
 
-      socket.emit('reply_sent_confirmation', outgoingMessageData);
-
-      if (!chatHistory[to]) chatHistory[to] = [];
-      chatHistory[to].push(outgoingMessageData);
+      // Simpan pesan keluar ke chatHistory
+      const encodedChatId = encodeFirebaseKey(chatId);
+      if (!chatHistory[encodedChatId]) {
+        chatHistory[encodedChatId] = [];
+      }
+      chatHistory[encodedChatId].push(outgoingMessageData);
       saveChatHistory();
 
-      // Kirim pesan ke semua admin yang terhubung
-      io.emit('new_message', outgoingMessageData);
+      // Kirim pesan keluar ke semua admin yang terhubung
+      io.emit('new_message', { ...outgoingMessageData, chatId });
+
+      // Konfirmasi ke pengirim
+      socket.emit('reply_sent_confirmation', outgoingMessageData);
 
     } catch (error) {
-      console.error(`Gagal mengirim pesan ke ${to} oleh ${username}:`, error);
+      console.error(`Gagal mengirim pesan ke ${chatId} oleh ${username}:`, error);
       socket.emit('send_error', { to, text, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
     }
   });

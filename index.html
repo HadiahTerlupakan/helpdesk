@@ -931,7 +931,7 @@
           // Cek apakah pesan sudah ada di UI
           if (messagesDiv.querySelector(`[data-message-id="${id}"]`)) {
             console.warn(`Pesan dengan ID ${id} sudah ditampilkan, diabaikan.`);
-            return;
+            return; // Hindari duplikasi
           }
 
           const messageDiv = document.createElement('div');
@@ -948,13 +948,13 @@
               dataUrl = `data:${mimeType};base64,${mediaData}`;
             }
 
-            if (mediaType === 'imageMessage') {
+            if (mediaType === 'imageMessage' || mediaType.startsWith('image/')) {
               contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 150px; max-height: 150px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
-            } else if (mediaType === 'videoMessage') {
+            } else if (mediaType === 'videoMessage' || mediaType.startsWith('video/')) {
               contentHTML += `<br><video controls src="${dataUrl}" preload="metadata" style="max-width: 150px; max-height: 150px; border-radius: 5px;"></video>`;
-            } else if (mediaType === 'audioMessage') {
+            } else if (mediaType === 'audioMessage' || mediaType.startsWith('audio/')) {
               contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata" style="max-width: 100%;"></audio>`;
-            } else if (mediaType === 'documentMessage') {
+            } else if (mediaType === 'documentMessage' || mediaType.startsWith('application/')) {
               const docName = fileName || "Dokumen";
               contentHTML += `<br><a href="${dataUrl}" download="${docName}" target="_blank" class="document-link"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
             } else {
@@ -1060,55 +1060,37 @@
         });
 
         socket.on('initial_data', (initialHistory) => {
-            console.log('Received initial_data with', Object.keys(initialHistory).length, 'chats');
-            chatHistory = initialHistory || {};
-            chatList.innerHTML = ''; // Clear list
-            chatListItems = {}; // Reset list items map
+          chatHistory = {};
+          Object.keys(initialHistory).forEach(chatId => {
+            chatHistory[chatId] = initialHistory[chatId]; // Gunakan format asli
+          });
 
-            // Sort chats by last message timestamp (most recent first)
-             const sortedChatIds = Object.keys(chatHistory).sort((a, b) => {
-                 const messagesA = chatHistory[a] || [];
-                 const messagesB = chatHistory[b] || [];
-                 const lastMsgTimeA = messagesA.length > 0 ? new Date(messagesA[messagesA.length - 1].timestamp).getTime() : 0;
-                 const lastMsgTimeB = messagesB.length > 0 ? new Date(messagesB[messagesB.length - 1].timestamp).getTime() : 0;
-                 // Ensure invalid timestamps are handled (e.g., put at the end)
-                 const timeA = isNaN(lastMsgTimeA) ? 0 : lastMsgTimeA;
-                 const timeB = isNaN(lastMsgTimeB) ? 0 : lastMsgTimeB;
-                 return timeB - timeA;
-             });
+          chatList.innerHTML = ''; // Clear list
+          chatListItems = {};
 
-            // Populate the chat list
-            sortedChatIds.forEach(chatId => {
-                const messages = chatHistory[chatId] || [];
-                const chatName = chatId.split('@')[0];
-                const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-                 // Determine initial unread status (complex, simplified here: assume read initially)
-                 const isUnreadInitially = false; // Or implement logic based on backend state if available
-                updateChatList(
-                    chatId,
-                    chatName,
-                    isUnreadInitially,
-                    lastMessage?.text || (lastMessage?.mediaType ? `[${lastMessage.mediaType}]` : ''), // Show media type if text is empty
-                    lastMessage?.timestamp || new Date(0).toISOString(),
-                    true // isInitialLoad = true
-                );
-            });
+          const sortedChatIds = Object.keys(chatHistory).sort((a, b) => {
+            const messagesA = chatHistory[a] || [];
+            const messagesB = chatHistory[b] || [];
+            const lastMsgTimeA = messagesA.length > 0 ? new Date(messagesA[messagesA.length - 1].timestamp).getTime() : 0;
+            const lastMsgTimeB = messagesB.length > 0 ? new Date(messagesB[messagesB.length - 1].timestamp).getTime() : 0;
+            return lastMsgTimeB - lastMsgTimeA;
+          });
 
-            updateAllChatListItemsPickStatus(); // Apply pick status after list is built
+          sortedChatIds.forEach(chatId => {
+            const messages = chatHistory[chatId] || [];
+            const chatName = chatId.split('@')[0];
+            const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+            updateChatList(
+              chatId,
+              chatName,
+              false,
+              lastMessage?.text || (lastMessage?.mediaType ? `[${lastMessage.mediaType}]` : ''),
+              lastMessage?.timestamp || new Date(0).toISOString(),
+              true
+            );
+          });
 
-            // Restore selected chat state if applicable (e.g., after refresh)
-            if (currentChatId && chatHistory[currentChatId]) {
-                if (chatListItems[currentChatId]) {
-                    chatListItems[currentChatId].classList.add('selected');
-                    loadChatMessages(currentChatId); // Reload messages
-                    updateChatAreaForCurrentChat(); // Update header/input
-                } else {
-                     currentChatId = null; // Chat no longer exists? Reset.
-                     resetChatArea();
-                }
-            } else if (!currentChatId) {
-                 resetChatArea(); // Ensure clean state if no chat should be selected
-            }
+          updateAllChatListItemsPickStatus();
         });
 
         socket.on('chat_history', ({ chatId, messages }) => {
@@ -1120,24 +1102,35 @@
             if (messages.length === 0) {
               messagesDiv.innerHTML = '<div class="placeholder">Belum ada pesan di percakapan ini.</div>';
             } else {
-              messages.forEach(msg => appendMessage(msg));
+              messages.forEach(msg => {
+                if (!messagesDiv.querySelector(`[data-message-id="${msg.id}"]`)) {
+                  appendMessage(msg); // Tambahkan hanya jika belum ada
+                }
+              });
             }
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
           }
         });
 
         socket.on('new_message', (data) => {
-          const chatId = data.chatId; // Gunakan chatId yang dikirim dari backend
+          const chatId = data.chatId; // Gunakan format asli
+
+          // Hindari duplikasi di frontend
+          if (messagesDiv.querySelector(`[data-message-id="${data.id}"]`)) {
+            console.warn(`Pesan dengan ID ${data.id} sudah ditampilkan, diabaikan.`);
+            return; // Abaikan pesan yang sudah ada
+          }
+
           if (!chatHistory[chatId]) {
             chatHistory[chatId] = [];
           }
 
-          // Hindari duplikasi di frontend
+          // Hindari duplikasi di chatHistory
           if (!chatHistory[chatId].some(msg => msg.id === data.id)) {
             chatHistory[chatId].push(data);
           } else {
             console.warn(`Pesan duplikat terdeteksi di frontend (ID: ${data.id}), diabaikan.`);
-            return;
+            return; // Hindari duplikasi
           }
 
           if (chatId === currentChatId) {
@@ -1320,36 +1313,37 @@
         });
 
         replyButton.addEventListener('click', () => {
-            const text = replyInput.value.trim();
+          const text = replyInput.value.trim();
 
-            if (!text && !selectedMedia) return;
+          if (!text && !selectedMedia) return;
 
-            if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
-                const messageData = {
-                    to: currentChatId,
-                    text: text || null,
-                    media: selectedMedia || null
-                };
-                socket.emit('reply_message', messageData);
+          if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
+            const messageData = {
+              to: currentChatId,
+              text: text || null,
+              media: selectedMedia || null
+            };
+            socket.emit('reply_message', messageData);
 
-                const tempOutgoingMsg = {
-                    from: currentUser,
-                    type: 'outgoing',
-                    text: text || null,
-                    mediaType: selectedMedia?.type?.startsWith('image/') ? 'imageMessage' : selectedMedia?.type || null,
-                    mediaData: selectedMedia?.data || null,
-                    fileName: selectedMedia?.name || null,
-                    timestamp: new Date().toISOString()
-                };
-                appendMessage(tempOutgoingMsg);
+            const tempOutgoingMsg = {
+              id: `temp-${Date.now()}`, // ID sementara untuk pesan
+              from: currentUser,
+              type: 'outgoing',
+              text: text || null,
+              mediaType: selectedMedia?.type?.startsWith('image/') ? 'imageMessage' : selectedMedia?.type || null,
+              mediaData: selectedMedia?.data || null,
+              fileName: selectedMedia?.name || null,
+              timestamp: new Date().toISOString()
+            };
+            appendMessage(tempOutgoingMsg); // Tampilkan pesan sementara di UI
 
-                replyInput.value = '';
-                selectedMedia = null;
-                updateMediaPreview();
-                replyInput.focus();
-            } else {
-                console.warn("Send attempt in invalid state:", { text, currentChatId, picked: pickedChatsStatus[currentChatId], currentUser });
-            }
+            replyInput.value = '';
+            selectedMedia = null;
+            updateMediaPreview();
+            replyInput.focus();
+          } else {
+            console.warn("Send attempt in invalid state:", { text, currentChatId, picked: pickedChatsStatus[currentChatId], currentUser });
+          }
         });
 
         replyInput.addEventListener('keypress', (e) => {
