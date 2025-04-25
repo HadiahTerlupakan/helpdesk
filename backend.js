@@ -239,13 +239,23 @@ async function connectToWhatsApp() {
   // Tambahkan variabel untuk melacak pesan keluar yang sudah ditangani
   const outgoingMessageIds = new Set();
 
+  // Pastikan event handler hanya terdaftar satu kali
+  sock.ev.off('messages.upsert');
+  
   sock.ev.on('messages.upsert', async ({ messages }) => {
+    // Skip jika tidak ada pesan
+    if (!messages || messages.length === 0) return;
     for (const message of messages) {
       const chatId = normalizeChatId(message.key.remoteJid); // Pastikan format asli
 
-      // Abaikan pesan keluar
+      // Abaikan pesan keluar yang sudah diproses
       if (message.key.fromMe) {
+        if (outgoingMessageIds.has(message.key.id)) {
+          console.log(`Pesan keluar dengan ID ${message.key.id} sudah diproses sebelumnya.`);
+          continue;
+        }
         console.log(`Pesan keluar dengan ID ${message.key.id} diabaikan dalam upsert.`);
+        outgoingMessageIds.add(message.key.id);
         continue;
       }
 
