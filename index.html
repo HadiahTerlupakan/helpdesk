@@ -926,53 +926,61 @@
          }
 
         function appendMessage(msgData) {
-            const { from, text, type, mediaData, mediaType, timestamp, fileName } = msgData;
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}`;
-            const senderName = type === 'incoming' ? (from ? from.split('@')[0] : 'Unknown') : 'Anda';
-            let contentHTML = `<strong>${senderName}</strong>`;
-            
-            if (mediaData && mediaType) {
-                let dataUrl = mediaData;
-                // Jika mediaData belum dalam format data URL, konversi dari base64
-                if (!mediaData.startsWith('data:')) {
-                    const mimeType = getMimeType(mediaType, mediaData);
-                    dataUrl = `data:${mimeType};base64,${mediaData}`;
-                }
+          const { id, from, text, type, mediaData, mediaType, timestamp, fileName } = msgData;
 
-                if (mediaType === 'imageMessage') {
-                    contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 150px; max-height: 150px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
-                } else if (mediaType === 'videoMessage') {
-                    contentHTML += `<br><video controls src="${dataUrl}" preload="metadata" style="max-width: 150px; max-height: 150px; border-radius: 5px;"></video>`;
-                } else if (mediaType === 'audioMessage') {
-                    contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata" style="max-width: 100%;"></audio>`;
-                } else if (mediaType === 'documentMessage') {
-                    const docName = fileName || "Dokumen";
-                    contentHTML += `<br><a href="${dataUrl}" download="${docName}" target="_blank" class="document-link"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
-                } else {
-                    contentHTML += `<br>[Media tidak didukung: ${mediaType}]`;
-                }
-                
-                if (text) {
-                    const textClass = 'caption';
-                    contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
-                }
+          // Cek apakah pesan sudah ada di UI
+          if (messagesDiv.querySelector(`[data-message-id="${id}"]`)) {
+            console.warn(`Pesan dengan ID ${id} sudah ditampilkan, diabaikan.`);
+            return;
+          }
+
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `message ${type}`;
+          messageDiv.dataset.messageId = id; // Tambahkan ID pesan sebagai atribut data
+          const senderName = type === 'incoming' ? (from ? from.split('@')[0] : 'Unknown') : 'Anda';
+          let contentHTML = `<strong>${senderName}</strong>`;
+
+          if (mediaData && mediaType) {
+            let dataUrl = mediaData;
+            // Jika mediaData belum dalam format data URL, konversi dari base64
+            if (!mediaData.startsWith('data:')) {
+              const mimeType = getMimeType(mediaType, mediaData);
+              dataUrl = `data:${mimeType};base64,${mediaData}`;
             }
 
-            if (text && (!mediaData || !mediaType)) {
-                const textClass = 'text-content';
-                contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
-            } else if (!mediaData && type === 'incoming') {
-                contentHTML += `<div class="text-content">[Pesan Kosong]</div>`;
+            if (mediaType === 'imageMessage') {
+              contentHTML += `<br><img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer; max-width: 150px; max-height: 150px; border-radius: 5px;" onclick="openMediaModal('${dataUrl}', 'image')">`;
+            } else if (mediaType === 'videoMessage') {
+              contentHTML += `<br><video controls src="${dataUrl}" preload="metadata" style="max-width: 150px; max-height: 150px; border-radius: 5px;"></video>`;
+            } else if (mediaType === 'audioMessage') {
+              contentHTML += `<br><audio controls src="${dataUrl}" preload="metadata" style="max-width: 100%;"></audio>`;
+            } else if (mediaType === 'documentMessage') {
+              const docName = fileName || "Dokumen";
+              contentHTML += `<br><a href="${dataUrl}" download="${docName}" target="_blank" class="document-link"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
+            } else {
+              contentHTML += `<br>[Media tidak didukung: ${mediaType}]`;
             }
 
-            messageDiv.innerHTML = contentHTML;
+            if (text) {
+              const textClass = 'caption';
+              contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
+            }
+          }
 
-            const placeholder = messagesDiv.querySelector('.placeholder');
-            if (placeholder) placeholder.remove();
+          if (text && (!mediaData || !mediaType)) {
+            const textClass = 'text-content';
+            contentHTML += `<div class="${textClass}">${sanitizeHTML(text)}</div>`;
+          } else if (!mediaData && type === 'incoming') {
+            contentHTML += `<div class="text-content">[Pesan Kosong]</div>`;
+          }
 
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          messageDiv.innerHTML = contentHTML;
+
+          const placeholder = messagesDiv.querySelector('.placeholder');
+          if (placeholder) placeholder.remove();
+
+          messagesDiv.appendChild(messageDiv);
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         function openMediaModal(src, type) {
@@ -1104,59 +1112,39 @@
         });
 
         socket.on('chat_history', ({ chatId, messages }) => {
-            chatHistory[chatId] = messages || []; // Update local cache
+          chatHistory[chatId] = messages || []; // Gunakan chatId asli
 
-            if (chatId === currentChatId) {
-                console.log(`Received history for active chat ${chatId}:`, messages.length, 'messages');
-                 // Clear loading message or existing messages before appending new history
-                 messagesDiv.innerHTML = ''; // Clear completely
-                if (messages.length === 0) {
-                     messagesDiv.innerHTML = '<div class="placeholder">Belum ada pesan di percakapan ini.</div>';
-                 } else {
-                    messages.forEach(msg => appendMessage(msg));
-                 }
-                 // Scroll to bottom after loading history
-                 requestAnimationFrame(() => {
-                     messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                 });
+          if (chatId === currentChatId) {
+            console.log(`Received history for active chat ${chatId}:`, messages.length, 'messages');
+            messagesDiv.innerHTML = ''; // Clear existing messages
+            if (messages.length === 0) {
+              messagesDiv.innerHTML = '<div class="placeholder">Belum ada pesan di percakapan ini.</div>';
             } else {
-                console.log(`Received history for non-active chat ${chatId}`);
+              messages.forEach(msg => appendMessage(msg));
             }
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          }
         });
 
         socket.on('new_message', (data) => {
-            console.log('New message received:', data);
-             if (!data || !data.from || !data.timestamp) {
-                 console.error("Received invalid message data:", data);
-                 return;
-             }
-            const chatId = data.from;
-            const chatName = chatId.split('@')[0];
+          const chatId = data.chatId; // Gunakan chatId yang dikirim dari backend
+          if (!chatHistory[chatId]) {
+            chatHistory[chatId] = [];
+          }
 
-            // Add to history cache
-            if (!chatHistory[chatId]) {
-                chatHistory[chatId] = [];
-            }
-            // Simple duplicate check based on timestamp and sender (adjust if backend provides unique ID)
-             if (!chatHistory[chatId].some(msg => msg.timestamp === data.timestamp && msg.from === data.from && msg.text === data.text)) {
-                 chatHistory[chatId].push(data);
-             } else {
-                 console.warn("Potential duplicate message ignored:", data);
-                 // return; // Optional: skip processing duplicate
-             }
+          // Hindari duplikasi di frontend
+          if (!chatHistory[chatId].some(msg => msg.id === data.id)) {
+            chatHistory[chatId].push(data);
+          } else {
+            console.warn(`Pesan duplikat terdeteksi di frontend (ID: ${data.id}), diabaikan.`);
+            return;
+          }
 
-
-            if (chatId === currentChatId) {
-                appendMessage(data);
-                // Mark as read visually and potentially notify server (logic inside markChatAsRead)
-                markChatAsRead(chatId);
-            } else {
-                const pickedBy = pickedChatsStatus[chatId];
-                const shouldBeUnread = !pickedBy || pickedBy === currentUser; // Mark unread if not picked by others
-                updateChatList(chatId, chatName, shouldBeUnread, data.text || (data.mediaType ? `[${data.mediaType}]` : ''), data.timestamp);
-                // Show browser notification for non-active chats
-                 showNotification(`Pesan dari ${chatName}`, data.text || (data.mediaType ? `[${data.mediaType}]` : '[Pesan Kosong]'));
-            }
+          if (chatId === currentChatId) {
+            appendMessage(data); // Tambahkan pesan ke percakapan yang sedang dibuka
+          } else {
+            updateChatList(chatId, chatId.split('@')[0], true, data.text || `[${data.mediaType || 'Media'}]`, data.timestamp);
+          }
         });
 
         socket.on('update_pick_status', ({ chatId, pickedBy }) => {

@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import pino from 'pino'; // Untuk logging Baileys yang lebih detail (opsional)
 import config from './config.js';
+import { fileURLToPath } from 'url';
 
 // --- Konfigurasi & State ---
 const admins = config.admins;
@@ -23,6 +24,8 @@ const adminSockets = {}; // socket ID -> username
 const usernameToSocketId = {}; // username -> socket ID
 const pickedChats = {}; // chatId -> username
 const chatReleaseTimers = {}; // chatId -> setTimeout ID
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const chatHistoryFile = path.join(__dirname, 'chat_history.json');
 let chatHistory = {}; // { chatId: [messages] }
 let sock; // Variabel global untuk instance socket Baileys
@@ -33,35 +36,60 @@ let sock; // Variabel global untuk instance socket Baileys
 const logger = pino({ level: 'warn' }); // Level: 'trace', 'debug', 'info', 'warn', 'error', 'fatal'
 
 // Memuat history chat dari file
-import { getDatabase, ref, child, get } from 'firebase/database';
-import { app as firebaseApp } from './firebaseConfig.js';
+import { getDatabase, ref, child, get, set } from 'firebase/database';
+import { app as firebaseApp, database } from './firebaseConfig.js';
 
 function loadChatHistory() {
-  const dbRef = ref(getDatabase(firebaseApp));
-  get(child(dbRef, 'chatHistory')).then((snapshot) => {
-    if (snapshot.exists()) {
-      chatHistory = snapshot.val();
-      console.log('Riwayat chat berhasil dimuat dari Firebase.');
-    } else {
-      console.log('Tidak ada riwayat chat di Firebase, memulai dengan history kosong.');
-      chatHistory = {};
-    }
-  }).catch((error) => {
-    console.error('Gagal memuat riwayat chat dari Firebase:', error);
-    chatHistory = {};
-  });
+  const dbRef = ref(database); // Gunakan instance database yang benar
+  get(child(dbRef, 'chatHistory'))
+    .then((snapshot) => {
+      if (snapshot.exists()) {
+        const encodedChatHistory = snapshot.val();
+        chatHistory = {};
+        for (const encodedKey in encodedChatHistory) {
+          const decodedKey = decodeFirebaseKey(encodedKey);
+          chatHistory[decodedKey] = encodedChatHistory[encodedKey];
+        }
+        console.log('Riwayat chat berhasil dimuat dari Firebase.');
+      } else {
+        console.log('Tidak ada riwayat chat di Firebase, memulai dengan history kosong.');
+        chatHistory = {};
+      }
+    })
+    .catch((error) => {
+      console.error('Gagal memuat riwayat chat dari Firebase:', error);
+    });
+}
+
+// Fungsi untuk meng-encode kunci agar valid di Firebase
+function encodeFirebaseKey(key) {
+  return key.replace(/\./g, '_dot_').replace(/@/g, '_at_').replace(/\$/g, '_dollar_')
+            .replace(/\//g, '_slash_').replace(/\[/g, '_openbracket_').replace(/\]/g, '_closebracket_');
+}
+
+// Fungsi untuk decode kunci jika diperlukan (opsional)
+function decodeFirebaseKey(encodedKey) {
+  return encodedKey.replace(/_dot_/g, '.').replace(/_at_/g, '@').replace(/_dollar_/g, '$')
+                   .replace(/_slash_/g, '/').replace(/_openbracket_/g, '[').replace(/_closebracket_/g, ']');
 }
 
 // Menyimpan history chat ke file
-const { set } = require('firebase/database');
 
 function saveChatHistory() {
-  const dbRef = ref(getDatabase(), 'chatHistory');
-  set(dbRef, chatHistory).then(() => {
-    console.log('Riwayat chat berhasil disimpan ke Firebase.');
-  }).catch((error) => {
-    console.error('Gagal menyimpan riwayat chat ke Firebase:', error);
-  });
+  const encodedChatHistory = {};
+  for (const chatId in chatHistory) {
+    const encodedKey = encodeFirebaseKey(chatId);
+    encodedChatHistory[encodedKey] = chatHistory[chatId];
+  }
+
+  const dbRef = ref(database, 'chatHistory'); // Gunakan instance database yang benar
+  set(dbRef, encodedChatHistory)
+    .then(() => {
+      console.log('Riwayat chat berhasil disimpan ke Firebase.');
+    })
+    .catch((error) => {
+      console.error('Gagal menyimpan riwayat chat ke Firebase:', error);
+    });
 }
 
 // Membatalkan timer auto-release
@@ -131,13 +159,14 @@ function cleanupAdminState(socketId) {
 // --- Setup Express & Server ---
 loadChatHistory(); // Muat history saat mulai
 
-app.use(express.static(__dirname)); // Sajikan file statis (HTML, CSS, JS Client)
-app.get('/', (req, res) => {
+// Ganti `app` dengan `expressApp`
+expressApp.use(express.static(__dirname)); // Sajikan file statis (HTML, CSS, JS Client)
+expressApp.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Konfigurasi session
-app.use(session({
+expressApp.use(session({
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: true,
@@ -145,49 +174,49 @@ app.use(session({
 }));
 
 const PORT = config.serverPort || 3000;
-http.listen(PORT, () => {
+server.listen(PORT, () => { // Ganti `http.listen` dengan `server.listen`
   console.log(`Server Helpdesk berjalan di http://localhost:${PORT}`);
   console.log(`Versi Aplikasi: ${config.version}`); // Log versi aplikasi
 });
 
 // --- Koneksi WhatsApp (Baileys) ---
+let qrDisplayed = false; // Tambahkan variabel untuk melacak status QR Code
+
 async function connectToWhatsApp() {
   console.log("Mencoba menghubungkan ke WhatsApp...");
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
   sock = makeWASocket({
     auth: state,
-    printQRInTerminal: config.baileysOptions?.printQRInTerminal ?? true, // Ambil dari config atau default true
-    browser: Browsers.macOS('Desktop'), // Memberi tahu WA kita adalah browser desktop
-    logger: logger, // Gunakan logger pino
-    // Opsi lain jika diperlukan:
-    // version: [2, 2413, 1], // Contoh pin versi jika ada masalah kompatibilitas
-    // connectTimeoutMs: 60000, // Timeout koneksi lebih lama
-    // keepAliveIntervalMs: 30000 // Interval keep-alive
+    printQRInTerminal: config.baileysOptions?.printQRInTerminal ?? true,
+    browser: Browsers.macOS('Desktop'),
+    logger: logger,
   });
 
-  // Event handler Baileys
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
-    if (qr) {
+
+    if (qr && !qrDisplayed) { // Tampilkan QR hanya jika belum ditampilkan
+      qrDisplayed = true; // Tandai QR sudah ditampilkan
       console.log('QR Code diterima, pindai dengan WhatsApp Anda:');
       qrcode.generate(qr, { small: true });
     }
+
     if (connection === 'close') {
+      qrDisplayed = false; // Reset status QR jika koneksi terputus
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = ![401, 403, 411, 419, 500].includes(statusCode); // Kode error yg tidak perlu reconnect otomatis
+      const shouldReconnect = ![401, 403, 411, 419, 500].includes(statusCode);
       console.error(`Koneksi WhatsApp terputus: ${lastDisconnect?.error?.message || 'Alasan tidak diketahui'} (Code: ${statusCode}), Mencoba menyambung kembali: ${shouldReconnect}`);
       if (shouldReconnect) {
-        setTimeout(connectToWhatsApp, 15000); // Coba sambung lagi setelah 15 detik
+        setTimeout(connectToWhatsApp, 15000);
       } else {
         console.error("Tidak dapat menyambung kembali secara otomatis. Periksa folder auth_info_baileys atau scan ulang QR.");
-        // Mungkin perlu membersihkan sesi atau memberi tahu admin
       }
     } else if (connection === 'open') {
       console.log('Berhasil terhubung ke WhatsApp!');
-      io.emit('whatsapp_connected'); // Beri tahu frontend bahwa WA terhubung
+      io.emit('whatsapp_connected');
     }
   });
 
@@ -195,96 +224,82 @@ async function connectToWhatsApp() {
     for (const message of messages) {
       // Abaikan notifikasi status, pesan dari diri sendiri, atau pesan tanpa konten
       if (message.key.remoteJid === 'status@broadcast' || message.key.fromMe || !message.message) {
-          continue;
+        continue;
       }
 
       console.log('Pesan masuk dari:', message.key.remoteJid);
       const chatId = message.key.remoteJid;
-      let messageContent = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
+
+      // Inisialisasi variabel untuk konten pesan
+      let messageContent = null;
       let mediaData = null;
       let mediaType = null;
-      let caption = '';
       let fileName = null;
 
-      // Cek tipe pesan dan unduh media jika ada
+      // Tentukan tipe pesan
       const messageType = Object.keys(message.message)[0];
-      // Include 'imageMessage' explicitly for clarity, though it was already handled
       const isMedia = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'].includes(messageType);
 
       if (isMedia) {
-          try {
-              // Hati-hati: downloadMediaMessage bisa memakan waktu & resource
-              const buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
-              mediaData = buffer.toString('base64'); // Send base64 data
-              mediaType = messageType;
-              // Get caption based on media type
-              caption = message.message[mediaType]?.caption || '';
-              if (mediaType === 'documentMessage') {
-                  fileName = message.message[mediaType]?.fileName || 'Dokumen';
-              } else if (mediaType === 'imageMessage') {
-                  fileName = 'Gambar'; // Default filename for images if none provided
-              } else if (mediaType === 'videoMessage') {
-                  fileName = 'Video';
-              } else if (mediaType === 'audioMessage') {
-                  fileName = 'Audio';
-              } else if (mediaType === 'stickerMessage') {
-                  fileName = 'Stiker';
-              }
-
-              // Prioritaskan caption, lalu nama file untuk konten teks jika media
-              messageContent = caption || ''; // Use caption as primary text content for media
-              // console.log(`Media ${mediaType} dari ${chatId} diterima.`); // Kurangi log
-          } catch (error) {
-              console.error(`Gagal mengunduh media dari ${chatId}:`, error);
-              messageContent = '[Gagal memuat media]';
-          }
-      } else if (!messageContent && messageType !== 'protocolMessage' && messageType !== 'senderKeyDistributionMessage') {
-          // Handle pesan tanpa teks (misal: lokasi, kontak, polling - belum didukung)
-          console.log(`Tipe pesan tidak didukung atau kosong: ${messageType} dari ${chatId}`);
-          messageContent = `[Tipe Pesan: ${messageType}]`; // Beri indikasi tipe pesan
+        try {
+          // Unduh media jika ada
+          const buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
+          mediaData = buffer.toString('base64'); // Konversi ke base64
+          mediaType = messageType;
+          fileName = message.message[mediaType]?.fileName || 'Media';
+          messageContent = message.message[mediaType]?.caption || `[${mediaType}]`; // Gunakan caption jika ada
+        } catch (error) {
+          console.error(`Gagal mengunduh media dari ${chatId}:`, error);
+          messageContent = '[Gagal memuat media]';
+        }
+      } else if (messageType === 'conversation') {
+        messageContent = message.message.conversation;
+      } else if (messageType === 'extendedTextMessage') {
+        messageContent = message.message.extendedTextMessage.text;
+      } else {
+        messageContent = '[Pesan tidak dikenal]';
       }
 
-      // Hanya proses jika ada konten yang relevan atau merupakan media
-      if (messageContent || mediaData) {
-          const messageData = {
-              id: message.key.id,
-              from: chatId,
-              text: messageContent,
-              mediaData: mediaData,
-              mediaType: mediaType,
-              fileName: fileName,
-              timestamp: message.messageTimestamp ? new Date(parseInt(message.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
-              unread: true,
-              type: 'incoming'
-          };
+      const messageData = {
+        id: message.key.id,
+        from: chatId,
+        text: messageContent,
+        mediaData: mediaData,
+        mediaType: mediaType,
+        fileName: fileName,
+        timestamp: message.messageTimestamp
+          ? new Date(parseInt(message.messageTimestamp) * 1000).toISOString()
+          : new Date().toISOString(),
+        unread: true,
+        type: 'incoming'
+      };
 
-          // Simpan ke history
-          if (!chatHistory[chatId]) {
-              chatHistory[chatId] = [];
-          }
-          // Hindari duplikasi sederhana (cek ID jika ada)
-          if (!chatHistory[chatId].some(m => m.id === messageData.id)) {
-              chatHistory[chatId].push(messageData);
-              saveChatHistory(); // Simpan setelah menambahkan
-          } else {
-              console.warn(`Pesan duplikat terdeteksi (ID: ${messageData.id}), diabaikan.`);
-              continue; // Jangan proses lebih lanjut jika duplikat
-          }
-
-
-          // Kirim ke semua admin yang terhubung
-          io.emit('new_message', messageData);
-
-          // Notifikasi browser (hanya jika chat tidak sedang di-pick oleh siapapun ATAU di-pick oleh admin lain)
-          const pickedBy = pickedChats[chatId];
-          // Kita tidak tahu siapa yang menerima notif, jadi kirim saja, frontend yg filter
-           io.emit('notification', {
-               title: `Pesan Baru (${chatId.split('@')[0]})`,
-               body: messageContent || `[${mediaType || 'Media'}]`,
-               icon: '/favicon.ico', // Ganti jika perlu
-               chatId: chatId // Sertakan chatId agar frontend bisa filter
-           });
+      // Simpan ke history menggunakan chatId yang di-encode
+      const encodedChatId = encodeFirebaseKey(chatId);
+      if (!chatHistory[encodedChatId]) {
+        chatHistory[encodedChatId] = [];
       }
+
+      // Hindari duplikasi sederhana (cek ID jika ada)
+      if (!chatHistory[encodedChatId].some(m => m.id === messageData.id)) {
+        chatHistory[encodedChatId].push(messageData);
+        saveChatHistory(); // Simpan setelah menambahkan
+      } else {
+        console.warn(`Pesan duplikat terdeteksi (ID: ${messageData.id}), diabaikan.`);
+        continue; // Jangan proses lebih lanjut jika duplikat
+      }
+
+      // Kirim ke semua admin yang terhubung
+      io.emit('new_message', { ...messageData, chatId }); // Sertakan chatId untuk frontend
+
+      // Notifikasi browser (hanya jika chat tidak sedang di-pick oleh siapapun ATAU di-pick oleh admin lain)
+      const pickedBy = pickedChats[chatId];
+      io.emit('notification', {
+        title: `Pesan Baru (${chatId.split('@')[0]})`,
+        body: messageContent || `[${mediaType || 'Media'}]`,
+        icon: '/favicon.ico', // Ganti jika perlu
+        chatId: chatId // Sertakan chatId agar frontend bisa filter
+      });
     }
   });
 
@@ -323,10 +338,10 @@ io.on('connection', (socket) => {
   socket.on('get_chat_history', (chatId) => {
     const username = adminSockets[socket.id];
     if (username && chatId) {
-        // console.log(`Admin ${username} meminta history untuk ${chatId}`); // Kurangi log
-        const history = chatHistory[chatId] || [];
-        socket.emit('chat_history', { chatId, messages: history });
-     }
+      const encodedChatId = encodeFirebaseKey(chatId); // Encode chatId untuk pencarian
+      const history = chatHistory[encodedChatId] || [];
+      socket.emit('chat_history', { chatId, messages: history });
+    }
   });
 
   // Proses login admin
@@ -470,71 +485,75 @@ io.on('connection', (socket) => {
     if (!sock) return socket.emit('send_error', { to, text, message: 'Koneksi WhatsApp belum siap.' });
 
     if (!pickedChats[to]) {
-        return socket.emit('send_error', { to, text, message: 'Ambil chat ini terlebih dahulu.' });
+      return socket.emit('send_error', { to, text, message: 'Ambil chat ini terlebih dahulu.' });
     }
     if (pickedChats[to] !== username) {
-        return socket.emit('send_error', { to, text, message: `Sedang ditangani oleh ${pickedChats[to]}.` });
+      return socket.emit('send_error', { to, text, message: `Sedang ditangani oleh ${pickedChats[to]}.` });
     }
 
     try {
-        const adminInfo = admins[username];
-        const adminInitials = adminInfo?.initials || username.substring(0, 2).toUpperCase();
-        const replyTextWithInitials = text ? `${text.trim()}
+      const adminInfo = admins[username];
+      const adminInitials = adminInfo?.initials || username.substring(0, 2).toUpperCase();
+      const replyTextWithInitials = text ? `${text.trim()}
 
 _${adminInitials}_` : null;
 
-        let sentMsg;
-        if (media) {
-            const mediaBuffer = Buffer.from(media.data, 'base64');
-            const mediaOptions = {
-                caption: replyTextWithInitials,
-                mimetype: media.type,
-                fileName: media.name
-            };
-
-            if (media.type.startsWith('image/')) {
-                sentMsg = await sock.sendMessage(to, { image: mediaBuffer, ...mediaOptions });
-            } else if (media.type.startsWith('video/')) {
-                sentMsg = await sock.sendMessage(to, { video: mediaBuffer, ...mediaOptions });
-            } else if (media.type.startsWith('audio/')) {
-                sentMsg = await sock.sendMessage(to, { audio: mediaBuffer, mimetype: media.type });
-                if (replyTextWithInitials && !text) {
-                    await sock.sendMessage(to, { text: `_${adminInitials}_` });
-                }
-            } else if (media.type === 'application/pdf' || media.type.startsWith('document/')) {
-                sentMsg = await sock.sendMessage(to, { document: mediaBuffer, ...mediaOptions });
-            } else {
-                console.warn(`Tipe media tidak didukung untuk dikirim: ${media.type}`);
-                socket.emit('send_error', { to, text, media, message: 'Tipe media tidak didukung.' });
-                return;
-            }
-        } else {
-            sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
-        }
-
-        clearAutoReleaseTimer(to);
-
-        const outgoingMessageData = {
-            id: sentMsg.key.id,
-            from: username,
-            to: to,
-            text: text?.trim() || null,
-            mediaType: media?.type || null,
-            fileName: media?.name || null,
-            initials: adminInitials,
-            timestamp: sentMsg.messageTimestamp ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
-            type: 'outgoing'
+      let sentMsg;
+      if (media) {
+        const mediaBuffer = Buffer.from(media.data, 'base64');
+        const mediaOptions = {
+          caption: replyTextWithInitials,
+          mimetype: media.type,
+          fileName: media.name
         };
 
-        socket.emit('reply_sent_confirmation', outgoingMessageData);
+        if (media.type.startsWith('image/')) {
+          sentMsg = await sock.sendMessage(to, { image: mediaBuffer, ...mediaOptions });
+        } else if (media.type.startsWith('video/')) {
+          sentMsg = await sock.sendMessage(to, { video: mediaBuffer, ...mediaOptions });
+        } else if (media.type.startsWith('audio/')) {
+          sentMsg = await sock.sendMessage(to, { audio: mediaBuffer, mimetype: media.type });
+          if (replyTextWithInitials && !text) {
+            await sock.sendMessage(to, { text: `_${adminInitials}_` });
+          }
+        } else if (media.type === 'application/pdf' || media.type.startsWith('document/')) {
+          sentMsg = await sock.sendMessage(to, { document: mediaBuffer, ...mediaOptions });
+        } else {
+          console.warn(`Tipe media tidak didukung untuk dikirim: ${media.type}`);
+          socket.emit('send_error', { to, text, media, message: 'Tipe media tidak didukung.' });
+          return;
+        }
+      } else {
+        sentMsg = await sock.sendMessage(to, { text: replyTextWithInitials });
+      }
 
-        if (!chatHistory[to]) chatHistory[to] = [];
-        chatHistory[to].push(outgoingMessageData);
-        saveChatHistory();
+      clearAutoReleaseTimer(to);
+
+      const outgoingMessageData = {
+        id: sentMsg.key.id,
+        from: username,
+        to: to, // Pastikan `to` adalah chatId yang benar
+        text: text?.trim() || null,
+        mediaType: media?.type || null,
+        mediaData: media?.data || null, // Pastikan media data dikirim ke frontend
+        fileName: media?.name || null,
+        initials: adminInitials,
+        timestamp: sentMsg.messageTimestamp ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
+        type: 'outgoing'
+      };
+
+      socket.emit('reply_sent_confirmation', outgoingMessageData);
+
+      if (!chatHistory[to]) chatHistory[to] = [];
+      chatHistory[to].push(outgoingMessageData);
+      saveChatHistory();
+
+      // Kirim pesan ke semua admin yang terhubung
+      io.emit('new_message', outgoingMessageData);
 
     } catch (error) {
-        console.error(`Gagal mengirim pesan ke ${to} oleh ${username}:`, error);
-        socket.emit('send_error', { to, text, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
+      console.error(`Gagal mengirim pesan ke ${to} oleh ${username}:`, error);
+      socket.emit('send_error', { to, text, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
     }
   });
 
