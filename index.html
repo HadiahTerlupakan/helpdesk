@@ -29,6 +29,9 @@
             --disabled-color: #aaa;
             --button-neutral-bg: #6c757d; /* Warna abu-abu untuk Release/Unpick */
             --button-neutral-hover: #5a6268;
+            /* Warna untuk Quick Reply */
+            --quick-reply-bg: #e0f2f1; /* Warna background saran */
+            --quick-reply-hover-bg: #b2dfdb; /* Warna background saran saat hover */
         }
 
         /* Reset default styles */
@@ -288,16 +291,22 @@
               align-items: center;
               gap: 8px; /* Space between icon and text */
          }
+          #superadmin-panel button:hover { opacity: 0.9; } /* Generic hover for admin buttons */
+
+
          #superadmin-panel .delete-chat-button { background-color: var(--button-danger-bg); color: var(--text-light); }
          #superadmin-panel .delete-chat-button:hover { background-color: var(--button-danger-hover); }
          #superadmin-panel .delete-all-chats-button { background-color: #c0392b; color: var(--text-light); } /* Darker red */
          #superadmin-panel .delete-all-chats-button:hover { background-color: #a93226; }
          #superadmin-panel .add-admin-button { background-color: var(--secondary-color); color: var(--text-light); }
          #superadmin-panel .add-admin-button:hover { background-color: #0b6b5a; }
-          #superadmin-panel .delete-admin-button { background-color: #dc3545; } /* Warna merah */
+          #superadmin-panel .delete-admin-button { background-color: #dc3545; color: var(--text-light);} /* Warna merah */
          #superadmin-panel .delete-admin-button:hover { background-color: #c82333; }
          #superadmin-panel .show-qr-button { background-color: #673ab7; color: var(--text-light); } /* Purple color */
          #superadmin-panel .show-qr-button:hover { background-color: #5e35b1; }
+          /* New Quick Reply Management Button Style */
+          #superadmin-panel .manage-quick-replies-button { background-color: #ff9800; color: var(--text-light); } /* Orange color */
+          #superadmin-panel .manage-quick-replies-button:hover { background-color: #f57c00; }
 
 
          /* Ensure icon has base styling */
@@ -392,6 +401,89 @@
              color: var(--error-color); /* Default error color */
          }
           #deleteAdminModal .delete-admin-form-status.success { color: var(--light-green); }
+
+
+        /* NEW: Quick Reply Management Modal */
+        #quickReplyManagementModal {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 2000;
+            justify-content: center; align-items: center;
+        }
+        #quickReplyManagementModal .modal-content {
+            text-align: left;
+            width: 600px; /* Wider modal */
+            max-width: 95%; /* Responsive */
+            display: flex; /* Use flex for layout inside */
+            flex-direction: column; /* Stack list and form */
+            max-height: 90vh; /* Limit height */
+            overflow: hidden; /* Prevent modal content overflow */
+        }
+         #quickReplyManagementModal h3 { text-align: center; margin-bottom: 15px;}
+         #quickReplyManagementModal .qr-list-container {
+             flex: 1; /* Take available space */
+             overflow-y: auto; /* Scrollable list */
+             margin-bottom: 15px;
+             padding-right: 10px; /* Space for scrollbar */
+         }
+          /* Style scrollbar for QR list */
+         #quickReplyManagementModal .qr-list-container::-webkit-scrollbar { width: 8px; }
+         #quickReplyManagementModal .qr-list-container::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 10px; }
+         #quickReplyManagementModal .qr-list-container::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+         #quickReplyManagementModal .qr-list-container::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+
+         #quickReplyList { list-style: none; padding: 0; margin: 0;}
+         #quickReplyList li {
+             background: var(--quick-reply-bg);
+             padding: 10px 15px;
+             margin-bottom: 8px;
+             border-radius: 4px;
+             border: 1px solid var(--border-color);
+             display: flex; justify-content: space-between; align-items: center;
+             flex-wrap: wrap; /* Allow wrapping on smaller screens */
+             gap: 10px; /* Space between items */
+         }
+          #quickReplyList li .qr-shortcut { font-weight: bold; color: var(--primary-color); flex-shrink: 0; } /* Prevent shrinking */
+          #quickReplyList li .qr-text { flex-grow: 1; margin: 0 15px; white-space: pre-wrap; font-size: 0.9em; color: var(--text-dark);} /* Allow text to wrap and grow */
+           /* Hide text on small screens or if space is tight? Optional. */
+          @media (max-width: 450px) {
+              #quickReplyList li .qr-text {
+                  flex-basis: 100%; /* Take full width */
+                  margin: 5px 0 0 0; /* Adjust margin */
+              }
+          }
+
+
+         #quickReplyList li .qr-actions button {
+             padding: 4px 8px; font-size: 0.8em; margin-left: 5px; cursor: pointer; border: none; border-radius: 3px;
+             transition: background-color 0.2s;
+         }
+         #quickReplyList li .qr-actions .edit-qr { background-color: var(--secondary-color); color: var(--text-light); }
+         #quickReplyList li .qr-actions .edit-qr:hover { background-color: #0b6b5a; }
+         #quickReplyList li .qr-actions .delete-qr { background-color: var(--button-danger-bg); color: var(--text-light); }
+         #quickReplyList li .qr-actions .delete-qr:hover { background-color: var(--button-danger-hover); }
+
+         #quickReplyManagementModal .qr-form-container {
+             padding-top: 15px;
+             border-top: 1px solid var(--border-color);
+             flex-shrink: 0; /* Don't shrink form */
+         }
+         #quickReplyManagementModal .qr-form-container label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: var(--text-dark); }
+         #quickReplyManagementModal .qr-form-container input, #quickReplyManagementModal .qr-form-container textarea {
+              display: block; margin-bottom: 15px; padding: 10px; width: 100%;
+             border: 1px solid var(--border-color); border-radius: 4px; font-size: 1em; background: white;
+             resize: vertical; /* Allow vertical resize for textarea */
+         }
+          #quickReplyManagementModal .qr-form-container .form-buttons { text-align: center;}
+          #quickReplyManagementModal .qr-form-container .form-buttons button { width: auto; margin: 0 5px; padding: 8px 15px; }
+
+          #quickReplyManagementModal .qr-form-status {
+              font-size: 0.9em; margin-top: 10px; min-height: 1.2em;
+              text-align: center;
+              color: var(--error-color);
+          }
+           #quickReplyManagementModal .qr-form-status.success { color: var(--light-green); }
 
 
         #messages {
@@ -510,6 +602,54 @@
              opacity: 0.7;
              pointer-events: none; /* Disable interactions */
          }
+
+         /* NEW: Quick Reply Suggestions Area */
+         .quick-reply-suggestions {
+             position: absolute;
+             bottom: 100%; /* Position above reply box */
+             left: 20px;
+             right: 20px; /* Stretch to match padding */
+             max-height: 200px; /* Limit height */
+             overflow-y: auto; /* Scrollable */
+             background: white;
+             border: 1px solid var(--border-color);
+             border-radius: 8px 8px 0 0; /* Rounded top corners */
+             box-shadow: 0 -2px 5px rgba(0,0,0,0.1); /* Shadow above */
+             z-index: 10; /* Above chat messages */
+             display: none; /* Hidden by default */
+             padding: 0; /* Remove default ul padding */
+             list-style: none; /* Remove list bullets */
+             margin: 0;
+             color: var(--text-dark);
+         }
+         .quick-reply-suggestions li {
+             padding: 10px 15px;
+             cursor: pointer;
+             border-bottom: 1px solid var(--border-color);
+             font-size: 0.9em;
+             white-space: nowrap;
+             overflow: hidden;
+             text-overflow: ellipsis;
+             display: flex; /* Flex for shortcut and text */
+             gap: 10px;
+             align-items: center;
+         }
+          .quick-reply-suggestions li:last-child { border-bottom: none; } /* No border on last item */
+         .quick-reply-suggestions li:hover,
+         .quick-reply-suggestions li.selected-suggestion { /* Add class for keyboard selection */
+             background: var(--quick-reply-hover-bg);
+         }
+          .quick-reply-suggestions li .qr-suggestion-shortcut {
+              font-weight: bold;
+              color: var(--primary-color);
+              flex-shrink: 0; /* Prevent shortcut from shrinking */
+          }
+           .quick-reply-suggestions li .qr-suggestion-text {
+               flex-grow: 1; /* Allow text to take space */
+               overflow: hidden;
+               text-overflow: ellipsis;
+               white-space: nowrap;
+           }
 
 
         .reply-input-container {
@@ -763,9 +903,9 @@
                  <div class="panel-title">Super Admin Panel</div>
                 <button id="add-admin-button" title="Tambah Admin Baru"><i class="fas fa-user-plus"></i> Tambah Admin</button>
                  <button id="delete-admin-button" title="Hapus Admin"><i class="fas fa-user-minus"></i> Hapus Admin</button> <!-- New Delete Admin Button -->
+                 <button id="manage-quick-replies-button" title="Kelola Template Balas Cepat" class="manage-quick-replies-button"><i class="fas fa-reply"></i> Kelola Balas Cepat</button> <!-- NEW QR Button -->
                  <button id="delete-all-chats-button" title="Hapus Semua Riwayat Chat"><i class="fas fa-trash-alt"></i> Hapus Semua Chat</button>
-                 <button id="show-qr-button" title="Tampilkan QR Code WhatsApp"><i class="fas fa-qrcode"></i> Tampilkan QR WhatsApp</button> <!-- NEW QR Button -->
-                 <!-- Delete single chat button will be in chat area header -->
+                 <button id="show-qr-button" title="Tampilkan QR Code WhatsApp" class="show-qr-button"><i class="fas fa-qrcode"></i> Tampilkan QR WhatsApp</button> <!-- NEW QR Button -->
 
             </div>
             <div id="active-chats">
@@ -811,6 +951,10 @@
                 <div class="placeholder">Pilih percakapan untuk memulai</div>
             </div>
             <div id="reply-box" class="disabled"> <!-- Add disabled class initially -->
+                <!-- NEW: Quick Reply Suggestions List -->
+                 <ul class="quick-reply-suggestions">
+                     <!-- Suggestions populated by JS -->
+                 </ul>
                  <div class="reply-input-container">
                     <button id="media-button" title="Lampirkan Media" disabled><i class="fas fa-paperclip"></i></button>
                     <!-- Mengganti input type="text" dengan textarea -->
@@ -909,6 +1053,37 @@
          </div>
      </div>
 
+     <!-- NEW: Quick Reply Management Modal -->
+     <div id="quickReplyManagementModal" class="modal-overlay">
+         <div class="modal-content">
+             <h3>Kelola Balas Cepat</h3>
+             <div class="qr-list-container">
+                 <ul id="quickReplyList">
+                     <!-- Quick replies will be listed here by JS -->
+                      <!-- Placeholder will be added by JS if list is empty -->
+                 </ul>
+             </div>
+
+             <div class="qr-form-container">
+                 <h4>Tambah/Edit Template</h4>
+                 <input type="hidden" id="qr-edit-id"> <!-- Hidden field for editing -->
+                 <label for="qr-shortcut-input">Shortcut:</label>
+                 <!-- PERBAIKAN: Ubah regex pattern di sini -->
+                 <input type="text" id="qr-shortcut-input" placeholder="Contoh: /sapaan" pattern="^\/[a-zA-Z0-9_-]+$"> <!-- Add pattern for basic validation -->
+                 <label for="qr-text-input">Teks Template:</label>
+                 <textarea id="qr-text-input" placeholder="Masukkan teks balasan cepat di sini..." rows="3"></textarea>
+
+                 <div class="form-buttons">
+                     <button id="submit-qr-button"><i class="fas fa-save"></i> Simpan Template</button>
+                      <button id="cancel-edit-qr-button" style="display: none;"><i class="fas fa-times"></i> Batal</button> <!-- Show when editing -->
+                     <button id="add-new-qr-button"><i class="fas fa-plus"></i> Tambah Baru</button> <!-- Show when not editing -->
+                     <button class="close-modal-button" data-target-modal="quickReplyManagementModal"><i class="fas fa-times"></i> Tutup</button>
+                 </div>
+                  <div class="qr-form-status"></div> <!-- Status message for the form -->
+             </div>
+         </div>
+     </div>
+
 
     <!-- Pastikan path ini benar -->
     <script src="/socket.io/socket.io.js"></script>
@@ -970,6 +1145,20 @@
         const deleteAllChatsButton = document.getElementById('delete-all-chats-button'); // Delete All Chats Button
         const showQrButton = document.getElementById('show-qr-button'); // NEW Show QR Button
         const deleteChatButton = document.getElementById('delete-chat-button'); // Delete Single Chat Button
+        // NEW: Quick Reply Management Elements
+        const manageQuickRepliesButton = document.getElementById('manage-quick-replies-button');
+        const quickReplyManagementModal = document.getElementById('quickReplyManagementModal');
+        const quickReplyListUl = document.getElementById('quickReplyList');
+        const qrEditIdInput = document.getElementById('qr-edit-id');
+        const qrShortcutInput = document.getElementById('qr-shortcut-input');
+        const qrTextInput = document.getElementById('qr-text-input');
+        const submitQrButton = document.getElementById('submit-qr-button');
+        const cancelEditQrButton = document.getElementById('cancel-edit-qr-button');
+        const addNewQrButton = document.getElementById('add-new-qr-button');
+        const qrFormStatusDiv = quickReplyManagementModal.querySelector('.qr-form-status');
+        // NEW: Quick Reply Suggestions Elements (in reply box)
+        const quickReplySuggestionsUl = replyBox.querySelector('.quick-reply-suggestions');
+
 
         const mediaButton = document.getElementById('media-button');
         const mediaInput = document.createElement('input'); // File input for media upload
@@ -1024,6 +1213,8 @@
         let onlineAdmins = []; // Array of online admin usernames (updated via socket)
         let currentQrCode = null; // State variable to hold the last received QR code data
         let currentQrStatus = 'Memuat status WA...'; // State variable for QR/WA status text
+        let quickReplyTemplates = []; // NEW: State variable for quick reply templates [{ id, shortcut, text }]
+        let selectedSuggestionIndex = -1; // NEW: For keyboard navigation in suggestions
 
 
         // Track offline admin notifications to avoid repeated alerts for the same admin
@@ -1097,11 +1288,13 @@
                 // Show/hide Super Admin panel based on role
                 superadminPanel.style.display = (currentUserRole === 'superadmin') ? 'flex' : 'none';
 
-                 // Ensure QR button is shown only for Super Admin
+                 // Ensure QR button and Quick Reply Manage button is shown only for Super Admin
                  if (currentUserRole === 'superadmin') {
                      showQrButton.style.display = 'flex'; // Use flex for icon alignment
+                      manageQuickRepliesButton.style.display = 'flex'; // Use flex for icon alignment
                  } else {
                      showQrButton.style.display = 'none';
+                     manageQuickRepliesButton.style.display = 'none';
                  }
 
                 // Request initial data will be handled by the server logic on successful login/reconnect (via 'request_initial_data' emission)
@@ -1116,7 +1309,7 @@
                 currentUser = null;
                 currentUserRole = null; // Clear role on logout
                 localStorage.removeItem('loggedInUsername'); // Clear username
-                // localStorage.removeItem('currentUserRole'); // Optional
+                // localStorage.removeItem('currentUserRole', role); // Optional
                 loginContainer.classList.remove('hidden'); // Show login container
                 appContainer.classList.add('hidden'); // Hide app container
                 resetUI(); // Reset all UI and state
@@ -1127,6 +1320,7 @@
                  updateWhatsappStatus('Disconnected', false); // Assume disconnected on logout
                 superadminPanel.style.display = 'none'; // Hide Super Admin panel
                  showQrButton.style.display = 'none'; // Hide QR button on logout
+                 manageQuickRepliesButton.style.display = 'none'; // Hide Quick Reply Manage button on logout
 
                  // Hide and clear QR modal explicitly on logout
                  qrModal.style.display = 'none';
@@ -1134,6 +1328,8 @@
                  qrStatus.textContent = '';
                  currentQrCode = null;
                  currentQrStatus = 'Memuat status WA...'; // Reset status
+                 // Hide quick reply suggestions on logout
+                  hideQuickReplySuggestions();
             }
         }
 
@@ -1219,6 +1415,8 @@
              // Reset textarea height
             replyInput.style.height = 'auto';
             replyInput.rows = 1; // Reset rows attribute as well
+             // Hide quick reply suggestions
+             hideQuickReplySuggestions();
         }
 
         function resetUI() {
@@ -1240,12 +1438,17 @@
             showLoginError(''); // Clear login error specifically
             superadminPanel.style.display = 'none'; // Hide Super Admin panel
              showQrButton.style.display = 'none'; // Hide QR button
+             manageQuickRepliesButton.style.display = 'none'; // Hide Quick Reply Manage button
+             quickReplyTemplates = []; // Clear quick reply templates
+
              // Hide and clear QR modal on full UI reset
              qrModal.style.display = 'none';
              qrCodeDiv.innerHTML = '';
              qrStatus.textContent = '';
              currentQrCode = null;
              currentQrStatus = 'Memuat status WA...'; // Reset stored status
+             // Hide quick reply suggestions on reset
+              hideQuickReplySuggestions();
         }
 
         // --- Helper Functions ---
@@ -1296,7 +1499,7 @@
                  replyInput.disabled = false;
                  replyButton.disabled = false;
                  mediaButton.disabled = false;
-                 replyInput.placeholder = 'Ketik balasan...';
+                 replyInput.placeholder = 'Ketik balasan atau ketik "/" untuk balas cepat...'; // Updated placeholder
                  // Auto-size textarea on load for current chat
                  replyInput.style.height = 'auto';
                  replyInput.rows = 1; // Reset rows before calculating scrollHeight
@@ -1324,6 +1527,8 @@
                    // Reset textarea height when disabling
                    replyInput.style.height = 'auto';
                    replyInput.rows = 1;
+                   // Hide quick reply suggestions if reply box is disabled
+                   hideQuickReplySuggestions();
             }
 
 
@@ -1455,6 +1660,114 @@
               deleteAdminFormStatusDiv.className = 'delete-admin-form-status';
                // Disable submit button if no other admins to delete
               submitDeleteAdminButton.disabled = !hasOtherAdmins;
+        }
+
+        // NEW: Function to populate the Quick Reply management list
+        function populateQuickReplyManagementList() {
+             quickReplyListUl.innerHTML = ''; // Clear existing list
+
+             // --- FIX: Ensure quickReplyTemplates is an array before iterating ---
+             if (!Array.isArray(quickReplyTemplates) || quickReplyTemplates.length === 0) {
+                  quickReplyListUl.innerHTML = '<li>Belum ada template balas cepat.</li>';
+                  return;
+             }
+             // --- END FIX ---
+
+             quickReplyTemplates.forEach(template => {
+                  const li = document.createElement('li');
+                  li.dataset.id = template.id;
+                  li.innerHTML = `
+                     <span class="qr-shortcut">${sanitizeHTML(template.shortcut)}</span> <!-- Display /shortcut -->
+                     <span class="qr-text">${sanitizeHTML(template.text)}</span>
+                     <span class="qr-actions">
+                         <button class="edit-qr" data-id="${template.id}"><i class="fas fa-edit"></i> Edit</button>
+                         <button class="delete-qr" data-id="${template.id}"><i class="fas fa-trash"></i> Hapus</button>
+                     </span>
+                  `;
+                  quickReplyListUl.appendChild(li);
+             });
+             // Add event listeners to edit and delete buttons
+             quickReplyListUl.querySelectorAll('.edit-qr').forEach(button => {
+                  button.addEventListener('click', handleEditQuickReplyClick);
+             });
+             quickReplyListUl.querySelectorAll('.delete-qr').forEach(button => {
+                  button.addEventListener('click', handleDeleteQuickReplyClick);
+             });
+        }
+
+        // NEW: Function to handle Edit button click in QR management modal
+        function handleEditQuickReplyClick(event) {
+             const templateId = event.target.dataset.id;
+             // --- FIX: Ensure quickReplyTemplates is an array before calling find ---
+             const templateToEdit = Array.isArray(quickReplyTemplates) ? quickReplyTemplates.find(t => t.id === templateId) : null;
+             // --- END FIX ---
+
+             if (templateToEdit) {
+                  qrEditIdInput.value = templateToEdit.id;
+                  qrShortcutInput.value = templateToEdit.shortcut;
+                  qrTextInput.value = templateToEdit.text;
+
+                  // Change form state to 'editing'
+                  submitQrButton.textContent = 'Update Template';
+                  submitQrButton.classList.remove('add-new');
+                  submitQrButton.classList.add('update-existing');
+                  cancelEditQrButton.style.display = 'inline-block';
+                   addNewQrButton.style.display = 'none'; // Hide "Add New" button
+
+                  qrFormStatusDiv.textContent = 'Mengedit template...';
+                  qrFormStatusDiv.className = 'qr-form-status'; // Reset status class
+
+                  // Focus the shortcut input
+                  qrShortcutInput.focus();
+             }
+        }
+
+         // NEW: Function to handle Cancel Edit button click
+         cancelEditQrButton.addEventListener('click', (event) => {
+              event.preventDefault(); // Prevent form submission if it were inside a form
+              resetQuickReplyForm();
+         });
+
+         // NEW: Function to handle Add New button click in QR management modal
+         addNewQrButton.addEventListener('click', (event) => {
+              event.preventDefault(); // Prevent form submission
+              resetQuickReplyForm();
+              qrShortcutInput.focus(); // Focus shortcut input for new entry
+         });
+
+
+         // NEW: Function to reset the QR management form
+         function resetQuickReplyForm() {
+              qrEditIdInput.value = '';
+              qrShortcutInput.value = '';
+              qrTextInput.value = '';
+
+              submitQrButton.textContent = 'Simpan Template';
+              submitQrButton.classList.remove('update-existing');
+              submitQrButton.classList.add('add-new'); // Optional: Add class for styling if needed
+              cancelEditQrButton.style.display = 'none';
+              addNewQrButton.style.display = 'inline-block'; // Show "Add New" button
+
+              qrFormStatusDiv.textContent = ''; // Clear status
+              qrFormStatusDiv.className = 'qr-form-status'; // Reset status class
+         }
+
+        // NEW: Function to handle Delete button click in QR management modal
+        function handleDeleteQuickReplyClick(event) {
+             const templateId = event.target.dataset.id;
+             // --- FIX: Ensure quickReplyTemplates is an array before calling find ---
+             const templateToDelete = Array.isArray(quickReplyTemplates) ? quickReplyTemplates.find(t => t.id === templateId) : null;
+             // --- END FIX ---
+
+             if (templateToDelete) {
+                  if (confirm(`Anda yakin ingin menghapus template "${sanitizeHTML(templateToDelete.shortcut)}"?`)) { // Use shortcut in confirmation
+                       console.log(`[UI] Super Admin ${currentUser} menghapus template QR: ${templateToDelete.shortcut}`);
+                       // Emit socket event to delete
+                       // --- FIX: Send template ID for deletion ---
+                       socket.emit('delete_quick_reply', { id: templateId });
+                       // --- END FIX ---
+                  }
+             }
         }
 
 
@@ -1608,6 +1921,8 @@
 
                      // Update unread indicator for the newly selected chat (should become hidden)
                      updateUnreadIndicator(chatId); // This will hide the indicator
+                     // Hide quick reply suggestions when switching chats
+                      hideQuickReplySuggestions();
 
                 });
 
@@ -2086,6 +2401,94 @@
         }
 
 
+        // NEW: Quick Reply Suggestion Handling
+        function showQuickReplySuggestions(filterText) {
+             // Hide if reply box is disabled
+             if (replyBox.classList.contains('disabled')) {
+                  hideQuickReplySuggestions();
+                  return;
+             }
+
+             // --- FIX: Ensure quickReplyTemplates is an array before filtering ---
+             const templatesToFilter = Array.isArray(quickReplyTemplates) ? quickReplyTemplates : [];
+             // --- END FIX ---
+
+             const filteredTemplates = templatesToFilter.filter(template =>
+                 template.shortcut.toLowerCase().includes(filterText.toLowerCase()) ||
+                 template.text.toLowerCase().includes(filterText.toLowerCase()) // Also search in text
+             );
+
+             quickReplySuggestionsUl.innerHTML = ''; // Clear previous suggestions
+
+             if (filteredTemplates.length === 0) {
+                 hideQuickReplySuggestions();
+                 return;
+             }
+
+             filteredTemplates.forEach((template, index) => {
+                 const li = document.createElement('li');
+                 li.dataset.shortcut = template.shortcut; // Store shortcut for use
+                  li.dataset.text = template.text; // Store full text
+                  li.dataset.index = index; // Store index for keyboard nav
+
+                 li.innerHTML = `
+                     <span class="qr-suggestion-shortcut">${sanitizeHTML(template.shortcut)}</span> <!-- Display /shortcut -->
+                     <span class="qr-suggestion-text">${sanitizeHTML(template.text)}</span>
+                 `;
+
+                 li.addEventListener('click', handleSuggestionClick);
+                 quickReplySuggestionsUl.appendChild(li);
+             });
+
+             quickReplySuggestionsUl.style.display = 'block'; // Show the suggestion list
+             selectedSuggestionIndex = -1; // Reset selection index
+         }
+
+
+        function hideQuickReplySuggestions() {
+            quickReplySuggestionsUl.style.display = 'none';
+             quickReplySuggestionsUl.innerHTML = '';
+             selectedSuggestionIndex = -1; // Reset index when hiding
+        }
+
+        function handleSuggestionClick(event) {
+            const selectedText = event.currentTarget.dataset.text;
+            applyQuickReplyTemplate(selectedText);
+             hideQuickReplySuggestions(); // Hide suggestions after selection
+             replyInput.focus(); // Put focus back on input
+        }
+
+        function applyQuickReplyTemplate(templateText) {
+             const currentValue = replyInput.value;
+             const lastSlashIndex = currentValue.lastIndexOf('/');
+
+             if (lastSlashIndex !== -1) {
+                 // Replace the part from the last slash onwards with the template text
+                 const prefix = currentValue.substring(0, lastSlashIndex);
+                 replyInput.value = prefix + templateText;
+             } else {
+                 // If no slash found (shouldn't happen if triggered correctly), just replace everything
+                 replyInput.value = templateText;
+             }
+
+             // Auto-size textarea after applying template
+             replyInput.style.height = 'auto'; // Reset height to calculate scrollHeight correctly
+             replyInput.style.height = replyInput.scrollHeight + 'px'; // Set height to fit content
+        }
+
+         function updateSelectedSuggestionHighlight() {
+             const suggestions = quickReplySuggestionsUl.querySelectorAll('li');
+             suggestions.forEach((li, index) => {
+                  li.classList.remove('selected-suggestion');
+                  if (index === selectedSuggestionIndex) {
+                       li.classList.add('selected-suggestion');
+                       // Optional: Scroll the selected item into view
+                       li.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                  }
+             });
+         }
+
+
         // --- Socket Event Handlers ---
 
         socket.on('connect', () => {
@@ -2111,7 +2514,7 @@
             // Set the login state and initial picks
             setLoginState(true, username, role, currentPicks);
             updateWhatsappStatus('Connected', true);
-            // Request the rest of the initial data (chat history, registered admins)
+            // Request the rest of the initial data (chat history, registered admins, quick replies)
             socket.emit('request_initial_data');
              // On successful reconnect, ensure QR modal is hidden and state cleared
              currentQrCode = null;
@@ -2170,6 +2573,8 @@
                  updateWhatsappStatus(`WebSocket terputus: ${reason}`, false); // Update status variable and sidebar
                  updateQrModalContent(); // Update modal content if open
              }
+             // Hide quick reply suggestions on disconnect
+              hideQuickReplySuggestions();
         });
 
         socket.on('login_success', ({ username, initials, role, currentPicks }) => {
@@ -2179,7 +2584,7 @@
             // WhatsApp status will be updated by a separate WA event handler
             // updateWhatsappStatus('Connected', true); // Let WA event handle this
 
-            // Request initial chat data after successful login
+            // Request initial chat data, admins, and quick replies after successful login
             socket.emit('request_initial_data');
 
              // On successful login, ensure QR modal is hidden and state cleared
@@ -2285,23 +2690,33 @@
 
         // --- Initial Data & Message Handling ---
 
-        socket.on('initial_data', ({ chatHistory: initialChatHistory, admins: registeredAdminList, currentUserRole: role }) => {
-            console.log('[SOCKET] Received initial data:', Object.keys(initialChatHistory).length, 'chats');
+        socket.on('initial_data', ({ chatHistory: initialChatHistory, admins: registeredAdminList, currentUserRole: role, quickReplies: initialQuickReplies }) => {
+            console.log('[SOCKET] Received initial data:', Object.keys(initialChatHistory || {}).length, 'chats'); // Added || {} for safety
             console.log('[SOCKET] Received registered admins:', registeredAdminList);
+            // --- FIX: Safely check if initialQuickReplies is an array ---
+            console.log('[SOCKET] Received quick replies:', (Array.isArray(initialQuickReplies) ? initialQuickReplies.length : 'invalid'), 'templates');
+            quickReplyTemplates = Array.isArray(initialQuickReplies) ? initialQuickReplies : []; // Ensure quickReplyTemplates is always an array
+            // --- END FIX ---
+
+
              registeredAdmins = registeredAdminList || {}; // Store registered admins
              currentUserRole = role; // Ensure current user role is set
+
 
             // Update admin dropdowns and super admin panel visibility
             populateDelegateChatSelect(); // Populate delegate select now that registered admins are known
              populateDeleteAdminSelect(); // Populate delete admin select
              superadminPanel.style.display = (currentUserRole === 'superadmin') ? 'flex' : 'none'; // Show/hide panel
 
-             // Ensure QR button is shown only for Super Admin
+             // Ensure QR button and Quick Reply Manage button is shown only for Super Admin
              if (currentUserRole === 'superadmin') {
                  showQrButton.style.display = 'flex'; // Use flex for icon alignment
+                  manageQuickRepliesButton.style.display = 'flex'; // Use flex for icon alignment
              } else {
                  showQrButton.style.display = 'none';
+                 manageQuickRepliesButton.style.display = 'none';
              }
+
 
             // On receiving initial data after login/reconnect, clear any old QR display state
              currentQrCode = null; // Clear stored QR data
@@ -2357,7 +2772,7 @@
         });
 
         socket.on('chat_history', ({ chatId, messages, status }) => {
-           console.log(`[SOCKET] Received history for chat ${chatId}:`, messages.length, 'messages', 'status:', status);
+           console.log(`[SOCKET] Received history for chat ${chatId}:`, (messages || []).length, 'messages', 'status:', status); // Added || [] for safety
            // Update the chat history state for this specific chat
            if (!chatHistory[chatId]) chatHistory[chatId] = {}; // Ensure the chat entry exists
            chatHistory[chatId].status = status || 'open'; // Update/set status
@@ -2425,7 +2840,7 @@
 
 
           // Add the new message to the history state if it's not a duplicate
-          if (!chatHistory[chatId].messages.some(msg => msg.id === messageId)) {
+          if (!chatHistory[chatId].messages.some(m => m.id === messageId)) {
              chatHistory[chatId].messages.push(data);
              console.log(`[HISTORY] Added new message (ID: ${messageId}, Type: ${data.type}) to history for chat ${chatId}`);
 
@@ -2651,12 +3066,25 @@
             console.log('[SOCKET] Received updated registered admins:', registeredAdminList);
             registeredAdmins = registeredAdminList || {}; // Update the registered admins state
              // Repopulate the delegate select dropdown as the list of potential delegates has changed
-            populateDelegateChatSelect();
-             populateDeleteAdminSelect(); // Also update delete admin select
+            populateDelegateAdminSelect(); // Also update delete admin select
              // Also update Super Admin panel visibility if needed (though should be set on login)
              if (currentUserRole === 'superadmin') {
                  superadminPanel.style.display = 'flex';
              }
+        });
+
+        // NEW: Quick Reply Templates Update Event
+        socket.on('quick_reply_templates_updated', (templates) => {
+             // --- FIX: Safely store the templates ---
+             console.log('[SOCKET] Received updated quick reply templates:', (Array.isArray(templates) ? templates.length : 'invalid'), 'templates');
+             quickReplyTemplates = Array.isArray(templates) ? templates : []; // Update the local state
+             // --- END FIX ---
+
+             // If the QR management modal is open, update the list display
+             if (quickReplyManagementModal.style.display !== 'none') {
+                 populateQuickReplyManagementList();
+             }
+             // No need to update suggestions list here, it's rebuilt on input change
         });
 
         // --- Super Admin Event Handlers ---
@@ -2688,6 +3116,24 @@
 
                submitDeleteAdminButton.disabled = deleteAdminSelect.value === "" || !registeredAdmins || Object.keys(registeredAdmins).filter(u => u !== currentUser).length === 0; // Re-evaluate disable state
                deleteAdminSelect.disabled = false;
+
+             // If QR management modal is open, show error there too
+             if (quickReplyManagementModal.style.display !== 'none') {
+                 qrFormStatusDiv.textContent = message;
+                 qrFormStatusDiv.className = 'qr-form-status error';
+                 // Re-enable form elements and buttons
+                 qrShortcutInput.disabled = false;
+                 qrTextInput.disabled = false;
+                 submitQrButton.disabled = false;
+                  // Re-evaluate add/cancel button visibility state
+                  if (qrEditIdInput.value) { // Editing
+                      cancelEditQrButton.style.display = 'inline-block';
+                      addNewQrButton.style.display = 'none';
+                  } else { // Adding
+                      cancelEditQrButton.style.display = 'none';
+                      addNewQrButton.style.display = 'inline-block';
+                  }
+             }
         });
 
         socket.on('superadmin_success', ({ message }) => {
@@ -2718,9 +3164,23 @@
                      deleteAdminSelect.disabled = false;
                     setTimeout(() => deleteAdminModal.style.display = 'none', 1500); // Close modal on success
                }
+
+              // If QR management modal is open, show success there and reset form
+              if (quickReplyManagementModal.style.display !== 'none') {
+                 qrFormStatusDiv.textContent = message;
+                 qrFormStatusDiv.className = 'qr-form-status success';
+                 resetQuickReplyForm(); // Reset the form after success
+                  // Re-enable form elements and buttons
+                  qrShortcutInput.disabled = false;
+                  qrTextInput.disabled = false;
+                  submitQrButton.disabled = false;
+              }
+
+
              // After success, re-populate relevant dropdowns just in case
              populateDelegateChatSelect();
              populateDeleteAdminSelect();
+             // Quick Reply templates are updated by the separate 'quick_reply_templates_updated' event.
         });
 
          socket.on('chat_history_deleted', ({ chatId }) => {
@@ -3066,6 +3526,10 @@
                                 // Optional: clear the rendered QR if closing, but keep data in currentQrCode
                                 // qrCodeDiv.innerHTML = '';
                            }
+                            // If closing QR management modal, reset the form
+                            if (modalId === 'quickReplyManagementModal') {
+                                 resetQuickReplyForm();
+                            }
                      }
                  }
              });
@@ -3144,6 +3608,67 @@
                   // This shouldn't happen if button is hidden, but for safety
                   showServerAlert('Akses ditolak. Anda bukan Super Admin.', false);
              }
+         });
+
+         // NEW: Manage Quick Replies button click handler (Super Admin Function)
+         manageQuickRepliesButton.addEventListener('click', () => {
+              // Only allow Super Admin to click this button
+             if (currentUserRole === 'superadmin') {
+                  quickReplyManagementModal.style.display = 'flex'; // Show modal
+                  populateQuickReplyManagementList(); // Populate list when opening
+                  resetQuickReplyForm(); // Reset form to 'add new' state
+             } else {
+                  showServerAlert('Akses ditolak. Anda bukan Super Admin.', false);
+             }
+         });
+
+         // NEW: Submit Quick Reply form handler (Super Admin Function)
+         submitQrButton.addEventListener('click', () => {
+              if (currentUserRole !== 'superadmin') {
+                   showServerAlert('Akses ditolak.', false);
+                   return;
+              }
+
+              const id = qrEditIdInput.value || null; // Will be null for new templates
+              const shortcut = qrShortcutInput.value.trim().toLowerCase(); // Always lowercase shortcut
+              const text = qrTextInput.value.trim();
+
+              // Basic frontend validation
+              if (!shortcut || !text) {
+                  qrFormStatusDiv.textContent = 'Shortcut dan teks template harus diisi.';
+                  qrFormStatusDiv.className = 'qr-form-status error';
+                  return;
+              }
+
+              // --- FIX: Validate shortcut format using the same regex as pattern ---
+              const shortcutValidationRegex = /^\/[a-z0-9_-]+$/;
+              if (!shortcutValidationRegex.test(shortcut)) {
+                   qrFormStatusDiv.textContent = 'Shortcut harus diawali dengan "/" dan hanya berisi huruf kecil, angka, hyphen (-), atau underscore (_).';
+                   qrFormStatusDiv.className = 'qr-form-status error';
+                   return;
+              }
+              // --- END FIX ---
+
+
+              qrFormStatusDiv.textContent = id ? 'Menyimpan perubahan...' : 'Menambah template...';
+              qrFormStatusDiv.className = 'qr-form-status'; // Clear previous class
+
+              // Disable form elements and buttons while processing
+              qrShortcutInput.disabled = true;
+              qrTextInput.disabled = true;
+              submitQrButton.disabled = true;
+              cancelEditQrButton.disabled = true; // Disable cancel/add while saving
+              addNewQrButton.disabled = true;
+
+
+              if (id) { // Editing existing
+                   console.log(`[UI] Super Admin ${currentUser} mengupdate template QR ID ${id}`);
+                   socket.emit('update_quick_reply', { id, shortcut, text });
+              } else { // Adding new
+                   console.log(`[UI] Super Admin ${currentUser} menambah template QR shortcut ${shortcut}`); // Log cleaned shortcut
+                   socket.emit('add_quick_reply', { shortcut, text }); // Emit cleaned shortcut
+              }
+              // Server will respond with superadmin_success/error and update via quick_reply_templates_updated
          });
 
 
@@ -3234,6 +3759,7 @@
                 replyButton.disabled = true;
                 mediaButton.disabled = true; // Disable media button too
                  hideSendError(); // Hide any previous error message
+                hideQuickReplySuggestions(); // Hide suggestions when sending
 
                  console.log('[UI] Sending message:', messageData); // Log message data before sending
                 socket.emit('reply_message', messageData); // Emit reply event
@@ -3256,17 +3782,90 @@
 
         // Allow sending message on Enter key press in textarea (Shift+Enter for newline)
         replyInput.addEventListener('keypress', (e) => {
+            // If suggestion list is visible, Enter key selects a suggestion instead of sending
+            if (quickReplySuggestionsUl.style.display !== 'none' && selectedSuggestionIndex !== -1 && e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault(); // Prevent newline AND prevent sending
+                // Trigger click on the selected suggestion item
+                const selectedSuggestion = quickReplySuggestionsUl.querySelector('li.selected-suggestion');
+                if (selectedSuggestion) {
+                     selectedSuggestion.click(); // This will call handleSuggestionClick
+                }
+                 return; // Stop further processing
+            }
+
+            // Otherwise, handle Enter for sending if not Shift+Enter
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault(); // Prevent default newline on Enter
                 replyButton.click(); // Trigger reply button click
             }
         });
 
-         // Auto-resize textarea based on content
+         // NEW: Handle Keyboard Navigation for Quick Reply Suggestions
+         replyInput.addEventListener('keydown', (e) => {
+             const isSuggestionsVisible = quickReplySuggestionsUl.style.display !== 'none';
+             const suggestions = quickReplySuggestionsUl.querySelectorAll('li');
+             const numSuggestions = suggestions.length;
+
+             if (!isSuggestionsVisible || numSuggestions === 0) return; // Only proceed if suggestions are shown
+
+             if (e.key === 'ArrowDown') {
+                  e.preventDefault(); // Prevent cursor movement in textarea
+                  selectedSuggestionIndex = (selectedSuggestionIndex + 1) % numSuggestions;
+                  updateSelectedSuggestionHighlight();
+             } else if (e.key === 'ArrowUp') {
+                  e.preventDefault(); // Prevent cursor movement in textarea
+                  selectedSuggestionIndex = (selectedSuggestionIndex - 1 + numSuggestions) % numSuggestions;
+                  updateSelectedSuggestionHighlight();
+             } else if (e.key === 'Escape') {
+                  e.preventDefault(); // Prevent default escape behavior
+                  hideQuickReplySuggestions(); // Hide suggestions
+             }
+             // Note: Enter key handling is done in the 'keypress' listener above
+         });
+
+
+         // NEW: Handle Quick Reply Shortcut Typing
          replyInput.addEventListener('input', () => {
+             // Auto-size textarea based on content
              replyInput.style.height = 'auto'; // Reset height to calculate scrollHeight correctly
              replyInput.style.height = replyInput.scrollHeight + 'px'; // Set height to fit content
+
+             const currentValue = replyInput.value;
+             const lastSlashIndex = currentValue.lastIndexOf('/');
+
+             // Check if a slash is typed and it's the last character (or followed by something)
+             // And ensure the cursor is right after the slash or within the potential shortcut
+             const cursorPosition = replyInput.selectionStart;
+             const textAfterLastSlash = lastSlashIndex !== -1 ? currentValue.substring(lastSlashIndex + 1, cursorPosition) : '';
+
+             // Only show suggestions if:
+             // 1. A slash is present AND
+             // 2. The cursor is right after the slash, or within the typed text after the slash
+             // 3. The text before the cursor after the slash contains only allowed characters for a shortcut part
+             const isValidShortcutCharPart = /^[a-z0-9_-]*$/.test(textAfterLastSlash);
+
+
+             if (lastSlashIndex !== -1 && cursorPosition > lastSlashIndex && isValidShortcutCharPart) {
+                 const filterText = currentValue.substring(lastSlashIndex); // Filter includes the '/'
+                 showQuickReplySuggestions(filterText);
+             } else {
+                 // If no slash, or cursor is before the slash, or invalid character typed after slash, hide suggestions
+                 hideQuickReplySuggestions();
+             }
          });
+
+         // Hide quick reply suggestions when clicking anywhere outside the input/suggestions area
+         document.addEventListener('click', (e) => {
+             const isClickInsideReplyBox = replyBox.contains(e.target);
+             const isClickInsideSuggestions = quickReplySuggestionsUl.contains(e.target);
+
+             if (!isClickInsideReplyBox && !isClickInsideSuggestions) {
+                  hideQuickReplySuggestions();
+             }
+              // Close modals when clicking outside (generic modal overlay handles this)
+         });
+
+
 
         // --- Initialization ---
 

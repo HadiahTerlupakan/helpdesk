@@ -1,4 +1,4 @@
-// backend.js atau server.js (atau file yang sesuai)
+// backend.js
 
 import { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } from 'baileys';
 import express from 'express';
@@ -17,12 +17,15 @@ import session from 'express-session';
 import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
-import config from './config.js'; // Pastikan file ini ada dan sudah diperbarui
+import config from './config.js';
 import { fileURLToPath } from 'url';
+// uuidv4 hanya perlu jika Anda ingin ID yang berbeda dari encoded shortcut,
+// tapi untuk konsistensi, kita bisa gunakan encoded shortcut sebagai ID juga.
+// import { v4 as uuidv4 } from 'uuid';
 
 // Firebase Imports
 import { getDatabase, ref, child, get, set, remove } from 'firebase/database';
-import { app as firebaseApp, database } from './firebaseConfig.js'; // Pastikan file ini ada
+import { app as firebaseApp, database } from './firebaseConfig.js';
 
 // --- Konfigurasi & State ---
 let admins = {}; // { username: { password, initials, role } } - Akan dimuat dari Firebase
@@ -30,7 +33,7 @@ const adminSockets = {}; // socket ID -> { username: '...', role: '...' } // Men
 const usernameToSocketId = {}; // username -> socket ID
 const pickedChats = {}; // chatId (normalized) -> username // State di backend untuk chat yang diambil
 const chatReleaseTimers = {}; // chatId (normalized) -> setTimeout ID
-const __filename = fileURLToPath(import.meta.url);
+const __filename = fileURLToPath(import.meta.url); // Menggunakan fileURLToPath yang benar
 const __dirname = path.dirname(__filename);
 // Struktur chatHistory: { encodedChatId: { status: 'open'|'closed', messages: [...] } }
 let chatHistory = {};
@@ -40,8 +43,9 @@ let sock; // Variabel global untuk instance socket Baileys
 let qrDisplayed = false;
 
 // --- QUICK REPLY TEMPLATES ---
-// Struktur quickReplyTemplates: { shortcut: { text: string } }
-// Kunci map ini adalah shortcut yang sebenarnya (sudah didecode)
+// Struktur quickReplyTemplates: { shortcut: { id: string, text: string, shortcut: string } }
+// Kunci map ini di backend adalah shortcut yang sebenarnya (sudah didecode), diawali '/'.
+// ID template adalah versi encoded dari shortcut.
 let quickReplyTemplates = {};
 // --- END QUICK REPLY TEMPLATES ---
 
@@ -57,107 +61,172 @@ async function loadDataFromFirebase() {
 
     try {
         // Muat Chat History
+        console.log('[FIREBASE] Mencoba memuat riwayat chat...');
         const historySnapshot = await get(child(dbRef, 'chatHistory'));
         if (historySnapshot.exists()) {
             chatHistory = historySnapshot.val();
             console.log('[FIREBASE] Riwayat chat berhasil dimuat dari Firebase.');
              // Pastikan struktur history sesuai harapan jika dimuat
             for (const encodedChatId in chatHistory) {
+                 // Tambahkan cek `hasOwnProperty` untuk menghindari properti prototipe
+                 if (!Object.prototype.hasOwnProperty.call(chatHistory, encodedChatId)) continue;
+
                  if (chatHistory[encodedChatId]) {
-                     // Handle data lama tanpa array messages atau status
+                     const decodedChatId = decodeFirebaseKey(encodedChatId);
+                      // Handle data lama tanpa array messages atau status
                      if (!chatHistory[encodedChatId].messages) {
-                        console.warn(`[FIREBASE] Mengkonversi struktur chat history lama untuk ${decodeFirebaseKey(encodedChatId)}: Menambahkan array 'messages'.`);
-                        // Asumsi data lama adalah array messages langsung
-                        chatHistory[encodedChatId] = { status: 'open', messages: chatHistory[encodedChatId] };
+                        console.warn(`[FIREBASE] Mengkonversi struktur chat history lama untuk ${decodedChatId}: Menambahkan array 'messages'.`);
+                         // Coba konversi jika data lama adalah array pesan langsung (ini hanya tebakan, tergantung data Anda)
+                        if (Array.isArray(chatHistory[encodedChatId])) {
+                             chatHistory[encodedChatId] = { status: 'open', messages: chatHistory[encodedChatId] };
+                             console.warn(`[FIREBASE] Data chat history ${decodedChatId} dikonversi dari array ke objek.`);
+                        } else {
+                            // Jika bukan array dan bukan objek dengan messages, kemungkinan data rusak
+                             console.error(`[FIREBASE] Struktur data chat history untuk ${decodedChatId} tidak dikenali (bukan array atau objek dengan messages). Mengosongkan pesan.`);
+                             chatHistory[encodedChatId].messages = []; // Kosongkan messages array saja
+                             // delete chatHistory[encodedChatId]; // Opsi: hapus entri rusak total
+                             // continue; // Lanjut ke chat berikutnya
+                        }
                      }
                      if (!chatHistory[encodedChatId].status) {
-                        console.warn(`[FIREBASE] Menambahkan status default 'open' untuk chat ${decodeFirebaseKey(encodedChatId)}.`);
+                        console.warn(`[FIREBASE] Menambahkan status default 'open' untuk chat ${decodedChatId}.`);
                         chatHistory[encodedChatId].status = 'open'; // Set status default jika tidak ada
                      }
-                     // Clean up potentially invalid entries
+                     // Clean up potentially invalid entries if 'messages' is present but not array
                      if (!Array.isArray(chatHistory[encodedChatId].messages)) {
-                         console.error(`[FIREBASE] Chat history untuk ${decodeFirebaseKey(encodedChatId)} memiliki struktur 'messages' yang tidak valid. Mengosongkan pesan.`);
+                         console.error(`[FIREBASE] Chat history untuk ${decodedChatId} memiliki struktur 'messages' yang tidak valid (bukan array). Mengosongkan pesan.`);
                           chatHistory[encodedChatId].messages = [];
                      }
+                      // Pastikan setiap pesan di dalam array memiliki ID. Ini krusial untuk deduplikasi.
+                      if (Array.isArray(chatHistory[encodedChatId].messages)) {
+                          chatHistory[encodedChatId].messages = chatHistory[encodedChatId].messages.filter(msg => {
+                               // Tambahkan cek untuk null/undefined message objek itu sendiri
+                               if (!msg || typeof msg !== 'object' || !msg.id) {
+                                   console.warn(`[FIREBASE] Pesan tidak valid (null/undefined atau tanpa ID) ditemukan di chat ${decodedChatId}. Menghapusnya dari memori.`);
+                                   return false; // Filter out invalid messages
+                               }
+                               return true; // Keep valid messages
+                          });
+                      }
+
                  } else {
-                     // Handle null or invalid entry at top level
-                     console.warn(`[FIREBASE] Entri chat history tidak valid ditemukan dan dihapus: ${encodedChatId}`);
+                     // Handle null or invalid entry at top level for a chat ID
+                     const decodedKey = decodeFirebaseKey(encodedChatId);
+                     console.warn(`[FIREBASE] Entri chat history tidak valid ditemukan dan dihapus: ${decodedKey} (Encoded: ${encodedChatId})`);
                      delete chatHistory[encodedChatId];
                  }
             }
+             // Setelah semua divalidasi, bersihkan key Firebase yang mungkin invalid
+             for (const encodedChatId in chatHistory) {
+                  if (!Object.prototype.hasOwnProperty.call(chatHistory, encodedChatId)) continue;
+                  const decodedChatId = decodeFirebaseKey(encodedChatId);
+                   if (!decodedChatId) { // Jika decoding gagal, key-nya mungkin memang tidak valid
+                        console.error(`[FIREBASE] Key Firebase chat history tidak valid saat decode: ${encodedChatId}. Menghapusnya.`);
+                        delete chatHistory[encodedChatId];
+                        continue; // Lanjut ke chat berikutnya
+                   }
+             }
+
+
         } else {
             console.log('[FIREBASE] Tidak ada riwayat chat di Firebase.');
-            chatHistory = {};
+            chatHistory = {}; // Pastikan chatHistory adalah objek kosong jika tidak ada data
         }
 
         // Muat Admins
+        console.log('[FIREBASE] Mencoba memuat data admin...');
         const adminsSnapshot = await get(child(dbRef, 'admins'));
         if (adminsSnapshot.exists()) {
             admins = adminsSnapshot.val();
             console.log('[FIREBASE] Data admin berhasil dimuat dari Firebase.');
              // Validasi dasar untuk superadmin
+             if (!admins || Object.keys(admins).length === 0) {
+                 console.error('[FIREBASE] TIDAK ADA DATA ADMIN DITEMUKAN DI DATABASE! Silakan tambahkan Super Admin secara manual di Firebase DB atau gunakan config.js.');
+                 admins = config.admins || {}; // Fallback to config if DB is empty
+                  if (Object.keys(admins).length > 0) {
+                       console.log('[FIREBASE] Menggunakan admin dari config.js sebagai fallback.');
+                       saveAdminsToFirebase(); // Save config admins if DB was empty
+                  }
+             }
+
              if (!admins[superAdminUsername] || admins[superAdminUsername].role !== 'superadmin') {
-                 console.warn(`[FIREBASE] PERINGATAN: Super Admin '${superAdminUsername}' tidak ditemukan atau tidak memiliki role 'superadmin' di Firebase. Beberapa fungsi mungkin tidak tersedia.`);
+                 console.warn(`[FIREBASE] PERINGATAN: Super Admin username '${superAdminUsername}' dari config.js tidak ditemukan atau tidak memiliki role 'superadmin' di Firebase admins yang dimuat.`);
+                  const actualSuperAdmins = Object.keys(admins).filter(user => admins[user]?.role === 'superadmin');
+                  if (actualSuperAdmins.length === 0) {
+                       console.error('[FIREBASE] TIDAK ADA SUPER ADMIN DITEMUKAN DI DATABASE SETELAH MEMUAT! Fungsionalitas super admin tidak akan bekerja.');
+                  } else if (actualSuperAdmins.length === 1) {
+                       console.warn(`[FIREBASE] Super Admin aktif di database adalah '${actualSuperAdmins[0]}'. Pastikan config.superAdminUsername sesuai jika ingin menggunakan '${superAdminUsername}'.`);
+                       // Update config.superAdminUsername in memory if there's exactly one superadmin and it doesn't match?
+                       // No, better to warn and rely on the one in DB if config doesn't match a superadmin.
+                  } else {
+                       console.warn(`[FIREBASE] Beberapa Super Admin ditemukan di database: ${actualSuperAdmins.join(', ')}. config.superAdminUsername adalah '${superAdminUsername}'.`);
+                  }
+
              }
         } else {
-            console.warn('[FIREBASE] Tidak ada data admin di Firebase. Menggunakan data dari config.js sebagai default.');
-            // Jika tidak ada admin di Firebase, gunakan yang dari config sebagai default
-             admins = config.admins;
-             console.log('[FIREBASE] Menggunakan admin dari config.js.');
-             // Opsional: Simpan admin dari config ke Firebase untuk pertama kali
-             // Hanya lakukan ini jika ANDA YAKIN ingin menimpa Firebase jika kosong
-             // saveAdminsToFirebase(); // Panggil ini sekali saat tidak ada admin di DB
+            console.warn('[FIREBASE] Tidak ada data admin di Firebase.');
+             admins = config.admins || {}; // Fallback to config if DB is empty
+              if (Object.keys(admins).length > 0) {
+                 console.log('[FIREBASE] Menggunakan admin dari config.js.');
+                 saveAdminsToFirebase(); // Simpan admin dari config ke Firebase untuk pertama kali jika DB kosong
+              } else {
+                  console.error('[FIREBASE] TIDAK ADA DATA ADMIN DITEMUKAN DI CONFIG.JS ATAU FIREBASE! Tidak ada admin yang bisa login.');
+              }
         }
 
         // --- QUICK REPLY TEMPLATES ---
         // Muat Quick Reply Templates
+        console.log('[FIREBASE] Mencoba memuat quick reply templates...');
         const templatesSnapshot = await get(child(dbRef, 'quickReplyTemplates'));
+        quickReplyTemplates = {}; // Reset in-memory state to ensure it's an object
         if (templatesSnapshot.exists()) {
             const firebaseTemplates = templatesSnapshot.val();
-            quickReplyTemplates = {}; // Reset in-memory state
-            // Convert Firebase data (encoded keys) to in-memory state (decoded keys)
-            for (const encodedShortcut in firebaseTemplates) {
-                const templateData = firebaseTemplates[encodedShortcut];
-                const shortcut = decodeFirebaseKey(encodedShortcut);
-                // Basic validation for loaded data structure
-                if (shortcut && templateData && typeof templateData.text === 'string') {
-                    // Validate shortcut format even after decoding, just in case old data was bad
-                     if (!shortcut.startsWith('/')) {
-                         console.warn(`[FIREBASE] Template dengan shortcut tidak valid '${shortcut}' (encoded: ${encodedShortcut}) diabaikan saat memuat.`);
-                          continue; // Skip invalid templates
-                     }
-                    quickReplyTemplates[shortcut] = { text: templateData.text };
-                } else {
-                     console.warn(`[FIREBASE] Entri template tidak valid ditemukan dan dihapus: ${encodedShortcut}`, templateData);
-                     // Optionally delete invalid entry from Firebase if you encounter it here frequently
-                     // remove(child(dbRef, `quickReplyTemplates/${encodedShortcut}`));
+            if (firebaseTemplates && typeof firebaseTemplates === 'object') { // Ensure it's an object
+                for (const encodedShortcut in firebaseTemplates) {
+                     // Tambahkan cek `hasOwnProperty`
+                    if (!Object.prototype.hasOwnProperty.call(firebaseTemplates, encodedShortcut)) continue;
+
+                    const templateData = firebaseTemplates[encodedShortcut];
+                    const shortcut = decodeFirebaseKey(encodedShortcut);
+                     // Validasi data sebelum menambahkan ke state
+                    if (shortcut && shortcut.startsWith('/') && typeof templateData.text === 'string') {
+                        // Generating a stable ID from encoded shortcut
+                        const templateId = encodedShortcut;
+                        quickReplyTemplates[shortcut] = { id: templateId, shortcut: shortcut, text: templateData.text };
+                    } else {
+                         console.warn(`[FIREBASE] Entri template tidak valid ditemukan di DB: ${encodedShortcut}`, templateData);
+                         // Tidak perlu menghapus dari DB di sini, fungsi save akan membersihkan yang tidak valid
+                    }
                 }
+                console.log(`[FIREBASE] ${Object.keys(quickReplyTemplates).length} quick reply templates berhasil dimuat dari Firebase.`);
+            } else {
+                console.warn('[FIREBASE] Data quick reply templates di Firebase tidak valid (bukan objek). Mengabaikan data tersebut.');
+                 quickReplyTemplates = {}; // Pastikan state tetap objek kosong
             }
-            console.log(`[FIREBASE] ${Object.keys(quickReplyTemplates).length} quick reply templates berhasil dimuat dari Firebase.`);
         } else {
             console.log('[FIREBASE] Tidak ada quick reply templates di Firebase.');
-            quickReplyTemplates = {}; // Ensure state is empty
+             quickReplyTemplates = {}; // Pastikan state adalah objek kosong jika tidak ada data
         }
         // --- END QUICK REPLY TEMPLATES ---
 
 
     } catch (error) {
         console.error('[FIREBASE] Gagal memuat data dari Firebase:', error);
-        // Handle error - mungkin perlu keluar atau mencoba lagi
-         throw error; // Lempar error agar proses start terhenti jika gagal muat data kritis
+         // Ini adalah error fatal saat startup, re-throw untuk menghentikan server
+         throw error;
     }
 }
 
 // Menyimpan Chat History ke Firebase
 function saveChatHistoryToFirebase() {
+    // console.log('[FIREBASE] Menyimpan riwayat chat ke Firebase...'); // Disable verbose logging
     const dbRef = ref(database, 'chatHistory');
-    // Firebase tidak mengizinkan undefined, ubah menjadi null jika ada.
-    // Gunakan replacer function untuk JSON.stringify.
+    // Filter undefined values just in case, although serializing should handle it
     const sanitizedChatHistory = JSON.parse(JSON.stringify(chatHistory, (key, value) => value === undefined ? null : value));
 
     set(dbRef, sanitizedChatHistory)
         .then(() => {
-            // console.log('[FIREBASE] Riwayat chat berhasil disimpan ke Firebase.');
+            // console.log('[FIREBASE] Riwayat chat berhasil disimpan ke Firebase.'); // Disable verbose logging
         })
         .catch((error) => {
             console.error('[FIREBASE] Gagal menyimpan riwayat chat ke Firebase:', error);
@@ -167,16 +236,12 @@ function saveChatHistoryToFirebase() {
 // Menyimpan Data Admin ke Firebase
 function saveAdminsToFirebase() {
     const dbRef = ref(database, 'admins');
-     // Firebase tidak mengizinkan undefined.
      const sanitizedAdmins = JSON.parse(JSON.stringify(admins, (key, value) => value === undefined ? null : value));
     set(dbRef, sanitizedAdmins)
         .then(() => {
             console.log('[FIREBASE] Data admin berhasil disimpan ke Firebase.');
-            // Broadcast updated admin list to all clients
-            io.emit('registered_admins', admins);
-            // Also update online list as roles might affect who is considered 'online' if needed,
-            // though getOnlineAdminUsernames uses adminSockets which already has role.
-             io.emit('update_online_admins', getOnlineAdminUsernames());
+            io.emit('registered_admins', admins); // Emit updated admins to all clients
+             io.emit('update_online_admins', getOnlineAdminUsernames()); // Emit updated online status
         })
         .catch((error) => {
             console.error('[FIREBASE] Gagal menyimpan data admin ke Firebase:', error);
@@ -185,31 +250,35 @@ function saveAdminsToFirebase() {
 
 // --- QUICK REPLY TEMPLATES ---
 // Menyimpan Quick Reply Templates ke Firebase
-function saveQuickReplyTemplatesToFirebase() {
+async function saveQuickReplyTemplatesToFirebase() {
+    console.log('[FIREBASE] Menyimpan quick reply templates ke Firebase...');
     const dbRef = ref(database, 'quickReplyTemplates');
-    // Firebase requires valid keys (no ., $, #, [, ], /)
-    // We store in-memory state with actual shortcuts (decoded),
-    // but need to encode keys when saving to Firebase.
     const firebaseData = {};
+    // Convert backend object state to Firebase-friendly object
     for (const shortcut in quickReplyTemplates) {
+         if (!Object.prototype.hasOwnProperty.call(quickReplyTemplates, shortcut)) continue;
+
         const template = quickReplyTemplates[shortcut];
-         // Basic validation before saving
-        if (shortcut && shortcut.startsWith('/') && template && typeof template.text === 'string') {
+         // Validate template structure before saving
+         if (shortcut && shortcut.startsWith('/') && template && typeof template.text === 'string') {
+             // Use encoded shortcut as Firebase key
              firebaseData[encodeFirebaseKey(shortcut)] = { text: template.text };
         } else {
-             console.warn(`[FIREBASE] Mengabaikan template dengan struktur atau shortcut tidak valid saat menyimpan: ${shortcut}`, template);
-        }
+             console.warn(`[FIREBASE] Mengabaikan template dengan struktur atau shortcut tidak valid saat menyimpan: '${shortcut}'`, template);
+         }
     }
 
-    set(dbRef, firebaseData)
-        .then(() => {
-            console.log('[FIREBASE] Quick reply templates berhasil disimpan ke Firebase.');
-            // Broadcast updated templates to all clients
-            io.emit('quick_reply_templates_updated', quickReplyTemplates); // Broadcast the decoded state
-        })
-        .catch((error) => {
-            console.error('[FIREBASE] Gagal menyimpan quick reply templates ke Firebase:', error);
-        });
+    try {
+        await set(dbRef, firebaseData);
+        console.log('[FIREBASE] Quick reply templates berhasil disimpan ke Firebase.');
+        // Convert backend object state to array for frontend
+        const quickReplyTemplatesArray = Object.values(quickReplyTemplates);
+        io.emit('quick_reply_templates_updated', quickReplyTemplatesArray); // Emit updated templates (as array) to all clients
+    } catch (error) {
+        console.error('[FIREBASE] Gagal menyimpan quick reply templates ke Firebase:', error);
+        // Tidak perlu re-throw error di sini, biarkan server tetap berjalan
+        // throw error;
+    }
 }
 // --- END QUICK REPLY TEMPLATES ---
 
@@ -267,13 +336,12 @@ function startAutoReleaseTimer(chatId, username) {
         delete pickedChats[normalizedChatId];
         delete chatReleaseTimers[normalizedChatId];
         io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null });
-        io.emit('initial_pick_status', pickedChats); // Broadcast seluruh status pick
+        io.emit('initial_pick_status', pickedChats); // Send full state update
         const targetSocketId = usernameToSocketId[username];
-        if (targetSocketId) {
-          io.to(targetSocketId).emit('auto_release_notification', { chatId: normalizedChatId, message: `Chat ${normalizedChatId.split('@')[0]} dilepas otomatis (tidak aktif).` });
+        if (targetSocketId && io.sockets.sockets.get(targetSocketId)) { // Check if socket is still online
+          io.to(targetSocketId).emit('auto_release_notification', { chatId: normalizedChatId, message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} dilepas otomatis (tidak aktif).` }); // Use fallback
         }
       } else {
-          // Jika chat sudah tidak diambil oleh admin ini (mungkin diambil admin lain/manual unpick), timer ini sudah kadaluarsa
           console.log(`[TIMER] Timer auto-release untuk ${normalizedChatId} oleh ${username} habis, tetapi chat sudah tidak diambil oleh admin ini. Timer dibersihkan.`);
           delete chatReleaseTimers[normalizedChatId];
       }
@@ -283,95 +351,107 @@ function startAutoReleaseTimer(chatId, username) {
 
 // Mendapatkan daftar username admin yang sedang online
 function getOnlineAdminUsernames() {
-    return Object.values(adminSockets).map(adminInfo => adminInfo.username);
+    // Filter out potential undefined/null values just in case
+    return Object.values(adminSockets).map(adminInfo => adminInfo?.username).filter(Boolean);
 }
 
 // Mendapatkan info admin (termasuk role) berdasarkan Socket ID
 function getAdminInfoBySocketId(socketId) {
-    return adminSockets[socketId] || null;
+    // Ensure adminSockets[socketId] exists and is an object before accessing properties
+    return adminSockets[socketId] && typeof adminSockets[socketId] === 'object' ? adminSockets[socketId] : null;
 }
 
 // Membersihkan state admin saat disconnect/logout
 function cleanupAdminState(socketId) {
-    const adminInfo = adminSockets[socketId];
+    const adminInfo = getAdminInfoBySocketId(socketId);
     if (adminInfo) {
         const username = adminInfo.username;
         console.log(`[ADMIN] Membersihkan state untuk admin ${username} (Socket ID: ${socketId})`);
-        // Lepas semua chat yang diambil oleh admin ini
         const chatsToRelease = Object.keys(pickedChats).filter(chatId => pickedChats[chatId] === username);
         chatsToRelease.forEach(chatId => {
             clearAutoReleaseTimer(chatId);
             delete pickedChats[chatId];
             console.log(`[ADMIN] Chat ${chatId} dilepas karena ${username} terputus/logout.`);
-            io.emit('update_pick_status', { chatId: chatId, pickedBy: null }); // Beri tahu semua klien bahwa chat dilepas
+            io.emit('update_pick_status', { chatId: chatId, pickedBy: null }); // Notify others
         });
 
         delete adminSockets[socketId];
         delete usernameToSocketId[username];
-        io.emit('update_online_admins', getOnlineAdminUsernames()); // Beri tahu semua klien status online admin terbaru
-        io.emit('initial_pick_status', pickedChats); // Broadcast seluruh status pick terbaru
-        return username;
+        io.emit('update_online_admins', getOnlineAdminUsernames()); // Update online list for everyone
+        io.emit('initial_pick_status', pickedChats); // Send full state update
+        return username; // Return username of cleaned up admin
     }
-    return null;
+    return null; // Return null if no admin found for socketId
 }
 
 // Fungsi untuk memastikan chatId dalam format lengkap
 function normalizeChatId(chatId) {
-  if (!chatId) return null;
-  // Tambahkan cek apakah sudah format lengkap, jika tidak, asumsikan itu adalah JID
-  if (!chatId.includes('@')) {
-       return `${chatId}@s.whatsapp.net`;
-  }
-  // Untuk group chats, pastikan formatnya @g.us jika belum
-  if (chatId.endsWith('-') && !chatId.endsWith('@g.us')) {
-       // Asumsi group JID format number-timestamp@g.us
-       return `${chatId}g.us`;
-  }
-  return chatId; // Sudah dalam format lengkap
+  if (!chatId || typeof chatId !== 'string') return null; // Handle null/undefined/non-string
+
+  // Basic normalization - WhatsApp IDs are either JID or group JID
+   // Ensure it contains at least one number and an '@'
+   if (!/\d@s\.whatsapp\.net$/.test(chatId) && !/-@g\.us$/.test(chatId)) {
+       // Attempt to append default JID if it looks like just a number
+       if(/^\d+$/.test(chatId)) {
+            return `${chatId}@s.whatsapp.net`;
+       }
+       // Attempt to append group JID if it looks like number-number
+        if(/^\d+-\d+$/.test(chatId)) {
+             return `${chatId}@g.us`;
+        }
+        console.warn(`[NORMALIZE] Chat ID format tidak dikenali: ${chatId}`);
+       return null; // Indicate invalid format if cannot normalize
+   }
+
+  return chatId; // Return as is if already in a recognized format
 }
 
-// Fungsi untuk decode kunci jika diperlukan
+// Fungsi untuk decode kunci dari Firebase (membalikkan encodeFirebaseKey)
 function decodeFirebaseKey(encodedKey) {
-   if (!encodedKey) return null;
+   if (!encodedKey || typeof encodedKey !== 'string') return null;
    return encodedKey
     .replace(/_dot_/g, '.')
     .replace(/_at_/g, '@')
     .replace(/_dollar_/g, '$')
     .replace(/_slash_/g, '/')
     .replace(/_openbracket_/g, '[')
-    .replace(/_closebracket_/g, ']');
+    .replace(/_closebracket_/g, ']')
+    .replace(/_hash_/g, '#');
 }
 
 // Fungsi untuk meng-encode kunci agar valid di Firebase
 function encodeFirebaseKey(key) {
-   if (!key) return null;
-    // Firebase disallow ., $, #, [, ], /
-    // We also need to handle '/' in shortcuts for encoding.
+   if (!key || typeof key !== 'string') return null;
    return key
     .replace(/\./g, '_dot_')
     .replace(/@/g, '_at_')
     .replace(/\$/g, '_dollar_')
-    .replace(/\//g, '_slash_') // Encode forward slash specifically for shortcuts
+    .replace(/\//g, '_slash_')
     .replace(/\[/g, '_openbracket_')
     .replace(/\]/g, '_closebracket_')
-    .replace(/#/g, '_hash_'); // Add hash encoding
+    .replace(/#/g, '_hash_');
 }
 
 // Fungsi untuk mengecek apakah admin adalah Super Admin
 function isSuperAdmin(username) {
-    // Ambil role dari data 'admins' yang dimuat dari Firebase
-    return username && admins[username]?.role === 'superadmin';
+     // Check if username exists in admins object and has role 'superadmin'
+     // Use config.superAdminUsername as a fallback check, but rely on loaded admins data
+     const isAdminInLoadedList = admins[username]?.role === 'superadmin';
+     // const isConfigSuperAdmin = username === config.superAdminUsername && admins[username]?.role === 'superadmin'; // This check is redundant if we trust the DB role
+
+     return isAdminInLoadedList; // Return true if the user in DB has superadmin role
 }
 
 
 // --- Setup Express & Server ---
 
-// Muat data awal saat server mulai
+// Memuat data dari Firebase sebelum memulai server atau WA
 loadDataFromFirebase().then(() => {
     console.log("[SERVER] Data Firebase siap. Memulai koneksi WhatsApp dan Server HTTP.");
      connectToWhatsApp().catch(err => {
       console.error("[WA] Gagal memulai koneksi WhatsApp awal:", err);
-      // Mungkin perlu keluar atau mencoba lagi dengan strategi berbeda
+       // Server might continue running without WA connection, or you might want to exit
+       // process.exit(1); // Uncomment to exit if WA connection is mandatory for startup
     });
 
     server.listen(PORT, () => {
@@ -381,7 +461,7 @@ loadDataFromFirebase().then(() => {
 
 }).catch(err => {
     console.error("[SERVER] Gagal memuat data awal dari Firebase. Server tidak dapat dimulai.", err);
-    process.exit(1); // Keluar jika gagal memuat data penting
+    process.exit(1); // Exit if initial data load fails
 });
 
 
@@ -390,7 +470,6 @@ expressApp.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Configure session middleware (jika diperlukan untuk hal lain, saat ini tidak banyak dipakai)
 expressApp.use(session({
   secret: config.sessionSecret,
   resave: false,
@@ -405,30 +484,24 @@ const PORT = config.serverPort || 3000;
 
 async function connectToWhatsApp() {
   console.log("[WA] Mencoba menghubungkan ke WhatsApp...");
+  // auth_info_baileys will be created if it doesn't exist
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
   sock = makeWASocket({
     auth: state,
     printQRInTerminal: config.baileysOptions?.printQRInTerminal ?? true,
-    browser: Browsers.macOS('Desktop'), // Ganti jika perlu
+    browser: Browsers.macOS('Desktop'),
     logger: logger,
-     syncFullHistory: false, // Untuk history lama, atur true jika perlu sync semua
+     syncFullHistory: false,
     getMessage: async (key) => {
         // Baileys mungkin meminta pesan lama (misal untuk quote/reply)
-        // Implementasi ini mencoba mencarinya di chatHistory.
-        // Catatan: chatHistory hanya menyimpan data esensial, BUKAN objek pesan Baileys penuh.
-        // Ini mungkin tidak cukup untuk fitur Baileys yang kompleks seperti quoting.
-        const encodedChatId = encodeFirebaseKey(key.remoteJid);
-        const msg = chatHistory[encodedChatId]?.messages?.find(m => m.id === key.id);
-        // console.warn(`[WA] Baileys meminta pesan ${key.id} dari ${key.remoteJid}. Ditemukan di history: ${!!msg}`);
-
-         // Jika Anda menyimpan objek pesan Baileys utuh, Anda bisa mengembalikannya di sini.
-         // Untuk saat ini, mengembalikan undefined agar Baileys tahu kita tidak punya.
-         // Ini mungkin menyebabkan fitur reply/quote tidak berfungsi.
-        return undefined; // Artinya tidak dapat diambil dari history kita
+        // Kita tidak menyimpan objek pesan Baileys lengkap, jadi kembalikan undefined.
+        // console.warn(`[WA] Baileys meminta pesan ${key.id} dari ${key.remoteJid}. Tidak tersedia di history lokal.`);
+        return undefined;
     }
   });
 
+  // Event listeners for Baileys
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
@@ -438,33 +511,50 @@ async function connectToWhatsApp() {
       qrDisplayed = true;
       console.log('[WA] QR Code diterima, pindai dengan WhatsApp Anda:');
       qrcode.generate(qr, { small: true });
-      io.emit('whatsapp_qr', qr);
+       // Emit QR to all connected Super Admins
+       for (const socketId in adminSockets) {
+            if (Object.prototype.hasOwnProperty.call(adminSockets, socketId) && adminSockets[socketId]?.role === 'superadmin') {
+                 io.to(socketId).emit('whatsapp_qr', qr);
+            }
+       }
+       if (Object.keys(adminSockets).filter(id => adminSockets[id]?.role === 'superadmin').length === 0) {
+           console.warn('[WA] Tidak ada Super Admin yang login. QR Code hanya ditampilkan di terminal.');
+       }
     }
 
     if (connection === 'close') {
       qrDisplayed = false;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      // Reconnect jika bukan error autentikasi atau fatal lainnya
-      const shouldReconnect = ![401, 403, 411, 419, 500, 515].includes(statusCode); // Tambah 515 (connection closed by remote)
+      // Reconnect reasons: https://github.com/WhiskeySockets/Baileys/blob/main/src/Utils/decode-wa-msg.ts#L23
+      const shouldReconnect = ![401, 403, 411, 419].includes(statusCode); // 401: Auth failed, 403: Forbidden, 411: Gone, 419: Conflict
+
       console.error(`[WA] Koneksi WhatsApp terputus: ${lastDisconnect?.error?.message || 'Alasan tidak diketahui'} (Code: ${statusCode || 'N/A'}), Mencoba menyambung kembali: ${shouldReconnect}`);
-      io.emit('whatsapp_disconnected', { reason: lastDisconnect?.error?.message || 'Unknown', statusCode });
+      io.emit('whatsapp_disconnected', { reason: lastDisconnect?.error?.message || 'Unknown', statusCode, message: lastDisconnect?.error?.message }); // Emit message to frontend
 
       if (shouldReconnect) {
-        console.log("[WA] Mencoba menyambung kembali dalam 10 detik..."); // Kurangi delay sedikit
-        setTimeout(connectToWhatsApp, 10000);
+        console.log("[WA] Mencoba menyambung kembali dalam 10 detik...");
+        setTimeout(connectToWhatsApp, 10000); // Reconnect after 10s
       } else {
-        console.error("[WA] Tidak dapat menyambung kembali secara otomatis. Periksa folder auth_info_baileys, hapus jika sesi invalid, atau scan ulang QR.");
-        io.emit('whatsapp_fatal_disconnected', { reason: lastDisconnect?.error?.message || 'Unknown', statusCode, message: 'Fatal disconnection, manual intervention needed.' });
+        console.error("[WA] Tidak dapat menyambung kembali otomatis. Mungkin sesi invalid atau konflik. Perlu scan ulang QR.");
+        // Emit fatal disconnect specifically to Super Admins, as they handle QR
+        for (const socketId in adminSockets) {
+             if (Object.prototype.hasOwnProperty.call(adminSockets, socketId) && adminSockets[socketId]?.role === 'superadmin') {
+                 io.to(socketId).emit('whatsapp_fatal_disconnected', { reason: lastDisconnect?.error?.message || 'Auth Failed', statusCode, message: 'Sesi invalid atau konflik. Silakan Tampilkan QR untuk memulihkan (perlu scan ulang).' });
+             } else {
+                 // Notify regular admins about the fatal error and to contact Super Admin
+                 io.to(socketId).emit('whatsapp_disconnected', { reason: lastDisconnect?.error?.message || 'Auth Failed', statusCode, message: 'Koneksi WhatsApp terputus secara fatal. Hubungi Super Admin untuk memulihkan.' });
+             }
+        }
+         if (Object.keys(adminSockets).filter(id => adminSockets[id]?.role === 'superadmin').length === 0) {
+             console.warn('[WA] Tidak ada Super Admin yang login untuk menerima notifikasi fatal disconnect.');
+         }
       }
     } else if (connection === 'open') {
       console.log('[WA] Berhasil terhubung ke WhatsApp!');
       qrDisplayed = false;
       io.emit('whatsapp_connected', { username: sock.user?.id || 'N/A' });
-       // Setelah terhubung, mungkin perlu sync kontak atau chat terbaru jika syncFullHistory: false
-       // sock.sendPresenceUpdate('available'); // Optional: Set status online
     } else {
         console.log(`[WA] Status koneksi WhatsApp: ${connection} ${isConnecting ? '(connecting)' : ''} ${isOnline ? '(online)' : ''}`);
-        // Emit connecting status if needed
         if (connection === 'connecting') {
             io.emit('whatsapp_connecting', {});
         }
@@ -472,11 +562,11 @@ async function connectToWhatsApp() {
   });
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      console.log(`[WA] Pesan ${type} diterima: ${messages.length}`);
+      // console.log(`[WA] Pesan ${type} diterima: ${messages.length}`); // Disable verbose logging
     if (!messages || messages.length === 0) return;
 
     for (const message of messages) {
-        // Abaikan pesan dari diri sendiri atau status broadcast
+      // Ignore messages sent by us, status updates, or from the WA bot's own JID
       if (message.key.fromMe || message.key.remoteJid === 'status@broadcast' || (sock?.user?.id && message.key.remoteJid === sock.user.id)) {
         continue;
       }
@@ -489,80 +579,107 @@ async function connectToWhatsApp() {
 
       const encodedChatId = encodeFirebaseKey(chatId);
        if (!encodedChatId) {
-           console.error('[FIREBASE] Gagal meng-encode chatId:', chatId, 'mengabaikan pesan masuk.');
+           console.error(`[FIREBASE] Gagal meng-encode chatId: ${chatId}. Mengabaikan pesan masuk.`);
            continue;
        }
 
 
-      let messageContent = null;
-      let mediaData = null;
-      let mediaType = null; // Will store the Baileys message type string (e.g., 'imageMessage')
-      let fileName = null;
-       let mimeType = null; // Will store the actual MIME type from Baileys
+      let messageContent = null; // Main text content (for message bubble)
+      let mediaData = null; // Base64 data for media
+      let mediaType = null; // Baileys message type string (e.g., 'imageMessage')
+      let mimeType = null; // Actual MIME type from Baileys props
+       let fileName = null; // Original file name if applicable
+       let messageTextSnippet = ''; // Snippet for chat list
 
-      const messageType = message.message ? Object.keys(message.message)[0] : null; // e.g., 'imageMessage'
-      const messageProps = message.message?.[messageType]; // Properties specific to the message type
 
-      const isMedia = messageType ? ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'].includes(messageType) : false;
+      const messageBaileysType = message.message ? Object.keys(message.message)[0] : null; // e.g., 'imageMessage'
+      const messageProps = message.message?.[messageBaileysType]; // Properties specific to the message type
 
-      if (isMedia && messageProps) {
-        try {
-          const buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
-          if (buffer) {
-              mediaData = buffer.toString('base64');
-              mediaType = messageType; // Store the Baileys type string
-              mimeType = messageProps.mimetype; // Use the actual mimetype if available
-              fileName = messageProps.fileName || messageProps.caption || `${mediaType.replace('Message', '')}_file`;
-              // For audio, if not voice note, fileName might be useful
-              if (mediaType === 'audioMessage' && messageProps.ptt) fileName = 'Voice Note';
+       // Handle different message types
+       switch (messageBaileysType) {
+           case 'conversation':
+           case 'extendedTextMessage':
+               messageContent = messageProps?.text || messageProps?.conversation || '';
+               messageTextSnippet = messageContent;
+               mediaType = 'text'; // Custom type for text messages in our scheme
+               break;
+           case 'imageMessage':
+           case 'videoMessage':
+           case 'audioMessage':
+           case 'documentMessage':
+           case 'stickerMessage': // Stickers also have media
+               mediaType = messageBaileysType;
+               mimeType = messageProps?.mimetype;
+                // Use original filename or a default based on type
+               fileName = messageProps?.fileName || messageProps?.caption || `${mediaType.replace('Message', '')}_file`;
+               if (mediaType === 'audioMessage' && messageProps?.ptt) fileName = 'Voice Note';
 
-              messageContent = messageProps.caption || `[${mediaType.replace('Message', '')}]`;
+               messageContent = messageProps?.caption || `[${mediaType.replace('Message', '')}]`; // Caption or placeholder
+               messageTextSnippet = messageProps?.caption || `[${mediaType.replace('Message', '')}]`; // Caption or placeholder for snippet
 
-          } else {
-              console.warn(`[WA] Gagal mengunduh media (buffer kosong) dari ${chatId} untuk pesan ${message.key.id}`);
-              messageContent = `[Gagal mengunduh media ${messageType.replace('Message', '')}]`;
-          }
-        } catch (error) {
-          console.error(`[WA] Error mengunduh media dari ${chatId} untuk pesan ${message.key.id}:`, error);
-          messageContent = `[Gagal memuat media ${messageType.replace('Message', '')}]`;
-        }
-      } else if (messageType === 'conversation') {
-        messageContent = messageProps.conversation;
-      } else if (messageType === 'extendedTextMessage' && messageProps.text) {
-        messageContent = messageProps.text;
-      } else if (messageType === 'imageMessage' && messageProps.caption) {
-         messageContent = messageProps.caption;
-      }
-       // Add other message types you want to handle for text snippet
-       else if (messageType === 'stickerMessage') {
-           messageContent = '[Stiker]';
-       } else if (messageType === 'locationMessage') {
-           messageContent = '[Lokasi]';
-       } else if (messageType === 'contactMessage') {
-           messageContent = '[Kontak]';
-       } else if (messageType === 'liveLocationMessage') {
-            messageContent = '[Live Lokasi]';
-       } else if (messageType === 'protocolMessage') {
-           // These are often service messages, might ignore or log
-           // console.log(`[WA] Protocol message skipped: ${chatId}`, message);
-           continue; // Skip protocol messages from history/display
-       } else if (messageType === 'reactionMessage') {
-            // console.log(`[WA] Reaction message skipped: ${chatId}`, message);
-            continue; // Skip reactions from history/display
+               // Attempt to download media
+               try {
+                 const buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
+                 if (buffer) {
+                     mediaData = buffer.toString('base64');
+                 } else {
+                     console.warn(`[WA] Gagal mengunduh media (buffer kosong) dari ${chatId} untuk pesan ${message.key.id}`);
+                     // Fallback text content if download fails
+                     messageContent = `[Gagal mengunduh media ${mediaType.replace('Message', '')}]` + (messageProps?.caption ? `\n${messageProps.caption}` : '');
+                     messageTextSnippet = `[Gagal unduh media ${mediaType.replace('Message', '')}]`;
+                 }
+               } catch (error) {
+                 console.error(`[WA] Error mengunduh media dari ${chatId} untuk pesan ${message.key.id}:`, error);
+                  // Fallback text content if download errors
+                 messageContent = `[Gagal memuat media ${mediaType.replace('Message', '')}]` + (messageProps?.caption ? `\n${messageProps.caption}` : '');
+                 messageTextSnippet = `[Error media ${mediaType.replace('Message', '')}]`;
+               }
+               break;
+            case 'locationMessage':
+                messageContent = `[Lokasi: ${messageProps?.degreesLatitude}, ${messageProps?.degreesLongitude}]`;
+                messageTextSnippet = '[Lokasi]';
+                mediaType = 'location'; // Custom type
+                // Optionally store location data: mediaData = JSON.stringify(messageProps);
+                break;
+            case 'contactMessage':
+                messageContent = `[Kontak: ${messageProps?.displayName || 'Nama tidak diketahui'}]`;
+                 messageTextSnippet = `[Kontak]`;
+                 mediaType = 'contact'; // Custom type
+                 // Optionally store vcard: mediaData = messageProps?.vcard;
+                 break;
+            case 'liveLocationMessage':
+                 messageContent = '[Live Lokasi]';
+                 messageTextSnippet = '[Live Lokasi]';
+                 mediaType = 'liveLocation'; // Custom type
+                 // Optionally store data: mediaData = JSON.stringify(messageProps);
+                 break;
+            case 'protocolMessage':
+            case 'reactionMessage':
+            case 'senderKeyDistributionMessage':
+            case 'editedMessage':
+            case 'keepalive':
+                 // These are often service messages, ignore for history/display
+                 // console.log(`[WA] Skipping message type: ${messageBaileysType} from ${chatId}`);
+                 continue; // Skip these message types entirely
+            default:
+                // Fallback for unknown or unhandled types
+                console.warn(`[WA] Menerima pesan dengan tipe tidak dikenal atau tidak ditangani: ${messageBaileysType} dari ${chatId}`);
+                messageContent = `[Pesan tidak dikenal: ${messageBaileysType || 'N/A'}]`;
+                messageTextSnippet = `[${messageBaileysType || 'Unknown'}]`;
+                mediaType = 'unknown'; // Custom type
+                // Optionally store raw message: mediaData = JSON.stringify(message);
        }
-      else {
-          // Fallback for unknown or empty message types
-         messageContent = `[Pesan tidak dikenal: ${messageType || 'N/A'}]`;
-      }
+
 
       const messageData = {
         id: message.key.id,
         from: chatId, // Store original sender (the customer)
-        text: messageContent,
-        mediaData: mediaData,
-        mediaType: mediaType, // Store Baileys type string
-        mimeType: mimeType, // Store actual MIME type from message
-        fileName: fileName,
+        text: messageContent || '', // Use messageContent, default to empty string
+        mediaData: mediaData, // Base64 media data (if any)
+        mediaType: mediaType, // Baileys message type string or custom type (if any)
+        mimeType: mimeType, // Actual MIME type (if any)
+        fileName: fileName, // File name (if any)
+        snippet: messageTextSnippet || '', // Snippet for chat list, default to empty string
         timestamp: message.messageTimestamp
           ? new Date(parseInt(message.messageTimestamp) * 1000).toISOString()
           : new Date().toISOString(),
@@ -572,60 +689,55 @@ async function connectToWhatsApp() {
 
 
       // Initialize chat entry if it doesn't exist or if messages array is missing
-      if (!chatHistory[encodedChatId] || !chatHistory[encodedChatId].messages) {
+      if (!chatHistory[encodedChatId] || !Array.isArray(chatHistory[encodedChatId].messages)) { // Ensure messages is array
         console.log(`[HISTORY] Membuat/memperbaiki entri baru untuk chat ${chatId}.`);
-        chatHistory[encodedChatId] = { status: chatHistory[encodedChatId]?.status || 'open', messages: [] }; // Pertahankan status jika sudah ada, default open
+         // Ensure status exists or set default
+        chatHistory[encodedChatId] = { status: chatHistory[encodedChatId]?.status || 'open', messages: [] };
       }
-       // Ensure messages array exists
-       if (!chatHistory[encodedChatId].messages) {
-           chatHistory[encodedChatId].messages = [];
-       }
-        // Ensure status exists
        if (!chatHistory[encodedChatId].status) {
            chatHistory[encodedChatId].status = 'open';
        }
 
-
-      // Add message to the messages array, deduplicate
-      if (!chatHistory[encodedChatId].messages.some(m => m.id === messageData.id)) {
+      // Add message to the messages array, deduplicate by ID
+      if (!chatHistory[encodedChatId].messages.some(m => m && typeof m === 'object' && m.id === messageData.id)) { // Check for null/undefined message objects
         console.log(`[HISTORY] Menambahkan pesan masuk baru (ID: ${messageData.id}) ke chat ${chatId}`);
         chatHistory[encodedChatId].messages.push(messageData);
-        saveChatHistoryToFirebase(); // Save after adding message
+        saveChatHistoryToFirebase(); // Save after adding new message
 
-        // Emit new message to all connected admin clients
-        io.emit('new_message', { ...messageData, chatId: chatId, chatStatus: chatHistory[encodedChatId].status });
+        io.emit('new_message', { // Emit to all clients
+             ...messageData,
+             chatId: chatId, // Ensure chatId is top-level for client
+             chatStatus: chatHistory[encodedChatId].status // Include chat status
+         });
 
-        // Send notification to admins if chat is not picked OR picked by someone else
+        // Send notification to online admins *not* handling this chat
         const pickedBy = pickedChats[chatId];
-        // Filter who should get notification
         const onlineAdmins = getOnlineAdminUsernames();
         onlineAdmins.forEach(adminUsername => {
             const adminSocketId = usernameToSocketId[adminUsername];
-            if (adminSocketId) {
-                 const adminCurrentlyPicked = pickedChats[chatId];
-                 // Notify if not picked by anyone OR picked by someone else
-                 if (!adminCurrentlyPicked || adminCurrentlyPicked !== adminUsername) {
-                      // Use the actual message content for the notification body
-                      const notificationBody = messageContent || (mediaType ? `[${mediaType.replace('Message', '')}]` : '[Pesan Baru]');
+            // Only send notification if admin is online AND not the one handling the chat AND chat is open
+            if (adminSocketId && pickedBy !== adminUsername && chatHistory[encodedChatId].status === 'open') {
+                // Check if the socket is still connected before emitting
+                if (io.sockets.sockets.get(adminSocketId)) {
+                      const notificationBody = messageTextSnippet || '[Pesan Baru]'; // Use snippet for notification
                      io.to(adminSocketId).emit('notification', {
-                        title: `Pesan Baru (${chatId.split('@')[0]})`,
+                        title: `Pesan Baru (${chatId.split('@')[0] || chatId})`, // Use chatId if name split fails
                         body: notificationBody,
-                        icon: '/favicon.ico', // Pastikan icon ada
+                        icon: '/favicon.ico',
                         chatId: chatId
                      });
-                 }
+                } else {
+                     console.warn(`[NOTIF] Socket ${adminSocketId} untuk admin ${adminUsername} terputus, tidak mengirim notifikasi.`);
+                }
             }
         });
 
       } else {
-         // console.log(`[WA] Pesan duplikat terdeteksi di upsert (ID: ${messageData.id}), diabaikan.`);
+         // console.log(`[WA] Pesan duplikat terdeteksi di upsert (ID: ${messageData.id}), diabaikan.`); // Disable verbose logging
       }
     }
   });
 
-    // Handle message receipts/read status if needed, though not strictly part of the request
-    // sock.ev.on('messages.update', (updates) => { /* ... */ });
-    // sock.ev.on('message-status.update', (updates) => { /* ... */ });
 }
 
 
@@ -633,19 +745,35 @@ async function connectToWhatsApp() {
 io.on('connection', (socket) => {
   console.log(`[SOCKET] Admin terhubung: ${socket.id}`);
 
-  // Send initial state to the newly connected client
+  // Send initial data required immediately upon connection
   socket.emit('registered_admins', admins);
   socket.emit('update_online_admins', getOnlineAdminUsernames());
-  socket.emit('initial_pick_status', pickedChats); // Send current picked status
-  // --- QUICK REPLY TEMPLATES ---
-  socket.emit('quick_reply_templates_updated', quickReplyTemplates); // Send current templates
-  // --- END QUICK REPLY TEMPLATES ---
+  socket.emit('initial_pick_status', pickedChats);
+  // --- FIX: Ensure quickReplyTemplates is an array for frontend ---
+  io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates)); // Send templates as an array
+  // --- END FIX ---
 
-
-  if (sock?.user) {
-      socket.emit('whatsapp_connected', { username: sock.user?.id || 'N/A' });
-  } else {
-      socket.emit('whatsapp_disconnected', { reason: 'Connecting...', statusCode: 'N/A' });
+  // Send initial WhatsApp status on connection
+  if (sock?.user?.id) { // Check if sock and user.id exist
+      socket.emit('whatsapp_connected', { username: sock.user.id });
+  } else if (qrDisplayed) {
+       // If QR is displayed, it means WA is waiting for scan
+       socket.emit('whatsapp_fatal_disconnected', { message: 'Sesi invalid. Menunggu QR Code baru...' }); // Simulate fatal to indicate need for QR
+       if (currentQrCode) { // Only send QR if we have it
+            socket.emit('whatsapp_qr', currentQrCode);
+       }
+  }
+   else {
+      // Otherwise, assume it's trying to connect or disconnected
+       // Check socket connection state more reliably if available
+      const waConnectionState = sock?.ws?.readyState; // WebSocket readyState
+       if (waConnectionState === sock?.ws.OPEN) { // Check against sock's WebSocket state
+            socket.emit('whatsapp_connected', { username: sock.user?.id || 'N/A' });
+       } else if (waConnectionState === sock?.ws.CONNECTING) {
+            socket.emit('whatsapp_connecting', {});
+       } else { // Assuming WA is disconnected or not initialized
+           socket.emit('whatsapp_disconnected', { reason: 'Not Initialized/Disconnected', statusCode: 'N/A', message: 'Koneksi WhatsApp belum siap.' });
+       }
   }
 
 
@@ -654,34 +782,37 @@ io.on('connection', (socket) => {
     if (adminInfo) {
       console.log(`[SOCKET] Admin ${adminInfo.username} meminta data awal.`);
       const decodedChatHistory = {};
+      // Iterate through encoded keys from backend state
       for (const encodedKey in chatHistory) {
+         // Add hasOwnProperty check
+         if (!Object.prototype.hasOwnProperty.call(chatHistory, encodedKey)) continue;
+
         const decodedKey = decodeFirebaseKey(encodedKey);
-         if (decodedKey && chatHistory[encodedKey]?.messages) { // Pastikan messages array ada
+        // Ensure decodedKey is valid and chat entry exists and has messages array
+         if (decodedKey && chatHistory[encodedKey] && Array.isArray(chatHistory[encodedKey].messages)) {
             decodedChatHistory[decodedKey] = {
-                status: chatHistory[encodedKey].status || 'open', // Default status
+                status: chatHistory[encodedKey].status || 'open', // Ensure status default
                 messages: chatHistory[encodedKey].messages.map((message) => ({
                     ...message,
-                    chatId: decodedKey // Ensure chatId is added to each message object for frontend
+                    chatId: decodedKey // Add decoded chatId to each message
                 }))
             };
-         } else if (decodedKey) {
-              // Handle case where chat entry exists but has no messages
-               decodedChatHistory[decodedKey] = {
-                   status: chatHistory[encodedKey]?.status || 'open',
-                   messages: [] // Ensure it's an empty array
+         } else if (decodedKey && chatHistory[encodedKey]) {
+              // Handle case where chat entry exists but messages is not an array (based on validation in loadData)
+              decodedChatHistory[decodedKey] = {
+                   status: chatHistory[encodedKey].status || 'open',
+                   messages: [] // Send empty array
                };
+              console.warn(`[SOCKET] Chat history untuk ${decodedKey} memiliki struktur pesan tidak valid.`);
+         } else {
+              console.warn(`[SOCKET] Mengabaikan chat history dengan encoded key tidak valid: ${encodedKey}`);
          }
       }
-      // --- QUICK REPLY TEMPLATES ---
-      socket.emit('initial_data', { chatHistory: decodedChatHistory, admins: admins, currentUserRole: adminInfo.role, quickReplyTemplates: quickReplyTemplates });
-      // --- END QUICK REPLY TEMPLATES ---
-
-      // Redundant, initial_pick_status already sent on connect/reconnect_success
-      // socket.emit('initial_pick_status', pickedChats);
-      // io.emit('update_online_admins', getOnlineAdminUsernames()); // Redundant, already sent on login/reconnect
+       // Send initial data including chat history, admins, role, and quick replies (as array)
+      socket.emit('initial_data', { chatHistory: decodedChatHistory, admins: admins, currentUserRole: adminInfo.role, quickReplies: Object.values(quickReplyTemplates) });
     } else {
       console.warn(`[SOCKET] Socket ${socket.id} meminta data awal sebelum login.`);
-      socket.emit('request_login'); // Tell frontend to show login
+      // Frontend handles login request on reconnect_failed, no specific emit needed here
     }
   });
 
@@ -691,39 +822,38 @@ io.on('connection', (socket) => {
         console.warn(`[SOCKET] Socket ${socket.id} meminta history sebelum login.`);
         return socket.emit('chat_history_error', { chatId, message: 'Login diperlukan.' });
     }
-    if (!chatId) {
-         console.warn(`[SOCKET] Admin ${adminInfo.username} meminta history dengan ID chat kosong.`);
+    const normalizedChatId = normalizeChatId(chatId); // Normalize input chatId
+    if (!normalizedChatId) { // Check if normalization failed
+         console.warn(`[SOCKET] Admin ${adminInfo?.username} meminta history dengan ID chat tidak valid: ${chatId}`);
          return socket.emit('chat_history_error', { chatId, message: 'Chat ID tidak valid.' });
     }
 
-    const normalizedChatId = normalizeChatId(chatId);
     const encodedChatId = encodeFirebaseKey(normalizedChatId);
-
     if (!encodedChatId) {
-        console.error(`[SOCKET] Gagal meng-encode chatId untuk get_chat_history: ${chatId}`);
-        return socket.emit('chat_history_error', { chatId, message: 'Kesalahan internal: ID chat tidak valid.' });
+        console.error(`[SOCKET] Gagal meng-encode chatId untuk get_chat_history: ${normalizedChatId}`);
+        return socket.emit('chat_history_error', { chatId: normalizedChatId, message: 'Kesalahan internal: ID chat tidak valid.' });
     }
 
     const chatEntry = chatHistory[encodedChatId];
-    const history = chatEntry?.messages?.map((message) => ({ // Check messages array exists
+     // Ensure messages is an array before mapping
+    const history = Array.isArray(chatEntry?.messages) ? chatEntry.messages.map((message) => ({
       ...message,
-      chatId: normalizedChatId // Ensure chatId is added
-    })) || []; // Provide empty array if no messages
+      chatId: normalizedChatId // Ensure chatId is correct on message objects sent to client
+    })) : [];
     const status = chatEntry?.status || 'open';
 
-    console.log(`[SOCKET] Mengirim history untuk chat ${normalizedChatId} ke admin ${adminInfo.username}.`);
+    console.log(`[SOCKET] Mengirim history untuk chat ${normalizedChatId} (${history.length} pesan) ke admin ${adminInfo.username}.`);
     socket.emit('chat_history', { chatId: normalizedChatId, messages: history, status: status });
   });
 
   socket.on('admin_login', ({ username, password }) => {
       console.log(`[ADMIN] Menerima percobaan login untuk: ${username}`);
-    const adminUser = admins[username];
-    if (adminUser && adminUser.password === password) { // Basic password check (consider hashing in production)
-      // Cek apakah admin sudah login dari socket lain
+    const adminUser = admins[username]; // Look up in loaded admins data
+    if (adminUser && adminUser.password === password) {
       const existingSocketId = usernameToSocketId[username];
       if (existingSocketId && io.sockets.sockets.get(existingSocketId)) {
          console.warn(`[ADMIN] Login gagal: Admin ${username} sudah login dari socket ${existingSocketId}.`);
-         socket.emit('login_failed', { message: 'Akun ini sudah login di tempat lain. Silakan logout dari perangkat lain atau tunggu.' });
+         socket.emit('login_failed', { message: 'Akun ini sudah login di tempat lain.' });
          return;
       }
 
@@ -731,12 +861,12 @@ io.on('connection', (socket) => {
       adminSockets[socket.id] = { username: username, role: adminUser.role || 'admin' };
       usernameToSocketId[username] = socket.id;
 
-      // --- QUICK REPLY TEMPLATES ---
-      socket.emit('login_success', { username: username, initials: adminUser.initials, role: adminUser.role || 'admin', currentPicks: pickedChats, quickReplyTemplates: quickReplyTemplates }); // Send current picks AND templates on login
-      // --- END QUICK REPLY TEMPLATES ---
-
-      io.emit('update_online_admins', getOnlineAdminUsernames()); // Notify everyone about new online admin
-       // initial data will be requested by frontend after login_success
+      // Send login success with role and initial state
+      socket.emit('login_success', { username: username, initials: adminUser.initials, role: adminUser.role || 'admin', currentPicks: pickedChats });
+      // --- FIX: Ensure templates are sent as an array on login ---
+      io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates));
+      // --- END FIX ---
+      io.emit('update_online_admins', getOnlineAdminUsernames()); // Notify others about new online admin
 
     } else {
       console.log(`[ADMIN] Login gagal untuk username: ${username}. Username atau password salah.`);
@@ -746,46 +876,44 @@ io.on('connection', (socket) => {
 
   socket.on('admin_reconnect', ({ username }) => {
       console.log(`[ADMIN] Menerima percobaan reconnect untuk: ${username} (Socket ID: ${socket.id})`);
-    const adminUser = admins[username];
+    const adminUser = admins[username]; // Look up in loaded admins data
     if (adminUser) {
         const existingSocketId = usernameToSocketId[username];
-        // Jika ada socket lain yang terdaftar untuk username ini DAN socket tersebut masih aktif
         if (existingSocketId && existingSocketId !== socket.id && io.sockets.sockets.get(existingSocketId)) {
              console.warn(`[ADMIN] Admin ${username} mereconnect. Menutup socket lama ${existingSocketId}.`);
-             // Cleanup state for the old socket first
-             cleanupAdminState(existingSocketId);
-             // Force disconnect the old socket (optional, cleanup might be enough)
-             // io.sockets.sockets.get(existingSocketId)?.disconnect(true); // This might trigger disconnect handler again
+             cleanupAdminState(existingSocketId); // Clean up old socket state
+             io.sockets.sockets.get(existingSocketId).disconnect(true); // Disconnect old socket
         } else if (existingSocketId && !io.sockets.sockets.get(existingSocketId)) {
              console.log(`[ADMIN] Admin ${username} mereconnect. Socket lama ${existingSocketId} sudah tidak aktif. Membersihkan state lama.`);
-              cleanupAdminState(existingSocketId); // Ensure old state is clean
+              cleanupAdminState(existingSocketId); // Clean up old socket state
         }
-
 
         console.log(`[ADMIN] Reconnect berhasil untuk ${username} (Socket ID: ${socket.id})`);
         adminSockets[socket.id] = { username: username, role: adminUser.role || 'admin' };
         usernameToSocketId[username] = socket.id;
-        // --- QUICK REPLY TEMPLATES ---
-        socket.emit('reconnect_success', { username: username, currentPicks: pickedChats, role: adminUser.role || 'admin', quickReplyTemplates: quickReplyTemplates }); // Send picks and templates on reconnect
-        // --- END QUICK REPLY TEMPLATES ---
-        io.emit('update_online_admins', getOnlineAdminUsernames()); // Notify everyone about online status
-        // initial data will be requested by frontend after reconnect_success
+
+        // Send reconnect success with role and initial state
+        socket.emit('reconnect_success', { username: username, currentPicks: pickedChats, role: adminUser.role || 'admin' });
+        // --- FIX: Ensure templates are sent as an array on reconnect ---
+        io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates));
+        // --- END FIX ---
+        io.emit('update_online_admins', getOnlineAdminUsernames()); // Notify others about online status update
     } else {
         console.warn(`[ADMIN] Reconnect failed: Admin ${username} not found in registered admins.`);
-        socket.emit('reconnect_failed');
+        socket.emit('reconnect_failed'); // Indicate reconnect failed
     }
   });
 
 
   socket.on('admin_logout', () => {
-    const username = cleanupAdminState(socket.id); // Cleanup state and get username
+    // cleanupAdminState handles state removal and emitting online status updates
+    const username = cleanupAdminState(socket.id);
     if (username) {
         console.log(`[ADMIN] Admin ${username} logout.`);
-        socket.emit('logout_success');
-        // cleanupAdminState already emits update_online_admins
+        socket.emit('logout_success'); // Optional: client might just reset UI anyway
     } else {
          console.warn(`[ADMIN] Socket ${socket.id} mencoba logout tapi tidak terdaftar sebagai admin login.`);
-         socket.emit('logout_failed', { message: 'Not logged in.' });
+         socket.emit('logout_failed', { message: 'Not logged in.' }); // Optional
     }
   });
 
@@ -797,51 +925,67 @@ io.on('connection', (socket) => {
     if (!normalizedChatId) return socket.emit('pick_error', { chatId, message: 'Chat ID tidak valid.' });
 
      const encodedChatId = encodeFirebaseKey(normalizedChatId);
-     // Cek status chat, jangan biarkan diambil jika sudah closed
+     // Check if chat exists in history and is closed
      if (chatHistory[encodedChatId]?.status === 'closed') {
          console.warn(`[PICK] Admin ${username} mencoba mengambil chat tertutup ${normalizedChatId}`);
          return socket.emit('pick_error', { chatId: normalizedChatId, message: 'Chat sudah ditutup. Tidak bisa diambil.' });
      }
+     // If chat doesn't exist in history, allow picking but log it
+      if (!chatHistory[encodedChatId]) {
+          console.warn(`[PICK] Admin ${username} mengambil chat baru ${normalizedChatId} yang belum ada di history.`);
+          // Optionally create the chat entry here with default status 'open'
+           chatHistory[encodedChatId] = { status: 'open', messages: [] };
+           saveChatHistoryToFirebase(); // Save the new chat entry
+      }
 
 
     if (pickedChats[normalizedChatId] && pickedChats[normalizedChatId] !== username) {
       console.warn(`[PICK] Admin ${username} mencoba mengambil chat ${normalizedChatId} yang sudah diambil oleh ${pickedChats[normalizedChatId]}`);
       socket.emit('pick_error', { chatId: normalizedChatId, message: `Sudah diambil oleh ${pickedChats[normalizedChatId]}.` });
     } else if (!pickedChats[normalizedChatId]) {
-      // Chat belum diambil
       pickedChats[normalizedChatId] = username;
       console.log(`[PICK] Admin ${username} mengambil chat ${normalizedChatId}`);
-      io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: username }); // Broadcast status pick terbaru
-      io.emit('initial_pick_status', pickedChats); // Broadcast seluruh status pick
+      io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: username });
+      io.emit('initial_pick_status', pickedChats); // Send full state update to sync all clients
 
-      startAutoReleaseTimer(normalizedChatId, username);
+      // Start auto-release timer only if timeout is configured
+      if (config.chatAutoReleaseTimeoutMinutes > 0) {
+           startAutoReleaseTimer(normalizedChatId, username);
+      }
 
-       // Mark incoming messages as read when picked
+
        const chatEntry = chatHistory[encodedChatId];
-       if (chatEntry?.messages) {
+       // Mark incoming messages as read for this chat if it exists and has messages
+       if (chatEntry?.messages) { // Ensure messages array exists
            let changed = false;
-           // Iterasi dari pesan terbaru ke belakang
+           // Iterate backwards from the last message
            for (let i = chatEntry.messages.length - 1; i >= 0; i--) {
-                // Hanya mark pesan incoming yang belum dibaca
+                // Ensure message object is valid
+                if (!chatEntry.messages[i] || typeof chatEntry.messages[i] !== 'object') continue;
+
                 if (chatEntry.messages[i].type === 'incoming' && chatEntry.messages[i].unread) {
                     chatEntry.messages[i].unread = false;
                     changed = true;
                 } else if (chatEntry.messages[i].type === 'outgoing') {
-                     // Stop marking as read once we hit an outgoing message (sent by an admin)
+                    // Stop marking read when we hit an outgoing message
                     break;
                 }
            }
            if (changed) {
                console.log(`[MARK] Mark incoming messages as read for chat ${normalizedChatId} by ${adminInfo.username}.`);
-               saveChatHistoryToFirebase();
-               io.emit('update_chat_read_status', { chatId: normalizedChatId }); // Notify clients to update unread indicator
+               saveChatHistoryToFirebase(); // Save changes
+               io.emit('update_chat_read_status', { chatId: normalizedChatId }); // Notify clients to update UI
            }
        }
     } else {
-      // Chat sudah diambil oleh admin yang sama, mungkin hanya perlu restart timer
       console.log(`[PICK] Admin ${username} mengklik pick lagi untuk ${normalizedChatId}, mereset timer.`);
-      startAutoReleaseTimer(normalizedChatId, username);
-      socket.emit('pick_info', { chatId: normalizedChatId, message: 'Timer auto-release direset.' });
+       // Only reset timer if auto-release is enabled
+      if (config.chatAutoReleaseTimeoutMinutes > 0) {
+           startAutoReleaseTimer(normalizedChatId, username);
+           socket.emit('pick_info', { chatId: normalizedChatId, message: 'Timer auto-release direset.' }); // Optional info feedback
+      } else {
+           socket.emit('pick_info', { chatId: normalizedChatId, message: 'Chat ini sudah diambil oleh Anda.' }); // Optional info feedback
+      }
     }
   });
 
@@ -852,31 +996,29 @@ io.on('connection', (socket) => {
      const normalizedChatId = normalizeChatId(chatId);
     if (!normalizedChatId) return socket.emit('pick_error', { chatId, message: 'Chat ID tidak valid.' });
 
-    // Hanya admin yang mengambil atau Super Admin yang bisa unpick
     const pickedBy = pickedChats[normalizedChatId];
+    // Allow unpicking if picked by current user OR if is Super Admin
     if (pickedBy === username || isSuperAdmin(username)) {
-        if (pickedBy) { // Pastikan memang sedang diambil
+        if (pickedBy) { // Check if it was actually picked before deleting
             clearAutoReleaseTimer(normalizedChatId);
             delete pickedChats[normalizedChatId];
             console.log(`[PICK] Admin ${username} melepas chat ${normalizedChatId}`);
-            io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null }); // Broadcast status pick terbaru
-             io.emit('initial_pick_status', pickedChats); // Broadcast seluruh status pick
+            io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null });
+             io.emit('initial_pick_status', pickedChats); // Send full state update
         } else {
             console.warn(`[PICK] Admin ${username} mencoba melepas chat ${normalizedChatId} yang tidak diambil.`);
              socket.emit('pick_error', { chatId: normalizedChatId, message: 'Chat ini tidak sedang diambil.' });
         }
-    } else if (pickedBy) {
+    } else if (pickedBy) { // If picked by someone else and not Super Admin
        console.warn(`[PICK] Admin ${username} mencoba melepas chat ${normalizedChatId} yang diambil oleh ${pickedBy}. Akses ditolak.`);
        socket.emit('pick_error', { chatId: normalizedChatId, message: `Hanya ${pickedBy} atau Super Admin yang bisa melepas chat ini.` });
-    } else {
-        // Ini seharusnya ditangani oleh block pertama (jika pickedBy ada)
-        // Tapi sebagai fallback jika logic agak kacau
+    } else { // Should be covered by the first 'if', but as fallback
          console.warn(`[PICK] Admin ${username} mencoba melepas chat ${normalizedChatId} dalam keadaan ambigu.`);
        socket.emit('pick_error', { chatId: normalizedChatId, message: 'Chat ini tidak sedang diambil.' });
     }
   });
 
-  socket.on('delegate_chat', ({ chatId, targetAdminUsername }) => {
+  socket.on('delegate_chat', async ({ chatId, targetAdminUsername }) => {
       console.log(`[DELEGATE] Permintaan delegasi chat ${chatId} ke ${targetAdminUsername}`);
       const adminInfo = getAdminInfoBySocketId(socket.id);
       if (!adminInfo) {
@@ -884,18 +1026,18 @@ io.on('connection', (socket) => {
           return socket.emit('delegate_error', { chatId, message: 'Login diperlukan.' });
       }
       const senderAdminUsername = adminInfo.username;
-      const senderAdminRole = adminInfo.role;
+      const senderAdminRole = adminInfo.role; // Store role for validation
 
       const normalizedChatId = normalizeChatId(chatId);
 
-      if (!normalizedChatId || !targetAdminUsername) {
-          console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba delegasi dengan data tidak lengkap.`);
-          return socket.emit('delegate_error', { chatId: normalizedChatId, message: 'Data tidak lengkap (ID chat atau target admin kosong).' });
+      if (!normalizedChatId || !targetAdminUsername || typeof targetAdminUsername !== 'string') {
+          console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba delegasi dengan data tidak lengkap atau salah format.`);
+          return socket.emit('delegate_error', { chatId: normalizedChatId, message: 'Data tidak lengkap atau target admin tidak valid.' });
       }
 
       const currentPickedBy = pickedChats[normalizedChatId];
-      // Cek apakah pengirim adalah admin yang mengambil chat ATAU Super Admin
-      if (currentPickedBy !== senderAdminUsername && senderAdminRole !== 'superadmin') {
+      // Check if sender is the picker OR is a Super Admin
+      if (currentPickedBy !== senderAdminUsername && !isSuperAdmin(senderAdminUsername)) {
           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba delegasi chat ${normalizedChatId} yang diambil oleh ${currentPickedBy || 'tidak ada'}. Akses ditolak.`);
           return socket.emit('delegate_error', { chatId: normalizedChatId, message: currentPickedBy ? `Chat ini sedang ditangani oleh ${currentPickedBy}.` : 'Chat ini belum diambil oleh Anda.' });
       }
@@ -903,39 +1045,54 @@ io.on('connection', (socket) => {
           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan ke diri sendiri.`);
           return socket.emit('delegate_error', { chatId: normalizedChatId, message: 'Tidak bisa mendelegasikan ke diri sendiri.' });
       }
-      // Cek apakah target admin valid (ada di daftar admin terdaftar)
+      // Check if target admin exists in the loaded admin list
       if (!admins[targetAdminUsername]) {
           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan ke admin target tidak dikenal: ${targetAdminUsername}`);
           return socket.emit('delegate_error', { chatId: normalizedChatId, message: `Admin target '${targetAdminUsername}' tidak ditemukan.` });
       }
 
-       // Cek status chat, jangan biarkan didelegasikan jika sudah closed
       const encodedChatId = encodeFirebaseKey(normalizedChatId);
+      // Check if chat exists and is closed
       if (chatHistory[encodedChatId]?.status === 'closed') {
           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan chat tertutup ${normalizedChatId}`);
           return socket.emit('delegate_error', { chatId: normalizedChatId, message: 'Chat sudah ditutup. Tidak bisa didelegasikan.' });
       }
+       // If chat doesn't exist in history, allow delegation but log it
+      if (!chatHistory[encodedChatId]) {
+          console.warn(`[DELEGATE] Admin ${senderAdminUsername} mendelegasikan chat baru ${normalizedChatId} yang belum ada di history.`);
+           // Optionally create the chat entry here with default status 'open'
+           chatHistory[encodedChatId] = { status: 'open', messages: [] };
+           // await saveChatHistoryToFirebase(); // Save the new chat entry - Save is done after update_pick_status below
+      }
 
 
       console.log(`[DELEGATE] Admin ${senderAdminUsername} mendelegasikan chat ${normalizedChatId} ke ${targetAdminUsername}`);
-      clearAutoReleaseTimer(normalizedChatId);
-      pickedChats[normalizedChatId] = targetAdminUsername; // Update state di backend
-      startAutoReleaseTimer(normalizedChatId, targetAdminUsername); // Mulai timer untuk admin baru
+      clearAutoReleaseTimer(normalizedChatId); // Clear timer for the sender's pick
+      pickedChats[normalizedChatId] = targetAdminUsername; // Set the new picker
+      // Start auto-release timer for the new picker if enabled
+      if (config.chatAutoReleaseTimeoutMinutes > 0) {
+          startAutoReleaseTimer(normalizedChatId, targetAdminUsername);
+      }
 
-      io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: targetAdminUsername }); // Broadcast status pick terbaru
-       io.emit('initial_pick_status', pickedChats); // Broadcast seluruh status pick
 
-      // Beri tahu admin target jika dia sedang online
+      // Save history only if a new chat entry was created above
+      // saveChatHistoryToFirebase(); // Or save here every time if you want to be sure status/messages[] is there
+
+      io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: targetAdminUsername }); // Update pick status for everyone
+      io.emit('initial_pick_status', pickedChats); // Send full state update to sync all clients
+
       const targetSocketId = usernameToSocketId[targetAdminUsername];
-      if (targetSocketId) {
+      if (targetSocketId && io.sockets.sockets.get(targetSocketId)) { // Check if target admin is online
           io.to(targetSocketId).emit('chat_delegated_to_you', {
               chatId: normalizedChatId,
               fromAdmin: senderAdminUsername,
-              message: `Chat ${normalizedChatId.split('@')[0]} didelegasikan kepada Anda oleh ${senderAdminUsername}.`
+              message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} didelegasikan kepada Anda oleh ${senderAdminUsername}.` // Use chatId as fallback
           });
+      } else {
+           console.warn(`[DELEGATE] Target admin ${targetAdminUsername} offline, tidak mengirim notifikasi delegasi.`);
       }
 
-      socket.emit('delegate_success', { chatId: normalizedChatId, targetAdminUsername }); // Konfirmasi ke pengirim
+      socket.emit('delegate_success', { chatId: normalizedChatId, targetAdminUsername }); // Confirm to sender
   });
 
 
@@ -947,46 +1104,55 @@ io.on('connection', (socket) => {
     }
     const username = adminInfo.username;
 
-    const chatId = normalizeChatId(to);
-    if (!chatId || (!text && !media)) {
-        console.warn(`[REPLY] Admin ${username} mencoba kirim pesan dengan data tidak lengkap.`);
-        return socket.emit('send_error', { to: chatId, text, message: 'Data tidak lengkap (ID chat, teks, atau media kosong).' });
+    const chatId = normalizeChatId(to); // Normalize the target chat ID
+    if (!chatId || (!text && !media)) { // Check if target ID is valid and there is content
+        console.warn(`[REPLY] Admin ${username} mencoba kirim pesan dengan data tidak lengkap atau ID chat tidak valid.`);
+        return socket.emit('send_error', { to: chatId, text, message: 'Data tidak lengkap (ID chat, teks, atau media kosong) atau ID chat tidak valid.' });
     }
-    if (!sock || sock.ws.readyState !== sock.ws.OPEN) { // Cek koneksi WA siap
+     // Check WhatsApp connection state
+    if (!sock || sock.ws.readyState !== sock.ws.OPEN) {
         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan, tapi koneksi WA tidak siap.`);
-        return socket.emit('send_error', { to: chatId, text, message: 'Koneksi WhatsApp belum siap.' });
+        return socket.emit('send_error', { to: chatId, text, media, message: 'Koneksi WhatsApp belum siap. Silakan coba lagi nanti.' });
     }
 
-    // Cek apakah chat diambil dan diambil oleh admin yang mengirim
     const pickedBy = pickedChats[chatId];
-    if (!pickedBy) {
-         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan ke chat ${chatId} yang belum diambil.`);
-        return socket.emit('send_error', { to: chatId, text, message: 'Ambil chat ini terlebih dahulu.' });
-    }
-    if (pickedBy !== username) {
-         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan ke chat ${chatId} yang diambil oleh ${pickedBy}.`);
-        return socket.emit('send_error', { to: chatId, text, message: `Sedang ditangani oleh ${pickedBy}.` });
+    // Allow sending if picked by current user OR is Super Admin
+    const canReply = pickedBy === username || isSuperAdmin(username);
+
+    if (!canReply) {
+         const errorMsg = pickedBy ? `Sedang ditangani oleh ${pickedBy}. Ambil alih chat ini terlebih dahulu.` : 'Ambil chat ini terlebih dahulu.';
+         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan ke chat ${chatId}. ${errorMsg}`);
+        return socket.emit('send_error', { to: chatId, text, message: errorMsg });
     }
 
      const encodedChatId = encodeFirebaseKey(chatId);
-     // Cek status chat
+     // Check if chat exists in history and is closed
      if (chatHistory[encodedChatId]?.status === 'closed') {
         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan ke chat tertutup ${chatId}.`);
-        return socket.emit('send_error', { to: chatId, text, message: 'Chat sudah ditutup. Tidak bisa mengirim balasan.' });
+        return socket.emit('send_error', { to: chatId, text, media, message: 'Chat sudah ditutup. Tidak bisa mengirim balasan.' });
     }
+     // If chat doesn't exist in history, create it now with default status 'open'
+     if (!chatHistory[encodedChatId]) {
+          console.log(`[REPLY] Admin ${username} mengirim pesan ke chat baru ${chatId} yang belum ada di history.`);
+          chatHistory[encodedChatId] = { status: 'open', messages: [] };
+           // No need to save here, save is done after adding message below
+      }
 
 
     try {
+      // Get admin initials for outgoing message display
       const adminInfoFromAdmins = admins[username];
-      // Ambil inisial, pastikan max 3 huruf dan selalu tambahkan strip di depan untuk format WA
-      const adminInitials = (adminInfoFromAdmins?.initials || username.substring(0, 3).toUpperCase()).substring(0,3); // Max 3 chars
-        // Append initials only if there is actual text or if it's an audio/media message without caption
-      const textForSendingToWA = text ? `${text.trim()}
+      const adminInitials = (adminInfoFromAdmins?.initials || username.substring(0, 3).toUpperCase()).substring(0,3);
 
--${adminInitials}` : (media && !text ? `-${adminInitials}` : ''); // Add initials with '-' prefix and '_' suffix
+      // Add initials prefix to text if text exists, or use initials alone if only media
+      const textContent = text?.trim() || ''; // Use trimmed text or empty string
+      const textForSendingToWA = textContent.length > 0 ? `${textContent}\n\n-${adminInitials}` : (media ? `-${adminInitials}` : '');
 
 
       let sentMsgResult;
+      let sentMediaType = null;
+      let sentMimeType = null;
+      let sentFileName = null;
 
       if (media) {
         if (!media.data || !media.type) {
@@ -994,129 +1160,143 @@ io.on('connection', (socket) => {
              return socket.emit('send_error', { to: chatId, text, media, message: 'Data media tidak valid.' });
         }
         const mediaBuffer = Buffer.from(media.data, 'base64');
-        // Determine the correct MIME type to send to Baileys if not explicitly provided
-        const mediaMimeType = media.mimeType || media.type; // Prefer mimeType if available
+        const mediaMimeType = media.mimeType || media.type; // Use provided mimeType or guess from type
 
         const mediaOptions = {
           mimetype: mediaMimeType,
           fileName: media.name || 'file',
-           // Use textForSendingToWA as caption if it exists, otherwise undefined
-          caption: textForSendingToWA || undefined
+          caption: textForSendingToWA || undefined // Send the text with initials as caption
         };
 
         console.log(`[WA] Mengirim media (${mediaMimeType}) ke ${chatId} oleh ${username}...`);
 
-        if (media.type.startsWith('image/')) { // Use media.type from frontend state for general category
-          sentMsgResult = await sock.sendMessage(chatId, { image: mediaBuffer, ...mediaOptions });
+        // Handle different media types for sending
+        if (media.type.startsWith('image/')) {
+             sentMsgResult = await sock.sendMessage(chatId, { image: mediaBuffer, ...mediaOptions });
+             sentMediaType = 'imageMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name;
         } else if (media.type.startsWith('video/')) {
-          sentMsgResult = await sock.sendMessage(chatId, { video: mediaBuffer, ...mediaOptions });
+             sentMsgResult = await sock.sendMessage(chatId, { video: mediaBuffer, ...mediaOptions });
+             sentMediaType = 'videoMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name;
         } else if (media.type.startsWith('audio/')) {
-            // Baileys recommends ptt: true for voice notes, standard audio needs mimetype
-            // If ptt is true, caption is usually ignored by WA clients
-           const isVoiceNote = mediaOptions.mimetype === 'audio/ogg; codecs=opus' || mediaOptions.mimetype === 'audio/mpeg' || mediaOptions.mimetype === 'audio/wav'; // Common voice note mimetypes
-           // Send text separately if it was provided as caption AND it's a voice note type where caption is ignored
-           if (textForSendingToWA && textForSendingToWA.trim().length > 0 && isVoiceNote) {
-               // Send audio first
-               sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: true });
-               // Then send text separately
-               await sock.sendMessage(chatId, { text: textForSendingToWA });
-           } else {
-                // Send audio with potential caption (if supported by type)
-               sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: isVoiceNote, caption: isVoiceNote ? undefined : mediaOptions.caption });
-           }
-        } else if (media.type === 'application/pdf' || media.type.startsWith('application/') || media.type.startsWith('text/')) { // Handle documents and text files
-            // Use a generic file icon if the specific type is not handled
-             if (media.type === 'application/pdf') {
-                 // Specific handling for PDF? Unlikely needed at send time.
-             }
-             sentMsgResult = await sock.sendMessage(chatId, { document: mediaBuffer, ...mediaOptions });
+           // Check if it looks like a voice note based on MIME type
+           const isVoiceNote = mediaOptions.mimetype === 'audio/ogg; codecs=opus' || mediaOptions.mimetype === 'audio/mpeg' || mediaOptions.mimetype === 'audio/wav';
+            // For voice notes, send as audio with ptt: true and ignore caption. Send text separately if it exists.
+            if (isVoiceNote) {
+                 sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: true });
+                  // If there was text alongside a voice note, send it as a separate text message
+                 if (textContent.length > 0) {
+                     console.log(`[WA] Mengirim teks caption VN terpisah ke ${chatId}`);
+                     await sock.sendMessage(chatId, { text: `-${adminInitials}: ${textContent}` }); // Prepend initials to caption
+                 }
+            } else { // Regular audio file
+                 sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: false, caption: mediaOptions.caption });
+            }
+            sentMediaType = 'audioMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name;
 
-        } else {
+        } else if (media.type === 'application/pdf' || media.type.startsWith('application/') || media.type.startsWith('text/')) {
+             sentMsgResult = await sock.sendMessage(chatId, { document: mediaBuffer, ...mediaOptions });
+              sentMediaType = 'documentMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name;
+        }
+         // Add handler for stickers if needed for sending
+         // else if (media.type === 'stickerMessage') {
+         //      sentMsgResult = await sock.sendMessage(chatId, { sticker: mediaBuffer, ...mediaOptions });
+         //      sentMediaType = 'stickerMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name || 'sticker';
+         // }
+        else {
           console.warn(`[REPLY] Tipe media tidak didukung untuk dikirim: ${media.type}`);
           socket.emit('send_error', { to: chatId, text, media, message: 'Tipe media tidak didukung.' });
-          return;
+          return; // Stop processing on unsupported media type
         }
 
-      } else { // Only text message
-        if (textForSendingToWA.trim().length > 0) {
+      } else { // Text message only
+        if (textForSendingToWA.trim().length > 0) { // Ensure text content is not just initials alone if original text was empty
            console.log(`[WA] Mengirim teks ke ${chatId} oleh ${username}...`);
            sentMsgResult = await sock.sendMessage(chatId, { text: textForSendingToWA });
+            sentMediaType = 'conversation';
+            sentMimeType = 'text/plain'; // Standard mime type for plain text
+            sentFileName = null; // No filename for text
         } else {
             console.warn(`[REPLY] Admin ${username} mencoba kirim pesan kosong.`);
             socket.emit('send_error', { to: chatId, text, media, message: 'Tidak ada konten untuk dikirim.' });
-            return;
+            return; // Stop processing if no text and no media
         }
       }
 
-      // Baileys sendMessage can return an array or a single object
+      // Ensure sentMsgResult is an array and get the first message object
       const sentMsg = Array.isArray(sentMsgResult) ? sentMsgResult[0] : sentMsgResult;
 
+      // Check if the sent message object is valid
       if (!sentMsg || !sentMsg.key || !sentMsg.key.id) {
           console.error('[WA] sock.sendMessage gagal mengembalikan objek pesan terkirim yang valid.', sentMsgResult);
           socket.emit('send_error', { to: chatId, text, media, message: 'Gagal mendapatkan info pesan terkirim dari WhatsApp.' });
-          return;
+          return; // Stop processing on invalid response
       }
 
-      // Store the outgoing message in history
-      // IMPORTANT: Store the text *as it was sent to WA* (including initials) or store original text + initials separately.
-      // Let's store original text + initials separately for clarity in history data structure,
-      // and frontend will decide how to display it.
+      // Create the outgoing message data object for history and clients
       const outgoingMessageData = {
-        id: sentMsg.key.id,
-        from: username, // Store admin username as sender for outgoing
-        to: chatId,
-        text: text?.trim() || null, // Store original text input
-        mediaType: media?.type || null, // Store Baileys type string from frontend
-        mimeType: media?.mimeType || media?.type || null, // Store MIME type if known
-        mediaData: media?.data || null, // Store media data in history (Base64)
-        fileName: media?.name || null,
-        initials: adminInitials, // Store initials used
-        timestamp: sentMsg.messageTimestamp
+        id: sentMsg.key.id, // WhatsApp message ID
+        from: username, // Admin's username
+        to: chatId, // Customer's JID
+        text: textContent, // Original text content (without initials prefix for display in bubble)
+        mediaType: sentMediaType, // Baileys message type or custom type
+        mimeType: sentMimeType, // MIME type of the sent media (if any)
+        mediaData: media?.data || null, // Base64 media data (if available from client)
+        fileName: sentFileName, // File name (if any)
+        initials: adminInitials, // Admin's initials
+        timestamp: sentMsg.messageTimestamp // Timestamp from WhatsApp
           ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString()
-          : new Date().toISOString(), // Use WA timestamp if available
-        type: 'outgoing'
+          : new Date().toISOString(), // Fallback to current time
+        type: 'outgoing', // Message direction
+         // outgoing messages are considered read by default
       };
 
-
+      // Ensure encodedChatId is valid before accessing chatHistory
       if (!encodedChatId) {
            console.error('[FIREBASE] Gagal meng-encode chatId untuk menyimpan pesan keluar:', chatId);
-           return socket.emit('send_error', { to: chatId, text, media, message: 'Kesalahan internal saat menyimpan history.' });
-      }
-
-      // Ensure chat entry and messages array exist before pushing
-      if (!chatHistory[encodedChatId]) {
-           chatHistory[encodedChatId] = { status: 'open', messages: [] }; // Should ideally exist already, but safer
-      }
-      if (!chatHistory[encodedChatId].messages) {
-           chatHistory[encodedChatId].messages = []; // Ensure messages is an array
-      }
-
-      // Check for duplicates before adding to history (important for retries)
-      if (!chatHistory[encodedChatId].messages.some(m => m.id === outgoingMessageData.id)) {
-        console.log(`[HISTORY] Menambahkan pesan keluar baru (ID: ${outgoingMessageData.id}) ke chat ${chatId}`);
-        chatHistory[encodedChatId].messages.push(outgoingMessageData);
-        saveChatHistoryToFirebase(); // Save after adding message
+           // Even if we can't save, notify client that send was attempted
+           socket.emit('send_error', { to: chatId, text: textContent, media, message: 'Kesalahan internal saat menyimpan history. Pesan mungkin terkirim tetapi tidak tersimpan.' });
+           // Continue processing to emit to other clients, but log error
       } else {
-          console.warn(`[HISTORY] Pesan keluar dengan ID ${outgoingMessageData.id} sudah ada di history, diabaikan penambahannya.`);
+           // Ensure chat entry and messages array exist
+          if (!chatHistory[encodedChatId] || !Array.isArray(chatHistory[encodedChatId].messages)) {
+               console.log(`[HISTORY] Membuat/memperbaiki entri chat ${chatId} untuk pesan keluar.`);
+               chatHistory[encodedChatId] = { status: chatHistory[encodedChatId]?.status || 'open', messages: [] };
+           }
+
+           // Add the outgoing message to history, deduplicate by ID
+           if (!chatHistory[encodedChatId].messages.some(m => m && typeof m === 'object' && m.id === outgoingMessageData.id)) {
+             console.log(`[HISTORY] Menambahkan pesan keluar baru (ID: ${outgoingMessageData.id}) ke chat ${chatId}`);
+             chatHistory[encodedChatId].messages.push(outgoingMessageData);
+             saveChatHistoryToFirebase(); // Save after adding message
+           } else {
+               console.warn(`[HISTORY] Pesan keluar duplikat terdeteksi (ID: ${outgoingMessageData.id}), diabaikan penambahannya ke history.`);
+           }
       }
 
-      // Emit the message data to all clients so they can display it
-      // Include chatStatus in the emitted message data
-      io.emit('new_message', { ...outgoingMessageData, chatId: chatId, chatStatus: chatHistory[encodedChatId].status });
 
-      // Confirm sending success to the original sender's socket
+      // Emit the outgoing message to all clients (including sender) to update their UI
+      io.emit('new_message', {
+          ...outgoingMessageData,
+          chatId: chatId, // Ensure chatId is top-level
+          chatStatus: chatHistory[encodedChatId]?.status || 'open' // Include chat status
+      });
+
+      // Send confirmation to the original sender's socket
       socket.emit('reply_sent_confirmation', {
           sentMsgId: outgoingMessageData.id,
           chatId: outgoingMessageData.to
       });
 
-      // Restart the auto-release timer for this chat
-      startAutoReleaseTimer(chatId, username);
+      // Reset auto-release timer if the message was sent by the current picker
+      if (pickedChats[chatId] === username && config.chatAutoReleaseTimeoutMinutes > 0) {
+           startAutoReleaseTimer(chatId, username);
+      }
 
 
     } catch (error) {
       console.error(`[REPLY] Gagal mengirim pesan ke ${chatId} oleh ${username}:`, error);
-      socket.emit('send_error', { to: chatId, text, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
+      // Send error feedback to the original sender's socket
+      socket.emit('send_error', { to: chatId, text: textContent, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
     }
   });
 
@@ -1128,112 +1308,47 @@ io.on('connection', (socket) => {
      }
 
      const normalizedChatId = normalizeChatId(chatId);
+     if (!normalizedChatId) {
+          console.warn(`[SOCKET] Admin ${adminInfo?.username} mencoba mark_as_read dengan ID chat tidak valid: ${chatId}`);
+          return;
+     }
      const encodedChatId = encodeFirebaseKey(normalizedChatId);
-
      if (!encodedChatId) {
-         console.error(`[FIREBASE] Gagal meng-encode chatId untuk mark_as_read: ${chatId}`);
+         console.error(`[FIREBASE] Gagal meng-encode chatId untuk mark_as_read: ${normalizedChatId}`);
          return;
      }
 
      const pickedBy = pickedChats[normalizedChatId];
-     // Allow marking as read if Super Admin OR if admin who picked it
+     // Allow marking as read if Super Admin OR if picked by the current user
      if (isSuperAdmin(adminInfo.username) || pickedBy === adminInfo.username) {
          const chatEntry = chatHistory[encodedChatId];
-         if (chatEntry?.messages) {
+         if (chatEntry?.messages) { // Ensure chat entry and messages array exist
               let changed = false;
-              // Iterate from the latest message backwards
+              // Iterate backwards from the last message
               for (let i = chatEntry.messages.length - 1; i >= 0; i--) {
-                   // Only mark pesan incoming yang belum dibaca
+                  // Ensure message object is valid and is an unread incoming message
+                   if (!chatEntry.messages[i] || typeof chatEntry.messages[i] !== 'object') continue;
+
                    if (chatEntry.messages[i].type === 'incoming' && chatEntry.messages[i].unread) {
                        chatEntry.messages[i].unread = false;
                        changed = true;
                    } else if (chatEntry.messages[i].type === 'outgoing') {
-                        // Stop marking as read once we hit an outgoing message (sent by an admin)
-                       break;
+                        // Stop marking read when we hit an outgoing message
+                        break;
                    }
-               // If the message is before the last outgoing message sent by an admin, it's considered read.
-               // This logic needs careful consideration. For now, just mark *all* incoming messages as read when chat is picked or manually marked.
-               // Let's simplify: mark *all* incoming messages as read in this chat.
-                if (chatEntry.messages[i].type === 'incoming' && chatEntry.messages[i].unread) {
-                    chatEntry.messages[i].unread = false;
-                    changed = true;
-                }
               }
               if (changed) {
                   console.log(`[MARK] Mark incoming messages as read for chat ${normalizedChatId} by ${adminInfo.username}.`);
-                  saveChatHistoryToFirebase(); // Save changes
-                  io.emit('update_chat_read_status', { chatId: normalizedChatId }); // Notify clients
+                  saveChatHistoryToFirebase(); // Save the changes
+                  io.emit('update_chat_read_status', { chatId: normalizedChatId }); // Notify all clients to update UI
               }
+         } else {
+             console.warn(`[MARK] Chat ${normalizedChatId} not found or has no messages to mark as read.`);
          }
      } else {
-          // console.log(`[MARK] Event mark_as_read untuk ${normalizedChatId} dari ${adminInfo.username} diabaikan (diambil ${pickedBy}).`);
-          // Optionally emit an error back if this action requires pick/superadmin
-          // socket.emit('mark_read_error', { chatId: normalizedChatId, message: 'Anda tidak memiliki izin untuk menandai chat ini sudah dibaca.' });
+         console.warn(`[MARK] Admin ${adminInfo.username} mencoba mark_as_read chat ${normalizedChatId} yang tidak ditanganinya. Akses ditolak.`);
      }
    });
-
-    // --- QUICK REPLY TEMPLATE MANAGEMENT (Super Admin Only) ---
-    socket.on('save_quick_reply_template', (data) => {
-        const adminInfo = adminSockets[socket.id];
-        if (!adminInfo || adminInfo.role !== 'superadmin') {
-            socket.emit('error_message', 'Hanya Super Admin yang dapat menyimpan template.');
-            return;
-        }
-        if (!data || typeof data.shortcut !== 'string' || typeof data.text !== 'string') {
-            socket.emit('error_message', 'Data template tidak valid.');
-            return;
-        }
-        const shortcut = data.shortcut.trim();
-        const text = data.text.trim();
-
-        if (!shortcut.startsWith('/') || shortcut.length < 2) {
-            socket.emit('error_message', 'Shortcut harus dimulai dengan / dan minimal 2 karakter.');
-            return;
-        }
-        if (!text) {
-            socket.emit('error_message', 'Teks template tidak boleh kosong.');
-            return;
-        }
-
-        // Validate shortcut format (allow alphanumeric, underscore, hyphen after initial /)
-        if (!/^\/[a-zA-Z0-9_-]+$/.test(shortcut)) {
-             socket.emit('error_message', 'Shortcut hanya boleh berisi huruf, angka, garis bawah (_), atau tanda hubung (-).');
-             return;
-        }
-
-
-        quickReplyTemplates[shortcut] = { text: text };
-        saveQuickReplyTemplatesToFirebase(); // Save and broadcast
-        console.log(`[ADMIN] Super Admin '${adminInfo.username}' menyimpan template: ${shortcut}`);
-        socket.emit('success_message', `Template '${shortcut}' berhasil disimpan.`);
-        // No need to emit 'quick_reply_templates_updated' here, save function does it
-    });
-
-    socket.on('delete_quick_reply_template', (shortcutToDelete) => {
-        const adminInfo = adminSockets[socket.id];
-        if (!adminInfo || adminInfo.role !== 'superadmin') {
-            socket.emit('error_message', 'Hanya Super Admin yang dapat menghapus template.');
-            return;
-        }
-        if (typeof shortcutToDelete !== 'string' || !shortcutToDelete.startsWith('/')) {
-             socket.emit('error_message', 'Shortcut template tidak valid.');
-             return;
-        }
-
-        if (quickReplyTemplates[shortcutToDelete]) {
-            delete quickReplyTemplates[shortcutToDelete];
-            saveQuickReplyTemplatesToFirebase(); // Save and broadcast
-            console.log(`[ADMIN] Super Admin '${adminInfo.username}' menghapus template: ${shortcutToDelete}`);
-            socket.emit('success_message', `Template '${shortcutToDelete}' berhasil dihapus.`);
-            // No need to emit 'quick_reply_templates_updated' here, save function does it
-        } else {
-            socket.emit('error_message', `Template '${shortcutToDelete}' tidak ditemukan.`);
-        }
-    });
-    // --- END QUICK REPLY TEMPLATE MANAGEMENT ---
-
-
-    // --- Super Admin Fungsi ---
 
     socket.on('delete_chat', async ({ chatId }) => {
         const adminInfo = getAdminInfoBySocketId(socket.id);
@@ -1248,35 +1363,38 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: 'Chat ID tidak valid.' });
         }
         const encodedChatId = encodeFirebaseKey(normalizedChatId);
+        if (!encodedChatId) {
+             console.error(`[SUPERADMIN] Gagal meng-encode chatId untuk delete_chat: ${normalizedChatId}`);
+             return socket.emit('superadmin_error', { message: 'Kesalahan internal: ID chat tidak valid.' });
+        }
+
 
         console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menghapus chat history untuk ${normalizedChatId}`);
 
+        // Check if chat exists in history before attempting deletion
         if (chatHistory[encodedChatId]) {
-            // Hapus dari state backend
+            // Remove from backend state
             delete chatHistory[encodedChatId];
-            // Lepas chat jika sedang diambil
+            // Remove from picked state if picked
             if (pickedChats[normalizedChatId]) {
                 clearAutoReleaseTimer(normalizedChatId);
                 delete pickedChats[normalizedChatId];
-                 // io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null }); // Broadcast pick status
-                 // io.emit('initial_pick_status', pickedChats); // Broadcast seluruh status pick
-                 // update_pick_status dan initial_pick_status akan dikirim setelah berhasil dihapus dari firebase
             }
 
-            // Hapus dari Firebase
+            // Delete from Firebase
             const success = await deleteChatHistoryFromFirebase(encodedChatId);
 
             if (success) {
-                // Beri tahu semua klien bahwa chat dihapus
+                // Emit updates to all clients
                 io.emit('chat_history_deleted', { chatId: normalizedChatId });
-                 io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null }); // Ensure pick status is cleared everywhere
-                 io.emit('initial_pick_status', pickedChats); // Ensure overall pick state is broadcast
-                socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0]} berhasil dihapus.` });
+                 // No need for update_pick_status here, initial_pick_status handles it
+                 io.emit('initial_pick_status', pickedChats);
+                socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dihapus.` }); // Use chatId as fallback
             } else {
-                 // Jika gagal hapus dari Firebase, kembalikan ke state backend (opsional, tergantung strategi error handling)
-                 // chatHistory[encodedChatId] = { status: 'open', messages: [] }; // Example of basic revert
                  console.error(`[SUPERADMIN] Gagal menghapus chat ${normalizedChatId} dari Firebase.`);
-                 socket.emit('superadmin_error', { message: 'Gagal menghapus chat dari Firebase.' });
+                 socket.emit('superadmin_error', { message: 'Gagal menghapus chat dari database.' });
+                 // Note: If Firebase delete failed, the chat is gone from backend state but not DB.
+                 // A reload/reconnect would bring it back from DB. This is a potential inconsistency edge case.
             }
         } else {
              console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba menghapus chat ${normalizedChatId} yang tidak ditemukan.`);
@@ -1293,26 +1411,28 @@ io.on('connection', (socket) => {
 
          console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menghapus SEMUA chat history.`);
 
-         // Bersihkan state backend
+         // Reset backend state
          chatHistory = {};
          for (const chatId in pickedChats) {
-             clearAutoReleaseTimer(chatId); // Batalkan semua timer
+             if (Object.prototype.hasOwnProperty.call(pickedChats, chatId)) {
+                clearAutoReleaseTimer(chatId);
+             }
          }
-         pickedChats = {}; // Bersihkan status pick
+         pickedChats = {};
 
-         // Hapus dari Firebase
+         // Delete from Firebase
          const success = await deleteAllChatHistoryFromFirebase();
 
          if (success) {
-             // Beri tahu semua klien
+             // Emit updates to all clients
              io.emit('all_chat_history_deleted');
-             io.emit('initial_pick_status', pickedChats); // Broadcast status picks kosong
+             io.emit('initial_pick_status', pickedChats); // Send empty picked state
              socket.emit('superadmin_success', { message: 'Semua chat history berhasil dihapus.' });
          } else {
               console.error(`[SUPERADMIN] Gagal menghapus semua chat dari Firebase.`);
-             // Jika gagal hapus dari Firebase, state backend sudah kosong, tapi Firebase masih ada data.
-             // Perlu strategi rekonsiliasi jika ini penting.
-             socket.emit('superadmin_error', { message: 'Gagal menghapus semua chat dari Firebase.' });
+             socket.emit('superadmin_error', { message: 'Gagal menghapus semua chat dari database.' });
+             // Note: If Firebase delete failed, backend state is empty, but DB might not be.
+             // A reload/reconnect would bring back data from DB.
          }
      });
 
@@ -1324,29 +1444,32 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa menambah admin.' });
         }
 
-        if (!username || !password || !initials) {
-             console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} data tidak lengkap.`);
-            return socket.emit('superadmin_error', { message: 'Username, password, dan initials harus diisi.' });
+        if (!username || typeof username !== 'string' || !password || typeof password !== 'string' || !initials || typeof initials !== 'string') {
+             console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} data tidak lengkap atau format salah.`);
+            return socket.emit('superadmin_error', { message: 'Username, password, dan initials harus diisi dengan format yang benar.' });
         }
-         // Server-side validation for initials length
-         if (initials.length > 3) {
-              console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} initials terlalu panjang.`);
-              return socket.emit('superadmin_error', { message: 'Initials maksimal 3 karakter.' });
+         const cleanedInitials = initials.trim().toUpperCase();
+         if (cleanedInitials.length === 0 || cleanedInitials.length > 3) {
+              console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} initials tidak valid: '${initials}' tidak 1-3 huruf.`);
+              return socket.emit('superadmin_error', { message: 'Initials harus 1-3 karakter huruf.' });
          }
-        if (admins[username]) {
+          // Allow A-Z only for initials
+         if (!/^[A-Z]+$/.test(cleanedInitials)) {
+              console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} initials mengandung karakter non-huruf: '${initials}'`);
+              return socket.emit('superadmin_error', { message: 'Initials hanya boleh berisi huruf A-Z.' });
+         }
+
+        if (admins[username]) { // Check against loaded admins data
             console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba menambah admin '${username}' yang sudah ada.`);
             return socket.emit('superadmin_error', { message: `Admin dengan username '${username}' sudah ada.` });
         }
-         // Allow role 'admin' or 'superadmin' for the new admin
          const validRoles = ['admin', 'superadmin'];
-         if (!role || !validRoles.includes(role)) {
+         if (!role || typeof role !== 'string' || !validRoles.includes(role)) {
               console.warn(`[SUPERADMIN] Permintaan tambah admin dari ${adminInfo.username} role tidak valid: ${role}`);
               return socket.emit('superadmin_error', { message: 'Role admin tidak valid. Gunakan "admin" atau "superadmin".' });
          }
-         // Only Super Admin can create another Super Admin
-         if (role === 'superadmin' && adminInfo.role !== 'superadmin') {
-              // This check should technically be redundant due to the main superadmin check,
-              // but it adds a layer of safety.
+         // Prevent regular admin from creating Super Admin
+         if (role === 'superadmin' && !isSuperAdmin(adminInfo.username)) {
                console.warn(`[SUPERADMIN] Admin ${adminInfo.username} (role ${adminInfo.role}) mencoba menambah admin dengan role 'superadmin'. Akses ditolak.`);
               return socket.emit('superadmin_error', { message: 'Hanya Super Admin yang bisa membuat Super Admin baru.' });
          }
@@ -1354,13 +1477,15 @@ io.on('connection', (socket) => {
 
         console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menambah admin baru: ${username} (${role})`);
 
+        // Update backend state
         admins[username] = {
-            password: password, // CONSIDER HASHING PASSWORDS IN A REAL APPLICATION!
-            initials: initials, // Store raw initials
+            password: password,
+            initials: cleanedInitials,
             role: role
         };
 
-        saveAdminsToFirebase(); // This will trigger 'registered_admins' broadcast
+        // Save to Firebase and emit updates
+        saveAdminsToFirebase();
 
         socket.emit('superadmin_success', { message: `Admin '${username}' berhasil ditambahkan.` });
      });
@@ -1373,15 +1498,16 @@ io.on('connection', (socket) => {
               return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa menghapus admin.' });
           }
 
-          if (!usernameToDelete) {
-               console.warn(`[SUPERADMIN] Permintaan hapus admin dari ${adminInfo.username} data tidak lengkap.`);
+          if (!usernameToDelete || typeof usernameToDelete !== 'string') {
+               console.warn(`[SUPERADMIN] Permintaan hapus admin dari ${adminInfo.username} data tidak lengkap atau format salah.`);
               return socket.emit('superadmin_error', { message: 'Username admin yang akan dihapus tidak valid.' });
           }
+          // Prevent admin from deleting themselves
           if (usernameToDelete === adminInfo.username) {
               console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba menghapus akun sendiri.`);
               return socket.emit('superadmin_error', { message: 'Tidak bisa menghapus akun Anda sendiri.' });
           }
-           // Prevent deleting the LAST Super Admin account if there's only one
+           // Prevent deleting the last Super Admin
            const superAdmins = Object.keys(admins).filter(user => admins[user]?.role === 'superadmin');
            if (superAdmins.length === 1 && superAdmins[0] === usernameToDelete) {
                console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba menghapus Super Admin terakhir: ${usernameToDelete}`);
@@ -1389,31 +1515,42 @@ io.on('connection', (socket) => {
            }
 
 
-          if (!admins[usernameToDelete]) {
+          if (!admins[usernameToDelete]) { // Check against loaded admins data
                console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba menghapus admin '${usernameToDelete}' yang tidak ditemukan.`);
                return socket.emit('superadmin_error', { message: `Admin dengan username '${usernameToDelete}' tidak ditemukan.` });
           }
 
           console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menghapus admin: ${usernameToDelete}`);
 
-           // Perform cleanup for the admin being deleted if they are online
+           // If the admin to be deleted is currently online, clean up their state and disconnect their socket
            const targetSocketId = usernameToSocketId[usernameToDelete];
            if(targetSocketId) {
                 console.log(`[SUPERADMIN] Admin ${usernameToDelete} online, membersihkan state dan memutuskan koneksi.`);
-                cleanupAdminState(targetSocketId); // This also emits updates
-                 // Explicitly disconnect the socket
-                 io.sockets.sockets.get(targetSocketId)?.disconnect(true);
+                cleanupAdminState(targetSocketId); // This cleans up their picked chats and removes them from adminSockets/usernameToSocketId
+                 // Explicitly disconnect the socket if it still exists
+                 if (io.sockets.sockets.get(targetSocketId)) {
+                      io.sockets.sockets.get(targetSocketId).disconnect(true);
+                 }
            } else {
-               // If offline, just emit updates after deleting from data
-               io.emit('update_online_admins', getOnlineAdminUsernames()); // Re-broadcast online list
-               io.emit('initial_pick_status', pickedChats); // Re-broadcast pick status
+                // If admin is offline, manually clean up their picked chats
+                const chatsPickedByDeletedAdmin = Object.keys(pickedChats).filter(chatId => pickedChats[chatId] === usernameToDelete);
+                 chatsPickedByDeletedAdmin.forEach(chatId => {
+                    clearAutoReleaseTimer(chatId); // Clear their timers
+                    delete pickedChats[chatId]; // Remove their picks
+                    console.log(`[ADMIN] Chat ${chatId} dilepas karena admin ${usernameToDelete} dihapus.`);
+                    io.emit('update_pick_status', { chatId: chatId, pickedBy: null }); // Notify clients
+                 });
+
+               // Emit updates about online admins (the deleted one is now definitely not online) and picked chats
+               io.emit('update_online_admins', getOnlineAdminUsernames());
+               io.emit('initial_pick_status', pickedChats);
            }
 
+           // Remove from backend state
+          delete admins[usernameToDelete];
 
-          delete admins[usernameToDelete]; // Delete from state
-
-          saveAdminsToFirebase(); // Save changes to Firebase (broadcasts registered_admins)
-
+          // Save to Firebase and emit updates
+          saveAdminsToFirebase();
 
           socket.emit('superadmin_success', { message: `Admin '${usernameToDelete}' berhasil dihapus.` });
       });
@@ -1422,27 +1559,32 @@ io.on('connection', (socket) => {
      socket.on('close_chat', ({ chatId }) => {
         console.log(`[CHAT STATUS] Permintaan tutup chat: ${chatId}`);
         const adminInfo = getAdminInfoBySocketId(socket.id);
-        if (!adminInfo || !chatId) {
+        if (!adminInfo || !chatId || typeof chatId !== 'string') {
              console.warn(`[CHAT STATUS] Socket ${socket.id} mencoba tutup chat tanpa login atau chat ID.`);
              return socket.emit('chat_status_error', { chatId, message: 'Login diperlukan atau Chat ID tidak valid.' });
         }
         const username = adminInfo.username;
         const normalizedChatId = normalizeChatId(chatId);
-        if (!normalizedChatId) {
-            console.warn(`[CHAT STATUS] Admin ${username} mencoba tutup chat dengan ID tidak valid.`);
+        if (!normalizedChatId) { // Check if normalization failed
+            console.warn(`[CHAT STATUS] Admin ${username} mencoba tutup chat dengan ID tidak valid: ${chatId}`);
             return socket.emit('chat_status_error', { chatId, message: 'Chat ID tidak valid.' });
         }
 
         const encodedChatId = encodeFirebaseKey(normalizedChatId);
+         if (!encodedChatId) {
+             console.error(`[CHAT STATUS] Gagal meng-encode chatId untuk close_chat: ${normalizedChatId}`);
+             return socket.emit('chat_status_error', { chatId: normalizedChatId, message: 'Kesalahan internal: ID chat tidak valid.' });
+         }
         const chatEntry = chatHistory[encodedChatId];
 
+         // Check if chat exists in history
         if (!chatEntry) {
              console.warn(`[CHAT STATUS] Admin ${username} mencoba tutup chat ${normalizedChatId} yang tidak ditemukan di history.`);
              return socket.emit('chat_status_error', { chatId: normalizedChatId, message: 'Chat tidak ditemukan.' });
         }
 
         const pickedBy = pickedChats[normalizedChatId];
-        // Izinkan menutup chat jika Super Admin ATAU admin yang mengambil chat tersebut
+        // Allow closing if picked by current user OR is Super Admin
         if (isSuperAdmin(username) || pickedBy === username) {
             if (chatEntry.status === 'closed') {
                  console.warn(`[CHAT STATUS] Admin ${username} mencoba tutup chat ${normalizedChatId} yang sudah tertutup.`);
@@ -1450,31 +1592,34 @@ io.on('connection', (socket) => {
             }
 
             console.log(`[CHAT STATUS] Admin ${username} menutup chat ${normalizedChatId}`);
-            chatEntry.status = 'closed'; // Update status di state backend
+            // Update backend state
+            chatEntry.status = 'closed';
 
-            // Lepas chat jika sedang diambil
+            // Remove from picked state if picked
             if (pickedBy) {
                  clearAutoReleaseTimer(normalizedChatId);
                  delete pickedChats[normalizedChatId];
-                 io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null }); // Broadcast status pick terbaru
-                 io.emit('initial_pick_status', pickedChats); // Broadcast seluruh status pick
+                 io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null }); // Notify clients
+                 io.emit('initial_pick_status', pickedChats); // Send full state update
             }
 
-            saveChatHistoryToFirebase(); // Simpan perubahan status ke Firebase
+            // Save to Firebase and emit updates
+            saveChatHistoryToFirebase();
 
-            io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'closed' }); // Beri tahu semua klien status terbaru
-            socket.emit('chat_status_success', { chatId: normalizedChatId, status: 'closed', message: `Chat ${normalizedChatId.split('@')[0]} berhasil ditutup.` });
+            io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'closed' }); // Notify all clients
+            socket.emit('chat_status_success', { chatId: normalizedChatId, status: 'closed', message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil ditutup.` }); // Confirm to sender
 
         } else {
              const errorMsg = pickedBy ? `Hanya ${pickedBy} atau Super Admin yang bisa menutup chat ini.` : `Chat ini tidak diambil oleh siapa pun. Hanya Super Admin yang bisa menutup chat yang tidak diambil.`;
              console.warn(`[CHAT STATUS] Admin ${username} mencoba menutup chat ${normalizedChatId}. Akses ditolak: ${errorMsg}`);
-            socket.emit('chat_status_error', { chatId: normalizedChatId, message: errorMsg });
+            socket.emit('chat_status_error', { chatId: normalizedChatId, message: errorMsg }); // Send error to sender
         }
      });
 
       socket.on('open_chat', ({ chatId }) => {
         console.log(`[CHAT STATUS] Permintaan buka chat: ${chatId}`);
         const adminInfo = getAdminInfoBySocketId(socket.id);
+        // Only allow Super Admin to open chats
         if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
              console.warn(`[CHAT STATUS] Akses ditolak: Admin ${adminInfo?.username} mencoba membuka kembali chat.`);
             return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa membuka kembali chat.' });
@@ -1486,182 +1631,294 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: 'Chat ID tidak valid.' });
         }
         const encodedChatId = encodeFirebaseKey(normalizedChatId);
+         if (!encodedChatId) {
+             console.error(`[SUPERADMIN] Gagal meng-encode chatId untuk open_chat: ${normalizedChatId}`);
+             return socket.emit('superadmin_error', { message: 'Kesalahan internal: ID chat tidak valid.' });
+         }
         const chatEntry = chatHistory[encodedChatId];
 
+         // Check if chat exists in history
         if (!chatEntry) {
              console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba membuka chat ${normalizedChatId} yang tidak ditemukan di history.`);
              return socket.emit('superadmin_error', { chatId: normalizedChatId, message: 'Chat tidak ditemukan.' });
         }
 
+         // Check if chat is already open
          if (chatEntry.status === 'open') {
               console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba membuka chat ${normalizedChatId} yang sudah terbuka.`);
               return socket.emit('superadmin_error', { chatId: normalizedChatId, message: 'Chat sudah terbuka.' });
          }
 
-
         console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} membuka kembali chat ${normalizedChatId}`);
-        chatEntry.status = 'open'; // Update status di state backend
+        // Update backend state
+        chatEntry.status = 'open';
 
-        saveChatHistoryToFirebase(); // Simpan perubahan status ke Firebase
+        // Save to Firebase and emit updates
+        saveChatHistoryToFirebase();
 
-        io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'open' }); // Beri tahu semua klien status terbaru
-        socket.emit('superadmin_success', { chatId: normalizedChatId, status: 'open', message: `Chat ${normalizedChatId.split('@')[0]} berhasil dibuka kembali.` });
+        io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'open' }); // Notify all clients
+        socket.emit('superadmin_success', { chatId: normalizedChatId, status: 'open', message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dibuka kembali.` }); // Confirm to sender
 
      });
 
-    // --- QUICK REPLY TEMPLATES ---
-    socket.on('save_quick_reply_template', ({ shortcut, text }) => {
+    // --- QUICK REPLY TEMPLATES HANDLERS (SUPER ADMIN) ---
+    socket.on('add_quick_reply', async ({ shortcut, text }) => {
         const adminInfo = getAdminInfoBySocketId(socket.id);
+        // Only allow Super Admin
         if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
-            console.warn(`[TEMPLATES] Akses ditolak: Admin ${adminInfo?.username} mencoba menyimpan template.`);
+            console.warn(`[TEMPLATES] Akses ditolak: Admin ${adminInfo?.username} mencoba menambah template.`);
             return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa mengelola template.' });
         }
 
-        console.log(`[TEMPLATES] Permintaan simpan template dari Super Admin ${adminInfo.username}: ${shortcut}`);
+        console.log(`[TEMPLATES] Permintaan tambah template dari Super Admin ${adminInfo.username}: ${shortcut}`);
 
-        // Server-side validation
-        if (!shortcut || !text || typeof shortcut !== 'string' || typeof text !== 'string') {
+        // Validate input data
+        if (!shortcut || typeof shortcut !== 'string' || !text || typeof text !== 'string') {
             console.warn(`[TEMPLATES] Data template tidak lengkap atau format salah dari ${adminInfo.username}.`);
             return socket.emit('superadmin_error', { message: 'Data template tidak lengkap (shortcut dan text diperlukan).' });
         }
-        if (!shortcut.startsWith('/')) {
-             console.warn(`[TEMPLATES] Shortcut template tidak valid dari ${adminInfo.username}: '${shortcut}' tidak diawali '/'.`);
-             return socket.emit('superadmin_error', { message: 'Shortcut harus diawali dengan "/".' });
+        const cleanedShortcut = shortcut.trim().toLowerCase(); // Normalize shortcut to lowercase
+
+        // --- PERBAIKAN: Regex validasi shortcut ---
+        // Regex ini memeriksa apakah string dimulai dengan '/' diikuti 1 atau lebih huruf kecil, angka, underscore, atau hyphen.
+        const shortcutValidationRegex = /^\/[a-z0-9_-]+$/;
+        if (!shortcutValidationRegex.test(cleanedShortcut)) {
+             console.warn(`[TEMPLATES] Shortcut template tidak valid dari ${adminInfo.username}: '${cleanedShortcut}'. Tidak sesuai format.`);
+             return socket.emit('superadmin_error', { message: 'Shortcut harus diawali dengan "/" dan hanya berisi huruf kecil, angka, hyphen (-), atau underscore (_).' });
         }
-         // Check if shortcut contains invalid Firebase key characters BEFORE encoding
-         const invalidChars = /[.#$\/\[\]]/;
-         // We are encoding /, so we only need to check for ., $, #, [, ]
-         const firebaseReservedChars = /[.#$\[\]]/;
-         if (firebaseReservedChars.test(shortcut)) {
-            console.warn(`[TEMPLATES] Shortcut template tidak valid dari ${adminInfo.username}: '${shortcut}' mengandung karakter terlarang Firebase (. # $ [ ]).`);
-             return socket.emit('superadmin_error', { message: 'Shortcut tidak boleh mengandung karakter . # $ [ ].' });
-         }
+        // --- END PERBAIKAN ---
+
+        if (quickReplyTemplates[cleanedShortcut]) { // Check against backend state
+            console.warn(`[TEMPLATES] Admin ${adminInfo.username} mencoba menambah template '${cleanedShortcut}' yang sudah ada.`);
+            return socket.emit('superadmin_error', { message: `Template dengan shortcut '${cleanedShortcut}' sudah ada.` });
+        }
+
+        if (text.trim().length === 0) {
+            console.warn(`[TEMPLATES] Template text kosong dari ${adminInfo.username}.`);
+            return socket.emit('superadmin_error', { message: 'Teks template tidak boleh kosong.' });
+        }
+
+        // Generate a stable ID from the encoded shortcut
+        const templateId = encodeFirebaseKey(cleanedShortcut);
+        if (!templateId) {
+             console.error(`[TEMPLATES] Gagal meng-encode shortcut '${cleanedShortcut}' untuk ID template.`);
+             return socket.emit('superadmin_error', { message: 'Kesalahan internal saat membuat ID template.' });
+        }
 
 
-        // Check for duplicate shortcut (case-sensitive based on how it's stored)
-        // If quickReplyTemplates[shortcut] exists, it's an update. If not, it's new.
-        // The map structure naturally handles preventing duplicates during *addition*
-        // if the key (shortcut) is the same. No need for a loop to check duplicates.
+        // Update backend state
+        quickReplyTemplates[cleanedShortcut] = {
+            id: templateId, // Store the generated ID
+            shortcut: cleanedShortcut, // Store the cleaned shortcut (e.g. /hallo)
+            text: text.trim() // Store the trimmed text
+        };
 
-        // Store/Update in-memory state using the decoded shortcut as the key
-        quickReplyTemplates[shortcut] = { text: text };
-
-        // Save to Firebase (uses encoded keys)
-        saveQuickReplyTemplatesToFirebase(); // This function also broadcasts updates
-
-        socket.emit('superadmin_success', { message: `Template '${shortcut}' berhasil disimpan.` });
+        // Save to Firebase and emit updates
+        try {
+             await saveQuickReplyTemplatesToFirebase();
+             socket.emit('superadmin_success', { message: `Template '${cleanedShortcut}' berhasil ditambahkan.` });
+        } catch (error) {
+             console.error('[TEMPLATES] Gagal menyimpan template setelah menambah:', error);
+             socket.emit('superadmin_error', { message: `Gagal menyimpan template '${cleanedShortcut}' ke database.` });
+             // Revert state if save failed? Maybe too complex for this example.
+             // delete quickReplyTemplates[cleanedShortcut];
+        }
     });
 
-    socket.on('delete_quick_reply_template', ({ shortcut }) => {
+    socket.on('update_quick_reply', async ({ id, shortcut, text }) => {
          const adminInfo = getAdminInfoBySocketId(socket.id);
+        // Only allow Super Admin
+        if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
+            console.warn(`[TEMPLATES] Akses ditolak: Admin ${adminInfo?.username} mencoba update template.`);
+            return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa mengelola template.' });
+        }
+
+        console.log(`[TEMPLATES] Permintaan update template ID ${id} dari Super Admin ${adminInfo.username}`);
+
+         // Validate input data
+        if (!id || typeof id !== 'string' || !shortcut || typeof shortcut !== 'string' || !text || typeof text !== 'string') {
+             console.warn(`[TEMPLATES] Data template update tidak lengkap atau format salah dari ${adminInfo.username}.`);
+            return socket.emit('superadmin_error', { message: 'Data template tidak lengkap atau format salah.' });
+        }
+        const cleanedShortcut = shortcut.trim().toLowerCase(); // Normalize new shortcut
+         const oldShortcut = decodeFirebaseKey(id); // Decode ID back to old shortcut
+
+        // --- PERBAIKAN: Validasi shortcut baru ---
+        const shortcutValidationRegex = /^\/[a-z0-9_-]+$/;
+        if (!shortcutValidationRegex.test(cleanedShortcut)) {
+             console.warn(`[TEMPLATES] Shortcut template baru tidak valid dari ${adminInfo.username}: '${cleanedShortcut}'. Tidak sesuai format.`);
+             return socket.emit('superadmin_error', { message: 'Shortcut baru harus diawali dengan "/" dan hanya berisi huruf kecil, angka, hyphen (-), atau underscore (_).' });
+        }
+        // --- END PERBAIKAN ---
+
+
+         // Check if the template with the old shortcut exists in state
+         if (!quickReplyTemplates[oldShortcut]) {
+             console.warn(`[TEMPLATES] Template dengan ID ${id} (shortcut ${oldShortcut}) tidak ditemukan untuk diupdate oleh ${adminInfo.username}.`);
+             return socket.emit('superadmin_error', { message: `Template tidak ditemukan.` });
+         }
+
+         // If the shortcut is changing (new shortcut is different from old), check if the new shortcut already exists for *another* template
+         if (oldShortcut !== cleanedShortcut && quickReplyTemplates[cleanedShortcut]) {
+             console.warn(`[TEMPLATES] Admin ${adminInfo.username} mencoba update template menjadi shortcut '${cleanedShortcut}' yang sudah ada.`);
+             return socket.emit('superadmin_error', { message: `Template dengan shortcut '${cleanedShortcut}' sudah ada.` });
+         }
+
+         if (text.trim().length === 0) {
+              console.warn(`[TEMPLATES] Template text kosong saat update dari ${adminInfo.username}.`);
+             return socket.emit('superadmin_error', { message: 'Teks template tidak boleh kosong.' });
+         }
+
+        // Update backend state
+        // If shortcut changed, delete old entry and add new one
+        if (oldShortcut !== cleanedShortcut) {
+             console.log(`[TEMPLATES] Shortcut template ID ${id} berubah dari '${oldShortcut}' menjadi '${cleanedShortcut}'. Menghapus lama dan menambah baru.`);
+             delete quickReplyTemplates[oldShortcut];
+             // New ID will be based on the new shortcut
+             const newTemplateId = encodeFirebaseKey(cleanedShortcut);
+              if (!newTemplateId) {
+                   console.error(`[TEMPLATES] Gagal meng-encode shortcut baru '${cleanedShortcut}' untuk ID template.`);
+                   return socket.emit('superadmin_error', { message: 'Kesalahan internal saat membuat ID template baru.' });
+              }
+             quickReplyTemplates[cleanedShortcut] = {
+                 id: newTemplateId,
+                 shortcut: cleanedShortcut,
+                 text: text.trim()
+             };
+        } else {
+             // If shortcut didn't change, just update the existing entry's text
+             console.log(`[TEMPLATES] Shortcut template ID ${id} tetap '${oldShortcut}'. Mengupdate teks.`);
+             quickReplyTemplates[cleanedShortcut].text = text.trim();
+             // ID remains the same
+        }
+
+
+        // Save to Firebase and emit updates
+        try {
+             await saveQuickReplyTemplatesToFirebase();
+             socket.emit('superadmin_success', { message: `Template '${cleanedShortcut}' berhasil diupdate.` });
+        } catch (error) {
+             console.error('[TEMPLATES] Gagal menyimpan template setelah update:', error);
+             socket.emit('superadmin_error', { message: `Gagal menyimpan template '${cleanedShortcut}' ke database.` });
+             // State might be inconsistent if save fails
+        }
+
+    });
+
+
+    socket.on('delete_quick_reply', async ({ id }) => {
+         const adminInfo = getAdminInfoBySocketId(socket.id);
+        // Only allow Super Admin
         if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
             console.warn(`[TEMPLATES] Akses ditolak: Admin ${adminInfo?.username} mencoba menghapus template.`);
             return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa mengelola template.' });
         }
 
-        console.log(`[TEMPLATES] Permintaan hapus template dari Super Admin ${adminInfo.username}: ${shortcut}`);
+        console.log(`[TEMPLATES] Permintaan hapus template ID ${id} dari Super Admin ${adminInfo.username}`);
 
-        // Server-side validation
-        if (!shortcut || typeof shortcut !== 'string') {
-             console.warn(`[TEMPLATES] Shortcut template tidak valid dari ${adminInfo.username} untuk dihapus.`);
-            return socket.emit('superadmin_error', { message: 'Shortcut template tidak valid.' });
+        // Validate input data
+        if (!id || typeof id !== 'string') {
+             console.warn(`[TEMPLATES] Template ID tidak valid dari ${adminInfo.username} untuk dihapus.`);
+            return socket.emit('superadmin_error', { message: 'Template ID tidak valid.' });
         }
 
-        // Check if template exists
-        if (!quickReplyTemplates[shortcut]) {
-            console.warn(`[TEMPLATES] Template '${shortcut}' tidak ditemukan untuk dihapus oleh ${adminInfo.username}.`);
-            return socket.emit('superadmin_error', { message: `Template dengan shortcut '${shortcut}' tidak ditemukan.` });
+        const shortcutToDelete = decodeFirebaseKey(id); // Decode ID back to shortcut
+
+        if (!shortcutToDelete || !quickReplyTemplates[shortcutToDelete]) { // Check against backend state using decoded shortcut
+            console.warn(`[TEMPLATES] Template dengan ID ${id} (shortcut ${shortcutToDelete}) tidak ditemukan untuk dihapus oleh ${adminInfo.username}.`);
+            return socket.emit('superadmin_error', { message: `Template tidak ditemukan.` });
         }
 
-        // Delete from in-memory state
-        delete quickReplyTemplates[shortcut];
+        // Update backend state
+        delete quickReplyTemplates[shortcutToDelete];
 
-        // Save to Firebase (uses encoded keys)
-        saveQuickReplyTemplatesToFirebase(); // This function also broadcasts updates
-
-        socket.emit('superadmin_success', { message: `Template '${shortcut}' berhasil dihapus.` });
+         // Save to Firebase and emit updates
+         try {
+             await saveQuickReplyTemplatesToFirebase();
+             socket.emit('superadmin_success', { message: `Template '${shortcutToDelete}' berhasil dihapus.` });
+         } catch (error) {
+              console.error('[TEMPLATES] Gagal menyimpan template setelah menghapus:', error);
+              socket.emit('superadmin_error', { message: `Gagal menghapus template '${shortcutToDelete}' dari database.` });
+              // State might be inconsistent if save fails
+         }
     });
-    // --- END QUICK REPLY TEMPLATES ---
+    // --- END QUICK REPLY TEMPLATES HANDLERS ---
 
 
   socket.on('disconnect', (reason) => {
     console.log(`[SOCKET] Socket ${socket.id} terputus. Alasan: ${reason}`);
-    // Cleanup state for the disconnected socket
+    // cleanupAdminState handles state removal and emitting online status updates
     const username = cleanupAdminState(socket.id);
     if (username) {
         console.log(`[ADMIN] Admin ${username} state dibersihkan.`);
     }
-    // cleanupAdminState already emits update_online_admins and initial_pick_status
   });
 
-  // --- Other Socket Events (like auto complete) ---
-  // "Auto Complete Chat" interpreted as "Mark as Closed" is covered by 'close_chat'
 });
 
 
-process.on('SIGINT', async () => {
-  console.log('[SERVER] Menerima SIGINT (Ctrl+C). Membersihkan...');
-   // Lakukan cleanup state untuk semua admin yang terhubung
-   for (const socketId in adminSockets) {
-       // Pastikan adminInfo valid sebelum cleanup
-       const adminInfo = adminSockets[socketId];
-       if(adminInfo) {
-            cleanupAdminState(socketId); // Ini akan memicu update_online_admins dan initial_pick_status
-       } else {
-            // Jika adminSockets[socketId] tidak valid, hapus saja dari adminSockets
-            delete adminSockets[socketId];
-       }
-   }
-   // Clear usernameToSocketId map
-    for(const username in usernameToSocketId) {
-        delete usernameToSocketId[username];
+// --- Shutdown Handling ---
+const shutdownHandler = async (signal) => {
+    console.log(`[SERVER] Menerima ${signal}. Membersihkan...`);
+
+    // Clean up admin states for all connected sockets
+    const connectedSocketIds = Object.keys(adminSockets); // Get current online sockets
+    for (const socketId of connectedSocketIds) {
+         // Use getAdminInfoBySocketId for safe access
+         const adminInfo = getAdminInfoBySocketId(socketId);
+         if (adminInfo) {
+             console.log(`[ADMIN] Cleaning up state for admin ${adminInfo.username} (Socket ID: ${socketId}) during shutdown.`);
+             cleanupAdminState(socketId); // This removes them from adminSockets and usernameToSocketId
+             // Don't disconnect sockets manually here, io.Close() will do it or they are already disconnecting
+         }
     }
+    // Note: adminSockets should be empty after this loop
 
 
-   if (sock) {
-    console.log('[WA] Menutup koneksi WhatsApp...');
-    // Gunakan reason yang jelas agar client tahu ini server shutdown
-    sock.end(new Error('Server Shutdown'));
-  }
-  console.log('[SERVER] Server dimatikan.');
-  process.exit(0);
-});
+    // Close Socket.IO server
+     console.log('[SOCKET] Menutup server Socket.IO...');
+     await new Promise(resolve => io.close(resolve));
+     console.log('[SOCKET] Server Socket.IO tertutup.');
 
-process.on('SIGTERM', async () => {
-    console.log('[SERVER] Menerima SIGTERM. Membersihkan...');
-    // Lakukan cleanup state untuk semua admin yang terhubung
-    for (const socketId in adminSockets) {
-         // Pastikan adminInfo valid sebelum cleanup
-       const adminInfo = adminSockets[socketId];
-       if(adminInfo) {
-            cleanupAdminState(socketId); // Ini akan memicu update_online_admins dan initial_pick_status
-       } else {
-            // Jika adminSockets[socketId] tidak valid, hapus saja dari adminSockets
-            delete adminSockets[socketId];
-       }
-    }
-     // Clear usernameToSocketId map
-    for(const username in usernameToSocketId) {
-        delete usernameToSocketId[username];
-    }
 
-    if (sock) {
-       console.log('[WA] Menutup koneksi WhatsApp...');
-       // Gunakan reason yang jelas
-       sock.end(new Error('Server Shutdown'));
-    }
+    // Close WhatsApp connection
+    if (sock && sock.ws.readyState !== sock.ws.CLOSED && sock.ws.readyState !== sock.ws.CLOSING) {
+        console.log('[WA] Menutup koneksi WhatsApp...');
+        try {
+            await sock.logout(); // Attempt graceful logout
+            console.log('[WA] WhatsApp connection closed gracefully.');
+        } catch (e) {
+             console.error('[WA] Error during WhatsApp logout, forcing end:', e);
+             // If logout fails, force end the connection
+             try {
+                 sock.end(new Error('Server Shutdown Forced'));
+             } catch (endErr) {
+                  console.error('[WA] Error forcing WhatsApp connection end:', endErr);
+             }
+        }
+     } else {
+         console.log('[WA] WhatsApp connection already closed or not initialized.');
+     }
+
     console.log('[SERVER] Server dimatikan.');
-    process.exit(0);
-});
+    process.exit(0); // Exit successfully
+};
 
-process.on('unhandledRejection', (err) => {
-  console.error('[ERROR] Unhandled Rejection:', err);
-  // Decide if you want to exit here or try to recover
-  // process.exit(1); // Uncomment to exit on unhandled rejection
+process.on('SIGINT', () => shutdownHandler('SIGINT')); // Ctrl+C
+process.on('SIGTERM', () => shutdownHandler('SIGTERM')); // kill command
+
+// Handle unhandled promise rejections and uncaught exceptions
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[ERROR] Unhandled Rejection at:', promise, 'reason:', reason);
+  // Optionally shutdown gracefully here too if it's a critical error
+   // shutdownHandler('unhandledRejection');
 });
 
 process.on('uncaughtException', (err) => {
   console.error('[ERROR] Uncaught Exception:', err);
-   // Decide if you want to exit here or try to recover
-  // process.exit(1); // Uncomment to exit on uncaught exception
+  // Crucial to handle uncaught exceptions. Log the error and then exit.
+   // Adding a delay might allow logs to flush
+  setTimeout(() => {
+       shutdownHandler('uncaughtException'); // Attempt graceful shutdown
+  }, 1000); // Delay exit slightly
 });
