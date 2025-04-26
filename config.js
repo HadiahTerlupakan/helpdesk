@@ -58,6 +58,9 @@ const config = {
   // Versi aplikasi (ditampilkan di footer frontend)
   version: '1.0.3', // Tingkatkan nomor versi
 
+  // Konfigurasi untuk mengaktifkan/menonaktifkan log di konsol browser
+  enableConsoleLogs: false, // Setel ke 'false' untuk menonaktifkan console.log, console.warn, dll. di frontend
+
   // Konfigurasi lain bisa ditambahkan di sini
 };
 

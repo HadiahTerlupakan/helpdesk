@@ -60,13 +60,34 @@ body {
     flex-direction: column;
     height: 100vh; /* Sidebar setinggi viewport */
     flex-shrink: 0; /* Mencegah sidebar menyusut */
-     overflow: hidden; /* Pastikan konten di sidebar tidak overflow */
+    overflow: hidden; /* Pastikan konten di sidebar tidak overflow */
+    transition: width 0.3s ease;
+}
+
+#sidebar.chat-selected {
+    width: 150px;
 }
 
 #sidebar-header {
     padding: 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     flex-shrink: 0; /* Tidak menyusut */
+}
+
+#sidebar-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-dark);
+    font-size: 1.5em;
+    cursor: pointer;
+    padding: 10px;
+}
+
+@media (max-width: 768px) {
+    #sidebar-toggle {
+        display: block;
+    }
 }
 #sidebar-header h2 { margin: 0 0 5px 0; font-size: 1.3em;}
 #sidebar-header h3 { margin: 5px 0 5px 0; font-size: 1em; color: #eee; }
@@ -166,6 +187,76 @@ body {
  /* Ensure chat info and actions take appropriate space and don't overflow */
 #current-chat-info { display: flex; flex-direction: column; flex-grow: 1; overflow: hidden; } /* Container for name & status */
  #current-chat-id-display { font-weight: bold; color: var(--text-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Responsive Layout */
+@media (max-width: 768px) {
+    #sidebar { display: none; }
+    #sidebar.show { display: flex; }
+    #sidebar-toggle {
+        display: block;
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        left: auto;
+        z-index: 1000;
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 10px;
+        font-size: 1.2em;
+        cursor: pointer;
+        width: 40px;
+        height: 40px;
+    }
+    
+    #sidebar {
+        position: fixed;
+        left: -300px;
+        transition: left 0.3s ease;
+    }
+    
+    #sidebar.show {
+        left: 0;
+    }
+    
+    #app-container {
+        flex-direction: column;
+    }
+    #sidebar {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+    #chat-area {
+        height: calc(100vh - 150px);
+    }
+    #chat-area-header {
+        padding: 8px 15px;
+    }
+    #reply-box {
+        padding: 10px;
+    }
+    #reply-input {
+        font-size: 0.9em;
+    }
+}
+
+@media (max-width: 480px) {
+    #chat-area-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+    #chat-actions-area {
+        width: 100%;
+        justify-content: space-between;
+    }
+    #reply-button {
+        padding: 8px 15px;
+    }
+}
  #current-chat-status { font-size: 0.9em; margin-top: 2px; padding: 2px 8px; border-radius: 4px; font-weight: bold; color: var(--text-light); display: inline-block; margin-right: 10px;} /* Add margin-right */
 
  #chat-picked-status { font-size: 0.9em; color: var(--text-muted); margin-top: 2px;} /* Picked status below chat name */
@@ -589,6 +680,7 @@ body {
     min-height: 60px; /* Adjusted min height */
     position: relative;
     flex-shrink: 0; /* Tidak menyusut */
+    z-index: 5; /* Lebih rendah dari tombol sidebar (z-index: 1000) */
 }
  #reply-box.disabled {
      opacity: 0.7;
@@ -785,6 +877,65 @@ body {
     overflow: auto; background-color: rgba(0,0,0,0.95); /* Darker background */
     justify-content: center; align-items: center;
     padding: 20px; box-sizing: border-box;
+}
+
+/* Confirmation Modal */
+#confirmationModal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.7);
+    justify-content: center;
+    align-items: center;
+}
+
+#confirmationModal .modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+#confirmationModal .modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+#confirmationModal .confirm-button {
+    background: var(--primary-color);
+    color: white;
+    padding: 10px 25px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#confirmationModal .cancel-button {
+    background: var(--button-warning-bg);
+    color: white;
+    padding: 10px 25px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#confirmationModal .confirm-button:hover {
+    background: var(--secondary-color);
+}
+
+#confirmationModal .cancel-button:hover {
+    background: var(--button-warning-hover);
 }
  /* Center the media elements */
 #modalMediaContent, #modalVideoContent, #modalAudioContent {
