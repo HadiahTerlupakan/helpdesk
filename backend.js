@@ -55,6 +55,12 @@ let quickReplyTemplates = {};
 const logger = pino({ level: config.baileysOptions?.logLevel ?? 'warn' });
 
 // Memuat Data dari Firebase (History, Admins, Templates)
+/**
+ * Memuat data dari Firebase termasuk chat history, daftar admin, dan template quick reply.
+ * @async
+ * @function loadDataFromFirebase
+ * @returns {Promise<void>}
+ */
 async function loadDataFromFirebase() {
     console.log("[FIREBASE] Memuat data dari Firebase...");
     const dbRef = ref(database); // Root reference
@@ -218,6 +224,11 @@ async function loadDataFromFirebase() {
 }
 
 // Menyimpan Chat History ke Firebase
+/**
+ * Menyimpan chat history ke Firebase.
+ * @function saveChatHistoryToFirebase
+ * @returns {void}
+ */
 function saveChatHistoryToFirebase() {
     // console.log('[FIREBASE] Menyimpan riwayat chat ke Firebase...'); // Disable verbose logging
     const dbRef = ref(database, 'chatHistory');
@@ -234,6 +245,11 @@ function saveChatHistoryToFirebase() {
 }
 
 // Menyimpan Data Admin ke Firebase
+/**
+ * Menyimpan daftar admin ke Firebase.
+ * @function saveAdminsToFirebase
+ * @returns {void}
+ */
 function saveAdminsToFirebase() {
     const dbRef = ref(database, 'admins');
      const sanitizedAdmins = JSON.parse(JSON.stringify(admins, (key, value) => value === undefined ? null : value));
@@ -250,6 +266,12 @@ function saveAdminsToFirebase() {
 
 // --- QUICK REPLY TEMPLATES ---
 // Menyimpan Quick Reply Templates ke Firebase
+/**
+ * Menyimpan template quick reply ke Firebase.
+ * @async
+ * @function saveQuickReplyTemplatesToFirebase
+ * @returns {Promise<void>}
+ */
 async function saveQuickReplyTemplatesToFirebase() {
     console.log('[FIREBASE] Menyimpan quick reply templates ke Firebase...');
     const dbRef = ref(database, 'quickReplyTemplates');
@@ -284,6 +306,13 @@ async function saveQuickReplyTemplatesToFirebase() {
 
 
 // Menghapus Chat History dari Firebase
+/**
+ * Menghapus chat history dari Firebase berdasarkan encoded chat ID.
+ * @async
+ * @function deleteChatHistoryFromFirebase
+ * @param {string} encodedChatId - Encoded chat ID yang akan dihapus
+ * @returns {Promise<void>}
+ */
 async function deleteChatHistoryFromFirebase(encodedChatId) {
     const dbRef = ref(database, `chatHistory/${encodedChatId}`);
     try {
@@ -297,6 +326,12 @@ async function deleteChatHistoryFromFirebase(encodedChatId) {
 }
 
 // Menghapus Semua Chat History dari Firebase
+/**
+ * Menghapus semua chat history dari Firebase.
+ * @async
+ * @function deleteAllChatHistoryFromFirebase
+ * @returns {Promise<void>}
+ */
 async function deleteAllChatHistoryFromFirebase() {
     const dbRef = ref(database, 'chatHistory');
     try {
@@ -311,6 +346,12 @@ async function deleteAllChatHistoryFromFirebase() {
 
 
 // Membatalkan timer auto-release
+/**
+ * Membersihkan timer auto release untuk chat tertentu.
+ * @function clearAutoReleaseTimer
+ * @param {string} chatId - ID chat yang akan dibersihkan timernya
+ * @returns {void}
+ */
 function clearAutoReleaseTimer(chatId) {
   const normalizedChatId = normalizeChatId(chatId);
   if (chatReleaseTimers[normalizedChatId]) {
@@ -321,6 +362,13 @@ function clearAutoReleaseTimer(chatId) {
 }
 
 // Memulai timer auto-release
+/**
+ * Memulai timer auto release untuk chat tertentu.
+ * @function startAutoReleaseTimer
+ * @param {string} chatId - ID chat yang akan diberi timer
+ * @param {string} username - Username admin yang mengambil chat
+ * @returns {void}
+ */
 function startAutoReleaseTimer(chatId, username) {
   const normalizedChatId = normalizeChatId(chatId);
   clearAutoReleaseTimer(normalizedChatId);
@@ -350,18 +398,35 @@ function startAutoReleaseTimer(chatId, username) {
 }
 
 // Mendapatkan daftar username admin yang sedang online
+/**
+ * Mendapatkan daftar username admin yang online.
+ * @function getOnlineAdminUsernames
+ * @returns {string[]} - Array berisi username admin yang online
+ */
 function getOnlineAdminUsernames() {
     // Filter out potential undefined/null values just in case
     return Object.values(adminSockets).map(adminInfo => adminInfo?.username).filter(Boolean);
 }
 
 // Mendapatkan info admin (termasuk role) berdasarkan Socket ID
+/**
+ * Mendapatkan informasi admin berdasarkan socket ID.
+ * @function getAdminInfoBySocketId
+ * @param {string} socketId - Socket ID admin
+ * @returns {Object|null} - Objek berisi informasi admin atau null jika tidak ditemukan
+ */
 function getAdminInfoBySocketId(socketId) {
     // Ensure adminSockets[socketId] exists and is an object before accessing properties
     return adminSockets[socketId] && typeof adminSockets[socketId] === 'object' ? adminSockets[socketId] : null;
 }
 
 // Membersihkan state admin saat disconnect/logout
+/**
+ * Membersihkan state admin berdasarkan socket ID.
+ * @function cleanupAdminState
+ * @param {string} socketId - Socket ID admin yang akan dibersihkan
+ * @returns {void}
+ */
 function cleanupAdminState(socketId) {
     const adminInfo = getAdminInfoBySocketId(socketId);
     if (adminInfo) {
@@ -385,6 +450,12 @@ function cleanupAdminState(socketId) {
 }
 
 // Fungsi untuk memastikan chatId dalam format lengkap
+/**
+ * Normalisasi chat ID dengan menghilangkan karakter khusus.
+ * @function normalizeChatId
+ * @param {string} chatId - Chat ID yang akan dinormalisasi
+ * @returns {string} - Chat ID yang sudah dinormalisasi
+ */
 function normalizeChatId(chatId) {
   if (!chatId || typeof chatId !== 'string') return null; // Handle null/undefined/non-string
 
@@ -407,6 +478,12 @@ function normalizeChatId(chatId) {
 }
 
 // Fungsi untuk decode kunci dari Firebase (membalikkan encodeFirebaseKey)
+/**
+ * Mendekode key Firebase yang telah diencode.
+ * @function decodeFirebaseKey
+ * @param {string} encodedKey - Key Firebase yang telah diencode
+ * @returns {string} - Key yang sudah didecode
+ */
 function decodeFirebaseKey(encodedKey) {
    if (!encodedKey || typeof encodedKey !== 'string') return null;
    return encodedKey
@@ -420,6 +497,12 @@ function decodeFirebaseKey(encodedKey) {
 }
 
 // Fungsi untuk meng-encode kunci agar valid di Firebase
+/**
+ * Mengencode key untuk Firebase dengan mengganti karakter khusus.
+ * @function encodeFirebaseKey
+ * @param {string} key - Key yang akan diencode
+ * @returns {string} - Key yang sudah diencode
+ */
 function encodeFirebaseKey(key) {
    if (!key || typeof key !== 'string') return null;
    return key
@@ -433,6 +516,12 @@ function encodeFirebaseKey(key) {
 }
 
 // Fungsi untuk mengecek apakah admin adalah Super Admin
+/**
+ * Memeriksa apakah username termasuk super admin.
+ * @function isSuperAdmin
+ * @param {string} username - Username yang akan diperiksa
+ * @returns {boolean} - True jika super admin, false jika bukan
+ */
 function isSuperAdmin(username) {
      // Check if username exists in admins object and has role 'superadmin'
      // Use config.superAdminUsername as a fallback check, but rely on loaded admins data
@@ -482,6 +571,12 @@ const PORT = config.serverPort || 3000;
 
 // --- Koneksi WhatsApp (Baileys) ---
 
+/**
+ * Menghubungkan ke WhatsApp menggunakan Baileys.
+ * @async
+ * @function connectToWhatsApp
+ * @returns {Promise<void>}
+ */
 async function connectToWhatsApp() {
   console.log("[WA] Mencoba menghubungkan ke WhatsApp...");
   // auth_info_baileys will be created if it doesn't exist

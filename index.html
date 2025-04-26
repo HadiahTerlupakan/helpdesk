@@ -1223,13 +1223,26 @@
         // --- Helper Functions ---
 
         // Function to get CSS Variable value
-        function getCssVariable(name) {
+        /**
+ * Mendapatkan nilai CSS variable dari root element.
+ * @function getCssVariable
+ * @param {string} name - Nama CSS variable
+ * @returns {string} - Nilai CSS variable
+ */
+function getCssVariable(name) {
             // Get the computed style of the root element
             return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         }
 
         // Helper to show alerts from server events (Super Admin actions, etc.)
-        function showServerAlert(message, isSuccess = true) {
+        /**
+ * Menampilkan alert dari server (untuk aksi Super Admin).
+ * @function showServerAlert
+ * @param {string} message - Pesan yang akan ditampilkan
+ * @param {boolean} [isSuccess=true] - Flag untuk menentukan jenis alert (success/error)
+ * @returns {void}
+ */
+function showServerAlert(message, isSuccess = true) {
             const alertDiv = document.createElement('div');
             alertDiv.className = `server-alert ${isSuccess ? 'success' : 'error'}`;
             alertDiv.textContent = message;
@@ -1243,7 +1256,13 @@
         }
 
 
-        function showLoginError(message) {
+        /**
+ * Menampilkan pesan error pada form login.
+ * @function showLoginError
+ * @param {string} message - Pesan error
+ * @returns {void}
+ */
+function showLoginError(message) {
             loginError.textContent = message;
             // Use getCssVariable to get the color value from CSS
              if (message.toLowerCase().includes('berhasil') || message.toLowerCase().includes('menghubungkan kembali')) {
@@ -1256,7 +1275,14 @@
             }
         }
 
-         function updateWhatsappStatus(statusText, isConnected) {
+         /**
+ * Memperbarui status koneksi WhatsApp di UI.
+ * @function updateWhatsappStatus
+ * @param {string} statusText - Teks status
+ * @param {boolean} isConnected - Flag status koneksi
+ * @returns {void}
+ */
+function updateWhatsappStatus(statusText, isConnected) {
              currentQrStatus = statusText; // Update internal status variable
              whatsappStatusDiv.textContent = `Status WA: ${statusText}`; // Update sidebar display
              whatsappStatusDiv.style.color = isConnected ? '#a0ffa0' : '#ffb0b0'; // Light green for connected, light red for disconnected
@@ -1271,7 +1297,16 @@
          }
 
 
-        function setLoginState(isLoggedIn, username = null, role = null, initialPicks = {}) {
+        /**
+ * Mengatur state login dan menyesuaikan UI.
+ * @function setLoginState
+ * @param {boolean} isLoggedIn - Flag status login
+ * @param {string|null} [username=null] - Username admin
+ * @param {string|null} [role=null] - Role admin
+ * @param {Object} [initialPicks={}] - Objek berisi chat yang sudah diambil
+ * @returns {void}
+ */
+function setLoginState(isLoggedIn, username = null, role = null, initialPicks = {}) {
             if (isLoggedIn) {
                 currentUser = username;
                 currentUserRole = role; // Store the role
@@ -1333,7 +1368,12 @@
             }
         }
 
-        function requestNotificationPermission() {
+        /**
+ * Meminta izin notifikasi dari pengguna.
+ * @function requestNotificationPermission
+ * @returns {void}
+ */
+function requestNotificationPermission() {
             // Check if the browser supports Notifications
             if ('Notification' in window) {
                 // Check if permission is already granted or denied
@@ -1348,7 +1388,15 @@
             }
         }
 
-        function showNotification(title, body, options = {}) {
+        /**
+ * Menampilkan notifikasi browser.
+ * @function showNotification
+ * @param {string} title - Judul notifikasi
+ * @param {string} body - Isi notifikasi
+ * @param {Object} [options={}] - Opsi tambahan untuk notifikasi
+ * @returns {void}
+ */
+function showNotification(title, body, options = {}) {
              // Check if browser supports notifications AND permission is granted
             if ('Notification' in window && Notification.permission === "granted") {
                  // Prevent notification if chat is currently active and picked by this user
@@ -1383,7 +1431,12 @@
             }
         }
 
-        function resetChatArea() {
+        /**
+ * Mereset area chat ke keadaan awal.
+ * @function resetChatArea
+ * @returns {void}
+ */
+function resetChatArea() {
             messagesDiv.innerHTML = '<div class="placeholder">Pilih percakapan dari daftar</div>';
             currentChatIdDisplay.textContent = 'Pilih percakapan dari daftar';
              currentChatStatusSpan.style.display = 'none'; // Hide status
@@ -1419,7 +1472,12 @@
              hideQuickReplySuggestions();
         }
 
-        function resetUI() {
+        /**
+ * Mereset seluruh UI ke keadaan awal.
+ * @function resetUI
+ * @returns {void}
+ */
+function resetUI() {
             resetChatArea();
              // Clear chat list and its internal state
             chatList.innerHTML = '<div class="placeholder" style="color: rgba(255,255,255,0.7); text-align: center; margin-top: 20px;">Memuat percakapan...</div>'; // Reset chat list placeholder
@@ -1454,7 +1512,12 @@
         // --- Helper Functions ---
 
         // Moved function declaration to a scope where it's available
-        function updateAllChatListItemsPickStatus() {
+        /**
+ * Memperbarui status pick untuk semua item chat list.
+ * @function updateAllChatListItemsPickStatus
+ * @returns {void}
+ */
+function updateAllChatListItemsPickStatus() {
              console.log('[UI] Memperbarui status pick semua chat item.');
              // Use Object.keys(chatListItems) to iterate over currently rendered items
             Object.keys(chatListItems).forEach(chatId => {
