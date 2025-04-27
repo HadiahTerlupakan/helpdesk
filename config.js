@@ -59,7 +59,7 @@ const config = {
   version: '1.0.3', // Tingkatkan nomor versi
 
   // Konfigurasi untuk mengaktifkan/menonaktifkan log di konsol browser
-  enableConsoleLogs: true, // Setel ke 'false' untuk menonaktifkan console.log, console.warn, dll. di frontend
+  enableConsoleLogs: false, // Setel ke 'false' untuk menonaktifkan console.log, console.warn, dll. di frontend
   usePairingCode: false, // <-- Menggunakan Pairing Code seperti yang Anda inginkan
   // Konfigurasi lain bisa ditambahkan di sini
 };
