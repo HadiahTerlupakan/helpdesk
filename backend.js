@@ -23,9 +23,8 @@ import { fileURLToPath } from 'url';
 // tapi untuk konsistensi, kita bisa gunakan encoded shortcut sebagai ID juga.
 // import { v4 as uuidv4 } from 'uuid';
 
-// Firebase Imports
-import { getDatabase, ref, child, get, set, remove } from 'firebase/database';
-import { app as firebaseApp, database } from './firebaseConfig.js';
+// SQLite Imports
+import { initDatabase, loadChatHistory, saveChatHistory, deleteChatHistory, deleteAllChatHistory, saveAdmins, loadAdmins, saveQuickReplyTemplates, loadQuickReplyTemplates } from './database.js';
 
 // --- Konfigurasi & State ---
 let admins = {}; // { username: { password, initials, role } } - Akan dimuat dari Firebase
@@ -61,207 +60,104 @@ const logger = pino({ level: config.baileysOptions?.logLevel ?? 'warn' });
  * @function loadDataFromFirebase
  * @returns {Promise<void>}
  */
-async function loadDataFromFirebase() {
-    console.log("[FIREBASE] Memuat data dari Firebase...");
-    const dbRef = ref(database); // Root reference
+async function loadDataFromDatabase() {
+    console.log("[DATABASE] Memuat data dari SQLite...");
 
     try {
+        // Inisialisasi database
+        await initDatabase();
+        
         // Muat Chat History
-        console.log('[FIREBASE] Mencoba memuat riwayat chat...');
-        const historySnapshot = await get(child(dbRef, 'chatHistory'));
-        if (historySnapshot.exists()) {
-            chatHistory = historySnapshot.val();
-            console.log('[FIREBASE] Riwayat chat berhasil dimuat dari Firebase.');
-             // Pastikan struktur history sesuai harapan jika dimuat
-            for (const encodedChatId in chatHistory) {
-                 // Tambahkan cek `hasOwnProperty` untuk menghindari properti prototipe
-                 if (!Object.prototype.hasOwnProperty.call(chatHistory, encodedChatId)) continue;
-
-                 if (chatHistory[encodedChatId]) {
-                     const decodedChatId = decodeFirebaseKey(encodedChatId);
-                      // Handle data lama tanpa array messages atau status
-                     if (!chatHistory[encodedChatId].messages) {
-                        console.warn(`[FIREBASE] Mengkonversi struktur chat history lama untuk ${decodedChatId}: Menambahkan array 'messages'.`);
-                         // Coba konversi jika data lama adalah array pesan langsung (ini hanya tebakan, tergantung data Anda)
-                        if (Array.isArray(chatHistory[encodedChatId])) {
-                             chatHistory[encodedChatId] = { status: 'open', messages: chatHistory[encodedChatId] };
-                             console.warn(`[FIREBASE] Data chat history ${decodedChatId} dikonversi dari array ke objek.`);
-                        } else {
-                            // Jika bukan array dan bukan objek dengan messages, kemungkinan data rusak
-                             console.error(`[FIREBASE] Struktur data chat history untuk ${decodedChatId} tidak dikenali (bukan array atau objek dengan messages). Mengosongkan pesan.`);
-                             chatHistory[encodedChatId].messages = []; // Kosongkan messages array saja
-                             // delete chatHistory[encodedChatId]; // Opsi: hapus entri rusak total
-                             // continue; // Lanjut ke chat berikutnya
-                        }
-                     }
-                     if (!chatHistory[encodedChatId].status) {
-                        console.warn(`[FIREBASE] Menambahkan status default 'open' untuk chat ${decodedChatId}.`);
-                        chatHistory[encodedChatId].status = 'open'; // Set status default jika tidak ada
-                     }
-                     // Clean up potentially invalid entries if 'messages' is present but not array
-                     if (!Array.isArray(chatHistory[encodedChatId].messages)) {
-                         console.error(`[FIREBASE] Chat history untuk ${decodedChatId} memiliki struktur 'messages' yang tidak valid (bukan array). Mengosongkan pesan.`);
-                          chatHistory[encodedChatId].messages = [];
-                     }
-                      // Pastikan setiap pesan di dalam array memiliki ID. Ini krusial untuk deduplikasi.
-                      if (Array.isArray(chatHistory[encodedChatId].messages)) {
-                          chatHistory[encodedChatId].messages = chatHistory[encodedChatId].messages.filter(msg => {
-                               // Tambahkan cek untuk null/undefined message objek itu sendiri
-                               if (!msg || typeof msg !== 'object' || !msg.id) {
-                                   console.warn(`[FIREBASE] Pesan tidak valid (null/undefined atau tanpa ID) ditemukan di chat ${decodedChatId}. Menghapusnya dari memori.`);
-                                   return false; // Filter out invalid messages
-                               }
-                               return true; // Keep valid messages
-                          });
-                      }
-
-                 } else {
-                     // Handle null or invalid entry at top level for a chat ID
-                     const decodedKey = decodeFirebaseKey(encodedChatId);
-                     console.warn(`[FIREBASE] Entri chat history tidak valid ditemukan dan dihapus: ${decodedKey} (Encoded: ${encodedChatId})`);
-                     delete chatHistory[encodedChatId];
-                 }
-            }
-             // Setelah semua divalidasi, bersihkan key Firebase yang mungkin invalid
-             for (const encodedChatId in chatHistory) {
-                  if (!Object.prototype.hasOwnProperty.call(chatHistory, encodedChatId)) continue;
-                  const decodedChatId = decodeFirebaseKey(encodedChatId);
-                   if (!decodedChatId) { // Jika decoding gagal, key-nya mungkin memang tidak valid
-                        console.error(`[FIREBASE] Key Firebase chat history tidak valid saat decode: ${encodedChatId}. Menghapusnya.`);
-                        delete chatHistory[encodedChatId];
-                        continue; // Lanjut ke chat berikutnya
-                   }
-             }
-
-
-        } else {
-            console.log('[FIREBASE] Tidak ada riwayat chat di Firebase.');
-            chatHistory = {}; // Pastikan chatHistory adalah objek kosong jika tidak ada data
-        }
+        console.log('[DATABASE] Mencoba memuat riwayat chat...');
+        chatHistory = await loadChatHistory();
+        console.log('[DATABASE] Riwayat chat berhasil dimuat dari database.');
 
         // Muat Admins
-        console.log('[FIREBASE] Mencoba memuat data admin...');
-        const adminsSnapshot = await get(child(dbRef, 'admins'));
-        if (adminsSnapshot.exists()) {
-            admins = adminsSnapshot.val();
-            console.log('[FIREBASE] Data admin berhasil dimuat dari Firebase.');
-             // Validasi dasar untuk superadmin
-             if (!admins || Object.keys(admins).length === 0) {
-                 console.error('[FIREBASE] TIDAK ADA DATA ADMIN DITEMUKAN DI DATABASE! Silakan tambahkan Super Admin secara manual di Firebase DB atau gunakan config.js.');
-                 admins = config.admins || {}; // Fallback to config if DB is empty
-                  if (Object.keys(admins).length > 0) {
-                       console.log('[FIREBASE] Menggunakan admin dari config.js sebagai fallback.');
-                       saveAdminsToFirebase(); // Save config admins if DB was empty
-                  }
-             }
-
-             if (!admins[superAdminUsername] || admins[superAdminUsername].role !== 'superadmin') {
-                 console.warn(`[FIREBASE] PERINGATAN: Super Admin username '${superAdminUsername}' dari config.js tidak ditemukan atau tidak memiliki role 'superadmin' di Firebase admins yang dimuat.`);
-                  const actualSuperAdmins = Object.keys(admins).filter(user => admins[user]?.role === 'superadmin');
-                  if (actualSuperAdmins.length === 0) {
-                       console.error('[FIREBASE] TIDAK ADA SUPER ADMIN DITEMUKAN DI DATABASE SETELAH MEMUAT! Fungsionalitas super admin tidak akan bekerja.');
-                  } else if (actualSuperAdmins.length === 1) {
-                       console.warn(`[FIREBASE] Super Admin aktif di database adalah '${actualSuperAdmins[0]}'. Pastikan config.superAdminUsername sesuai jika ingin menggunakan '${superAdminUsername}'.`);
-                       // Update config.superAdminUsername in memory if there's exactly one superadmin and it doesn't match?
-                       // No, better to warn and rely on the one in DB if config doesn't match a superadmin.
-                  } else {
-                       console.warn(`[FIREBASE] Beberapa Super Admin ditemukan di database: ${actualSuperAdmins.join(', ')}. config.superAdminUsername adalah '${superAdminUsername}'.`);
-                  }
-
-             }
-        } else {
-            console.warn('[FIREBASE] Tidak ada data admin di Firebase.');
-             admins = config.admins || {}; // Fallback to config if DB is empty
-              if (Object.keys(admins).length > 0) {
-                 console.log('[FIREBASE] Menggunakan admin dari config.js.');
-                 saveAdminsToFirebase(); // Simpan admin dari config ke Firebase untuk pertama kali jika DB kosong
-              } else {
-                  console.error('[FIREBASE] TIDAK ADA DATA ADMIN DITEMUKAN DI CONFIG.JS ATAU FIREBASE! Tidak ada admin yang bisa login.');
-              }
-        }
-
-        // --- QUICK REPLY TEMPLATES ---
-        // Muat Quick Reply Templates
-        console.log('[FIREBASE] Mencoba memuat quick reply templates...');
-        const templatesSnapshot = await get(child(dbRef, 'quickReplyTemplates'));
-        quickReplyTemplates = {}; // Reset in-memory state to ensure it's an object
-        if (templatesSnapshot.exists()) {
-            const firebaseTemplates = templatesSnapshot.val();
-            if (firebaseTemplates && typeof firebaseTemplates === 'object') { // Ensure it's an object
-                for (const encodedShortcut in firebaseTemplates) {
-                     // Tambahkan cek `hasOwnProperty`
-                    if (!Object.prototype.hasOwnProperty.call(firebaseTemplates, encodedShortcut)) continue;
-
-                    const templateData = firebaseTemplates[encodedShortcut];
-                    const shortcut = decodeFirebaseKey(encodedShortcut);
-                     // Validasi data sebelum menambahkan ke state
-                    if (shortcut && shortcut.startsWith('/') && typeof templateData.text === 'string') {
-                        // Generating a stable ID from encoded shortcut
-                        const templateId = encodedShortcut;
-                        quickReplyTemplates[shortcut] = { id: templateId, shortcut: shortcut, text: templateData.text };
-                    } else {
-                         console.warn(`[FIREBASE] Entri template tidak valid ditemukan di DB: ${encodedShortcut}`, templateData);
-                         // Tidak perlu menghapus dari DB di sini, fungsi save akan membersihkan yang tidak valid
-                    }
-                }
-                console.log(`[FIREBASE] ${Object.keys(quickReplyTemplates).length} quick reply templates berhasil dimuat dari Firebase.`);
+        console.log('[DATABASE] Mencoba memuat data admin...');
+        admins = await loadAdmins();
+        
+        // Jika tidak ada admin di database, gunakan dari config
+        if (!admins || Object.keys(admins).length === 0) {
+            console.warn('[DATABASE] Tidak ada data admin di database.');
+            admins = config.admins || {};
+            
+            if (Object.keys(admins).length > 0) {
+                console.log('[DATABASE] Menggunakan admin dari config.js.');
+                await saveAdmins(admins);
             } else {
-                console.warn('[FIREBASE] Data quick reply templates di Firebase tidak valid (bukan objek). Mengabaikan data tersebut.');
-                 quickReplyTemplates = {}; // Pastikan state tetap objek kosong
+                console.error('[DATABASE] TIDAK ADA DATA ADMIN DITEMUKAN DI CONFIG.JS ATAU DATABASE! Tidak ada admin yang bisa login.');
             }
         } else {
-            console.log('[FIREBASE] Tidak ada quick reply templates di Firebase.');
-             quickReplyTemplates = {}; // Pastikan state adalah objek kosong jika tidak ada data
+            console.log('[DATABASE] Data admin berhasil dimuat dari database.');
+            
+            // Validasi dasar untuk superadmin
+            if (!admins[superAdminUsername] || admins[superAdminUsername].role !== 'superadmin') {
+                console.warn(`[DATABASE] PERINGATAN: Super Admin username '${superAdminUsername}' dari config.js tidak ditemukan atau tidak memiliki role 'superadmin' di database.`);
+                const actualSuperAdmins = Object.keys(admins).filter(user => admins[user]?.role === 'superadmin');
+                
+                if (actualSuperAdmins.length === 0) {
+                    console.error('[DATABASE] TIDAK ADA SUPER ADMIN DITEMUKAN DI DATABASE! Fungsionalitas super admin tidak akan bekerja.');
+                } else if (actualSuperAdmins.length === 1) {
+                    console.warn(`[DATABASE] Super Admin aktif di database adalah '${actualSuperAdmins[0]}'. Pastikan config.superAdminUsername sesuai jika ingin menggunakan '${superAdminUsername}'.`);
+                } else {
+                    console.warn(`[DATABASE] Beberapa Super Admin ditemukan di database: ${actualSuperAdmins.join(', ')}. config.superAdminUsername adalah '${superAdminUsername}'.`);
+                }
+            }
         }
-        // --- END QUICK REPLY TEMPLATES ---
 
+        // Muat Quick Reply Templates
+        console.log('[DATABASE] Mencoba memuat quick reply templates...');
+        quickReplyTemplates = await loadQuickReplyTemplates();
+        
+        if (Object.keys(quickReplyTemplates).length > 0) {
+            console.log(`[DATABASE] ${Object.keys(quickReplyTemplates).length} quick reply templates berhasil dimuat dari database.`);
+        } else {
+            console.log('[DATABASE] Tidak ada quick reply templates di database.');
+            quickReplyTemplates = {};
+        }
 
     } catch (error) {
-        console.error('[FIREBASE] Gagal memuat data dari Firebase:', error);
-         // Ini adalah error fatal saat startup, re-throw untuk menghentikan server
-         throw error;
+        console.error('[DATABASE] Gagal memuat data dari database:', error);
+        // Ini adalah error fatal saat startup, re-throw untuk menghentikan server
+        throw error;
     }
 }
 
 // Menyimpan Chat History ke Firebase
 /**
  * Menyimpan chat history ke Firebase.
- * @function saveChatHistoryToFirebase
+ * @function saveChatHistoryToDatabase
  * @returns {void}
  */
-function saveChatHistoryToFirebase() {
-    // console.log('[FIREBASE] Menyimpan riwayat chat ke Firebase...'); // Disable verbose logging
-    const dbRef = ref(database, 'chatHistory');
-    // Filter undefined values just in case, although serializing should handle it
+async function saveChatHistoryToDatabase() {
+    // Filter undefined values just in case
     const sanitizedChatHistory = JSON.parse(JSON.stringify(chatHistory, (key, value) => value === undefined ? null : value));
 
-    set(dbRef, sanitizedChatHistory)
-        .then(() => {
-            // console.log('[FIREBASE] Riwayat chat berhasil disimpan ke Firebase.'); // Disable verbose logging
-        })
-        .catch((error) => {
-            console.error('[FIREBASE] Gagal menyimpan riwayat chat ke Firebase:', error);
-        });
+    try {
+        await saveChatHistory(sanitizedChatHistory);
+        // console.log('[DATABASE] Riwayat chat berhasil disimpan ke database.'); // Disable verbose logging
+    } catch (error) {
+        console.error('[DATABASE] Gagal menyimpan riwayat chat ke database:', error);
+    }
 }
 
 // Menyimpan Data Admin ke Firebase
 /**
  * Menyimpan daftar admin ke Firebase.
- * @function saveAdminsToFirebase
+ * @function saveAdminsToDatabase
  * @returns {void}
  */
-function saveAdminsToFirebase() {
-    const dbRef = ref(database, 'admins');
-     const sanitizedAdmins = JSON.parse(JSON.stringify(admins, (key, value) => value === undefined ? null : value));
-    set(dbRef, sanitizedAdmins)
-        .then(() => {
-            console.log('[FIREBASE] Data admin berhasil disimpan ke Firebase.');
-            io.emit('registered_admins', admins); // Emit updated admins to all clients
-             io.emit('update_online_admins', getOnlineAdminUsernames()); // Emit updated online status
-        })
-        .catch((error) => {
-            console.error('[FIREBASE] Gagal menyimpan data admin ke Firebase:', error);
-        });
+async function saveAdminsToDatabase() {
+    const sanitizedAdmins = JSON.parse(JSON.stringify(admins, (key, value) => value === undefined ? null : value));
+    
+    try {
+        await saveAdmins(sanitizedAdmins);
+        console.log('[DATABASE] Data admin berhasil disimpan ke database.');
+        io.emit('registered_admins', admins); // Emit updated admins to all clients
+        io.emit('update_online_admins', getOnlineAdminUsernames()); // Emit updated online status
+    } catch (error) {
+        console.error('[DATABASE] Gagal menyimpan data admin ke database:', error);
+    }
 }
 
 // --- QUICK REPLY TEMPLATES ---
@@ -269,37 +165,21 @@ function saveAdminsToFirebase() {
 /**
  * Menyimpan template quick reply ke Firebase.
  * @async
- * @function saveQuickReplyTemplatesToFirebase
+ * @function saveQuickReplyTemplatesToDatabase
  * @returns {Promise<void>}
  */
-async function saveQuickReplyTemplatesToFirebase() {
-    console.log('[FIREBASE] Menyimpan quick reply templates ke Firebase...');
-    const dbRef = ref(database, 'quickReplyTemplates');
-    const firebaseData = {};
-    // Convert backend object state to Firebase-friendly object
-    for (const shortcut in quickReplyTemplates) {
-         if (!Object.prototype.hasOwnProperty.call(quickReplyTemplates, shortcut)) continue;
-
-        const template = quickReplyTemplates[shortcut];
-         // Validate template structure before saving
-         if (shortcut && shortcut.startsWith('/') && template && typeof template.text === 'string') {
-             // Use encoded shortcut as Firebase key
-             firebaseData[encodeFirebaseKey(shortcut)] = { text: template.text };
-        } else {
-             console.warn(`[FIREBASE] Mengabaikan template dengan struktur atau shortcut tidak valid saat menyimpan: '${shortcut}'`, template);
-         }
-    }
-
+async function saveQuickReplyTemplatesToDatabase() {
+    console.log('[DATABASE] Menyimpan quick reply templates ke database...');
+    
     try {
-        await set(dbRef, firebaseData);
-        console.log('[FIREBASE] Quick reply templates berhasil disimpan ke Firebase.');
+        await saveQuickReplyTemplates(quickReplyTemplates);
+        console.log('[DATABASE] Quick reply templates berhasil disimpan ke database.');
         // Convert backend object state to array for frontend
         const quickReplyTemplatesArray = Object.values(quickReplyTemplates);
         io.emit('quick_reply_templates_updated', quickReplyTemplatesArray); // Emit updated templates (as array) to all clients
     } catch (error) {
-        console.error('[FIREBASE] Gagal menyimpan quick reply templates ke Firebase:', error);
+        console.error('[DATABASE] Gagal menyimpan quick reply templates ke database:', error);
         // Tidak perlu re-throw error di sini, biarkan server tetap berjalan
-        // throw error;
     }
 }
 // --- END QUICK REPLY TEMPLATES ---
@@ -309,18 +189,19 @@ async function saveQuickReplyTemplatesToFirebase() {
 /**
  * Menghapus chat history dari Firebase berdasarkan encoded chat ID.
  * @async
- * @function deleteChatHistoryFromFirebase
+ * @function deleteChatHistoryFromDatabase
  * @param {string} encodedChatId - Encoded chat ID yang akan dihapus
  * @returns {Promise<void>}
  */
-async function deleteChatHistoryFromFirebase(encodedChatId) {
-    const dbRef = ref(database, `chatHistory/${encodedChatId}`);
+async function deleteChatHistoryFromDatabase(chatId) {
     try {
-        await remove(dbRef);
-        console.log(`[FIREBASE] Chat history untuk ${decodeFirebaseKey(encodedChatId)} berhasil dihapus dari Firebase.`);
-        return true;
+        const success = await deleteChatHistory(chatId);
+        if (success) {
+            console.log(`[DATABASE] Chat history untuk ${chatId} berhasil dihapus dari database.`);
+        }
+        return success;
     } catch (error) {
-        console.error(`[FIREBASE] Gagal menghapus chat history untuk ${decodeFirebaseKey(encodedChatId)} dari Firebase:`, error);
+        console.error(`[DATABASE] Gagal menghapus chat history untuk ${chatId} dari database:`, error);
         return false;
     }
 }
@@ -329,17 +210,18 @@ async function deleteChatHistoryFromFirebase(encodedChatId) {
 /**
  * Menghapus semua chat history dari Firebase.
  * @async
- * @function deleteAllChatHistoryFromFirebase
+ * @function deleteAllChatHistoryFromDatabase
  * @returns {Promise<void>}
  */
-async function deleteAllChatHistoryFromFirebase() {
-    const dbRef = ref(database, 'chatHistory');
+async function deleteAllChatHistoryFromDatabase() {
     try {
-        await remove(dbRef);
-        console.log('[FIREBASE] Semua chat history berhasil dihapus dari Firebase.');
-        return true;
+        const success = await deleteAllChatHistory();
+        if (success) {
+            console.log('[DATABASE] Semua chat history berhasil dihapus dari database.');
+        }
+        return success;
     } catch (error) {
-        console.error('[FIREBASE] Gagal menghapus semua chat history dari Firebase:', error);
+        console.error('[DATABASE] Gagal menghapus semua chat history dari database:', error);
         return false;
     }
 }
@@ -534,22 +416,22 @@ function isSuperAdmin(username) {
 
 // --- Setup Express & Server ---
 
-// Memuat data dari Firebase sebelum memulai server atau WA
-loadDataFromFirebase().then(() => {
-    console.log("[SERVER] Data Firebase siap. Memulai koneksi WhatsApp dan Server HTTP.");
-     connectToWhatsApp().catch(err => {
-      console.error("[WA] Gagal memulai koneksi WhatsApp awal:", err);
-       // Server might continue running without WA connection, or you might want to exit
-       // process.exit(1); // Uncomment to exit if WA connection is mandatory for startup
+// Memuat data dari database sebelum memulai server atau WA
+loadDataFromDatabase().then(() => {
+    console.log("[SERVER] Data database siap. Memulai koneksi WhatsApp dan Server HTTP.");
+    connectToWhatsApp().catch(err => {
+        console.error("[WA] Gagal memulai koneksi WhatsApp awal:", err);
+        // Server might continue running without WA connection, or you might want to exit
+        // process.exit(1); // Uncomment to exit if WA connection is mandatory for startup
     });
 
     server.listen(PORT, () => {
-      console.log(`[SERVER] Server Helpdesk berjalan di http://localhost:${PORT}`);
-      console.log(`[SERVER] Versi Aplikasi: ${config.version || 'N/A'}`);
+        console.log(`[SERVER] Server Helpdesk berjalan di http://localhost:${PORT}`);
+        console.log(`[SERVER] Versi Aplikasi: ${config.version || 'N/A'}`);
     });
 
 }).catch(err => {
-    console.error("[SERVER] Gagal memuat data awal dari Firebase. Server tidak dapat dimulai.", err);
+    console.error("[SERVER] Gagal memuat data awal dari database. Server tidak dapat dimulai.", err);
     process.exit(1); // Exit if initial data load fails
 });
 
@@ -797,7 +679,7 @@ async function connectToWhatsApp() {
       if (!chatHistory[encodedChatId].messages.some(m => m && typeof m === 'object' && m.id === messageData.id)) { // Check for null/undefined message objects
         console.log(`[HISTORY] Menambahkan pesan masuk baru (ID: ${messageData.id}) ke chat ${chatId}`);
         chatHistory[encodedChatId].messages.push(messageData);
-        saveChatHistoryToFirebase(); // Save after adding new message
+        saveChatHistoryToDatabase(); // Save after adding new message
 
         io.emit('new_message', { // Emit to all clients
              ...messageData,
@@ -1030,7 +912,7 @@ io.on('connection', (socket) => {
           console.warn(`[PICK] Admin ${username} mengambil chat baru ${normalizedChatId} yang belum ada di history.`);
           // Optionally create the chat entry here with default status 'open'
            chatHistory[encodedChatId] = { status: 'open', messages: [] };
-           saveChatHistoryToFirebase(); // Save the new chat entry
+           saveChatHistoryToDatabase(); // Save the new chat entry
       }
 
 
@@ -1068,7 +950,7 @@ io.on('connection', (socket) => {
            }
            if (changed) {
                console.log(`[MARK] Mark incoming messages as read for chat ${normalizedChatId} by ${adminInfo.username}.`);
-               saveChatHistoryToFirebase(); // Save changes
+               saveChatHistoryToDatabase(); // Save changes
                io.emit('update_chat_read_status', { chatId: normalizedChatId }); // Notify clients to update UI
            }
        }
@@ -1157,7 +1039,7 @@ io.on('connection', (socket) => {
           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mendelegasikan chat baru ${normalizedChatId} yang belum ada di history.`);
            // Optionally create the chat entry here with default status 'open'
            chatHistory[encodedChatId] = { status: 'open', messages: [] };
-           // await saveChatHistoryToFirebase(); // Save the new chat entry - Save is done after update_pick_status below
+           // await saveChatHistoryToDatabase(); // Save the new chat entry - Save is done after update_pick_status below
       }
 
 
@@ -1171,7 +1053,7 @@ io.on('connection', (socket) => {
 
 
       // Save history only if a new chat entry was created above
-      // saveChatHistoryToFirebase(); // Or save here every time if you want to be sure status/messages[] is there
+      // saveChatHistoryToDatabase(); // Or save here every time if you want to be sure status/messages[] is there
 
       io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: targetAdminUsername }); // Update pick status for everyone
       io.emit('initial_pick_status', pickedChats); // Send full state update to sync all clients
@@ -1362,7 +1244,7 @@ io.on('connection', (socket) => {
            if (!chatHistory[encodedChatId].messages.some(m => m && typeof m === 'object' && m.id === outgoingMessageData.id)) {
              console.log(`[HISTORY] Menambahkan pesan keluar baru (ID: ${outgoingMessageData.id}) ke chat ${chatId}`);
              chatHistory[encodedChatId].messages.push(outgoingMessageData);
-             saveChatHistoryToFirebase(); // Save after adding message
+             saveChatHistoryToDatabase(); // Save after adding message
            } else {
                console.warn(`[HISTORY] Pesan keluar duplikat terdeteksi (ID: ${outgoingMessageData.id}), diabaikan penambahannya ke history.`);
            }
@@ -1434,7 +1316,7 @@ io.on('connection', (socket) => {
               }
               if (changed) {
                   console.log(`[MARK] Mark incoming messages as read for chat ${normalizedChatId} by ${adminInfo.username}.`);
-                  saveChatHistoryToFirebase(); // Save the changes
+                  saveChatHistoryToDatabase(); // Save the changes
                   io.emit('update_chat_read_status', { chatId: normalizedChatId }); // Notify all clients to update UI
               }
          } else {
@@ -1580,7 +1462,7 @@ io.on('connection', (socket) => {
         };
 
         // Save to Firebase and emit updates
-        saveAdminsToFirebase();
+        saveAdminsToDatabase();
 
         socket.emit('superadmin_success', { message: `Admin '${username}' berhasil ditambahkan.` });
      });
@@ -1645,7 +1527,7 @@ io.on('connection', (socket) => {
           delete admins[usernameToDelete];
 
           // Save to Firebase and emit updates
-          saveAdminsToFirebase();
+          saveAdminsToDatabase();
 
           socket.emit('superadmin_success', { message: `Admin '${usernameToDelete}' berhasil dihapus.` });
       });
@@ -1810,7 +1692,7 @@ io.on('connection', (socket) => {
 
         // Save to Firebase and emit updates
         try {
-             await saveQuickReplyTemplatesToFirebase();
+             await saveQuickReplyTemplatesToDatabase();
              socket.emit('superadmin_success', { message: `Template '${cleanedShortcut}' berhasil ditambahkan.` });
         } catch (error) {
              console.error('[TEMPLATES] Gagal menyimpan template setelah menambah:', error);
@@ -1890,7 +1772,7 @@ io.on('connection', (socket) => {
 
         // Save to Firebase and emit updates
         try {
-             await saveQuickReplyTemplatesToFirebase();
+             await saveQuickReplyTemplatesToDatabase();
              socket.emit('superadmin_success', { message: `Template '${cleanedShortcut}' berhasil diupdate.` });
         } catch (error) {
              console.error('[TEMPLATES] Gagal menyimpan template setelah update:', error);
@@ -1929,7 +1811,7 @@ io.on('connection', (socket) => {
 
          // Save to Firebase and emit updates
          try {
-             await saveQuickReplyTemplatesToFirebase();
+             await saveQuickReplyTemplatesToDatabase();
              socket.emit('superadmin_success', { message: `Template '${shortcutToDelete}' berhasil dihapus.` });
          } catch (error) {
               console.error('[TEMPLATES] Gagal menyimpan template setelah menghapus:', error);
