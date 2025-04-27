@@ -28,6 +28,7 @@ Aplikasi helpdesk berbasis WhatsApp untuk manajemen percakapan pelanggan dengan 
 3. **Penyimpanan Data**
    - Penyimpanan riwayat percakapan menggunakan SQLite
    - Penyimpanan data admin menggunakan SQLite
+   - Backup data otomatis
 
 4. **Notifikasi Real-time**
    - Pemberitahuan chat baru
@@ -36,52 +37,24 @@ Aplikasi helpdesk berbasis WhatsApp untuk manajemen percakapan pelanggan dengan 
 
 ## Instalasi
 
-1. Pastikan sudah terinstall:
-   - Node.js (versi 14 atau lebih baru)
-   - NPM
-
-2. Clone repository ini atau download source code
-
-3. Install dependencies:
-```bash
-npm install
-```
-
-4. Konfigurasi:
-   - Edit file `config.js` untuk:
-     - Menambahkan/mengubah data admin
-     - Mengatur waktu rilis otomatis (`chatAutoReleaseTimeoutMinutes`)
-     - Mengubah port server jika diperlukan
-
-5. Jalankan server:
-```bash
-node backend.js
-```
-
-6. Buka browser dan akses:
-```
-http://localhost:3000
-```
-
-## Penggunaan
-
-1. Login sebagai admin menggunakan username dan password yang sudah dikonfigurasi
-2. Pilih chat dari daftar chat masuk
-3. Balas pesan pelanggan melalui antarmuka
-4. Chat akan otomatis dilepas setelah waktu yang ditentukan
-5. Admin lain dapat melihat status chat yang sedang ditangani
+1. Clone repository ini
+2. Install dependencies dengan `npm install`
+3. Konfigurasi file `config.js` sesuai kebutuhan
+4. Jalankan aplikasi dengan `npm start`
 
 ## Struktur File
 
-- `backend.js` - Logika server utama
-- `config.js` - Konfigurasi aplikasi
-- `index.html` - Antarmuka pengguna
-- `auth_info_baileys/` - Folder penyimpanan session WhatsApp
-- `chat_history.json` - File penyimpanan riwayat chat (terbuat otomatis)
+```
+helpdesk/
+├── backend.js        # Main application
+├── config.js         # Configuration file
+├── database.js       # Database operations
+├── package.json      # Dependencies
+└── README.md         # Documentation
+```
 
-## Catatan
-
-1. Pastikan folder `auth_info_baileys` ada untuk menyimpan session WhatsApp
-2. Scan QR code WhatsApp saat pertama kali menjalankan aplikasi
-3. File `chat_history.json` akan dibuat otomatis untuk menyimpan riwayat chat
-4. Waktu rilis otomatis dapat diubah di `config.js` (dalam menit)
+## Catatan Penting
+- Pastikan Node.js versi terbaru terinstall
+- Untuk produksi, ganti sessionSecret di config.js
+- Backup database secara berkala
+- Versi saat ini: 1.0.3
