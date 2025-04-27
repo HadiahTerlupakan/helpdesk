@@ -428,8 +428,11 @@ async function getAllMediaFilePaths() {
  * @returns {Promise<void>}
  * @throws {Error} Jika transaksi database gagal.
  */
+import bcrypt from 'bcrypt';
+
 async function saveAdmins(admins) {
     const db = await getDb();
+    const saltRounds = 10;
 
     try {
         await db.run('BEGIN TRANSACTION');
@@ -450,9 +453,12 @@ async function saveAdmins(admins) {
                  continue; // Lewati admin yang tidak valid
             }
 
+            // Hash password menggunakan bcrypt
+            const hashedPassword = await bcrypt.hash(admin.password, saltRounds);
+
             await insertStmt.run(
                 username,
-                admin.password, // PERTIMBANGKAN HASHING PASSWORD!
+                hashedPassword,
                 admin.initials,
                 admin.role
             );

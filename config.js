@@ -46,6 +46,13 @@ const config = {
   // Kunci rahasia untuk sesi Express. GANTI INI dengan string acak yang panjang dan sulit ditebak.
   sessionSecret: 'ganti-dengan-string-acak-yang-panjang-dan-kuat', // <--- GANTI INI !!!
 
+  // Konfigurasi rate limiting
+  rateLimitConfig: {
+    windowMs: 15 * 60 * 1000, // 15 menit
+    max: 100, // Maksimum 100 request
+    message: 'Terlalu banyak request'
+  },
+
   // Opsi Baileys (jika diperlukan)
   baileysOptions: {
      // Uncomment baris di bawah jika ingin menampilkan QR Code di terminal saat pertama kali login
@@ -62,6 +69,9 @@ const config = {
   enableConsoleLogs: false, // Setel ke 'false' untuk menonaktifkan console.log, console.warn, dll. di frontend
   usePairingCode: false, // <-- Menggunakan Pairing Code seperti yang Anda inginkan
   // Konfigurasi lain bisa ditambahkan di sini
+  
+  // Daftar domain yang diizinkan untuk CORS
+  corsAllowedOrigins: ["http://localhost:3000", "https://domain-anda.com"]
 };
 
 export default config;

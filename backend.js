@@ -2,14 +2,16 @@
 
 import { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } from 'baileys';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 const expressApp = express({});
 import http from 'http';
 const server = http.createServer(expressApp);
 import { Server } from 'socket.io';
 const io = new Server(server, {
     cors: {
-        origin: "*", // Ganti dengan domain frontend spesifik Anda jika sudah production
-        methods: ["GET", "POST"]
+        origin: config.corsAllowedOrigins,
+        methods: ["GET", "POST"],
+        credentials: true
     },
      maxHttpBufferSize: 5e7 // Tambahkan ini jika mengirim/menerima media besar via socket (50MB)
 });
@@ -49,6 +51,9 @@ import {
 let admins = {};
 let chatHistory = {};
 let quickReplyTemplates = {};
+
+// Konfigurasi rate limiting
+const apiLimiter = rateLimit(config.rateLimitConfig);
 
 const adminSockets = {};
 const usernameToSocketId = {};
@@ -396,6 +401,9 @@ async function startApp() {
 }
 
 expressApp.use(express.static(__dirname));
+
+// Terapkan rate limiting pada semua API routes
+expressApp.use('/api', apiLimiter);
 expressApp.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
@@ -1356,13 +1364,28 @@ io.on('connection', (socket) => {
       // If the message sent was media AND buffer was successfully created/obtained
       // we need to save the buffer to a file on the server for history display later.
       // This happens *after* successful sending via sock.sendMessage to get the Baileys message ID.
+      // Validasi ekstensi dan mime type sebelum memproses file
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain'];
+      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.txt'];
+      
       if (mediaBuffer && sentMediaType !== 'unknown') {
-           try {
-               // Dapatkan ekstensi dari mimeType atau tebak jika tidak ada
-               const fileExtension = getFileExtension(sentMimeType);
-               // Buat nama file unik menggunakan ID pesan Baileys yang baru saja didapat
-               const uniqueFilename = `${sentMsg.key.id}${fileExtension}`;
-               const fullFilePath = path.join(mediaDir, uniqueFilename);
+          // Validasi mime type
+          if (!allowedMimeTypes.includes(sentMimeType)) {
+              console.warn(`[MEDIA] Mime type tidak diizinkan: ${sentMimeType}`);
+              return socket.emit('send_error', { to: chatId, text: sentTextContentForHistory, media, message: 'Tipe file tidak diizinkan.' });
+          }
+          
+          // Validasi ekstensi file
+          const fileExtension = getFileExtension(sentMimeType);
+          if (!allowedExtensions.includes(fileExtension.toLowerCase())) {
+              console.warn(`[MEDIA] Ekstensi file tidak diizinkan: ${fileExtension}`);
+              return socket.emit('send_error', { to: chatId, text: sentTextContentForHistory, media, message: 'Ekstensi file tidak diizinkan.' });
+          }
+          
+          try {
+              // Buat nama file unik menggunakan ID pesan Baileys yang baru saja didapat
+              const uniqueFilename = `${sentMsg.key.id}${fileExtension}`;
+              const fullFilePath = path.join(mediaDir, uniqueFilename);
 
                // Simpan buffer media keluar ke file
                await fs.promises.writeFile(fullFilePath, mediaBuffer);
