@@ -1,0 +1,21 @@
+{
+  "name": "WhatsApp Helpdesk",
+  "short_name": "WA Helpdesk",
+  "description": "Aplikasi Helpdesk WhatsApp untuk admin",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#25D366",
+  "icons": [
+    {
+      "src": "https://web.whatsapp.com/favicon-64x64.ico",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
