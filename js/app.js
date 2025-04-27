@@ -2387,6 +2387,16 @@ const socket = io({
      setLoginState(false); // This resets the UI and state
      // The server will handle state cleanup and disconnecting the socket if needed.
  });
+
+ // Handle clear cache command from server
+ socket.on('clear_cache', () => {
+     console.log('[UI] Clearing browser cache and session storage');
+     sessionStorage.clear();
+     localStorage.removeItem('adminUsername');
+     
+     // Force reload to clear any cached data
+     window.location.reload(true);
+ });
  
  
  // Pick chat button click handler

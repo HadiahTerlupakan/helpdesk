@@ -2,9 +2,8 @@
 
 Aplikasi helpdesk berbasis WhatsApp untuk manajemen percakapan pelanggan dengan fitur:
 - **Multi-admin** dengan role berbeda (admin/superadmin)
-- **Integrasi Firebase** untuk penyimpanan data percakapan
+- **Penyimpanan data percakapan** menggunakan SQLite
 - **Timer rilis otomatis** (default: 15 menit)
-- **Riwayat percakapan** yang tersimpan di Firebase
 - **Delegasi chat** antar admin
 - **Antarmuka admin** yang responsif
 - **Fitur superadmin** untuk manajemen admin dan percakapan
@@ -26,10 +25,9 @@ Aplikasi helpdesk berbasis WhatsApp untuk manajemen percakapan pelanggan dengan 
    - Delegasi chat ke admin lain
    - Superadmin dapat menghapus percakapan
 
-3. **Integrasi Firebase**
-   - Penyimpanan riwayat percakapan
-   - Penyimpanan data admin
-   - Sinkronisasi real-time antar admin
+3. **Penyimpanan Data**
+   - Penyimpanan riwayat percakapan menggunakan SQLite
+   - Penyimpanan data admin menggunakan SQLite
 
 4. **Notifikasi Real-time**
    - Pemberitahuan chat baru

@@ -9,7 +9,6 @@
     "dev": "nodemon backend.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.16",
     "baileys": "^6.7.16",
     "bcryptjs": "^3.0.2",
     "express": "^4.21.2",

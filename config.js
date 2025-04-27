@@ -16,7 +16,7 @@ const config = {
   admins: {
     'admin': { password: 'admin123', initials: 'AD', role: 'admin' }, // Contoh: admin biasa
     'admin2': { password: 'password', initials: 'A2', role: 'admin' }, // Contoh: admin biasa
-    'superadmin': { password: 'superpassword', initials: '-SA', role: 'superadmin' }, // Contoh: super admin
+    'superadmin': { password: 'superpassword', initials: 'SA', role: 'superadmin' }, // Contoh: super admin
     // Anda bisa menambahkan admin lain di sini:
     // 'budi': { password: 'rahasia123', initials: 'BU', role: 'admin' },
   },
@@ -40,7 +40,7 @@ const config = {
 
   // Waktu (dalam menit) sebelum timeout AFK, admin akan menerima peringatan
   // Set ke 0 atau null untuk menonaktifkan peringatan.
-  adminAfkWarningMinutes: 20, // <-- Tambahkan ini (contoh: 2 menit sebelum logout)
+  adminAfkWarningMinutes: 20, // <-- Tambahkan ini (contoh: 20 menit sebelum logout)
 
 
   // Kunci rahasia untuk sesi Express. GANTI INI dengan string acak yang panjang dan sulit ditebak.
@@ -49,9 +49,8 @@ const config = {
   // Opsi Baileys (jika diperlukan)
   baileysOptions: {
      // Uncomment baris di bawah jika ingin menampilkan QR Code di terminal saat pertama kali login
-     // printQRInTerminal: true,
-
-     // Atur level logging Baileys (default: 'warn')
+     // printQRInTerminal: true, // Opsi ini akan diabaikan jika usePairingCode true
+     logLevel: 'warn' // Diubah kembali ke warn agar lihat pesan penting Baileys
      // Level yang tersedia: 'trace', 'debug', 'info', 'warn', 'error', 'fatal'
      // logLevel: 'warn'
   },
@@ -60,8 +59,8 @@ const config = {
   version: '1.0.3', // Tingkatkan nomor versi
 
   // Konfigurasi untuk mengaktifkan/menonaktifkan log di konsol browser
-  enableConsoleLogs: false, // Setel ke 'false' untuk menonaktifkan console.log, console.warn, dll. di frontend
-
+  enableConsoleLogs: true, // Setel ke 'false' untuk menonaktifkan console.log, console.warn, dll. di frontend
+  usePairingCode: false, // <-- Menggunakan Pairing Code seperti yang Anda inginkan
   // Konfigurasi lain bisa ditambahkan di sini
 };
 
