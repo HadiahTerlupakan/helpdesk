@@ -1,11 +1,15 @@
 // Import konfigurasi dari config.js
 import config from '../config.js';
+// Import library mime-types for file extension guessing if needed (already used in backend)
+// Not strictly needed in frontend for display if backend provides mimeType and filePath,
+// but good practice if needing to guess file types for previews etc.
+// import mime from 'mime-types'; // Your existing code doesn't import it here, let's not add it unless necessary
 
 // --- Logging Wrapper ---
 // Simpan referensi ke metode console asli
 const originalConsole = { ...console };
 // Ambil pengaturan logging dari config, default true jika tidak ada
-const enableLogs = config.enableConsoleLogs !== undefined ? config.enableConsoleLogs : true;
+const enableLogs = config.enableConsoleLogs !== undefined ? config.enableLogs : true;
 
 // Buat objek console baru yang membungkus metode console asli
 const wrappedConsole = {};
@@ -39,8 +43,8 @@ const socket = io({
      reconnectionDelayMax: 5000,
      randomizationFactor: 0.5
  });
- 
- 
+
+
  // --- UI Elements ---
  const loginContainer = document.getElementById('login-container');
  const appContainer = document.getElementById('app-container');
@@ -53,8 +57,8 @@ const socket = io({
  const qrCodeDiv = qrModal.querySelector('#qr-code'); // Select QR div INSIDE the modal
  const qrStatus = qrModal.querySelector('#qr-status'); // Select status p INSIDE the modal
  const whatsappStatusDiv = document.getElementById('whatsapp-status'); // WA Status Display (stays in sidebar header)
- 
- 
+
+
  const adminUsernameDisplay = document.getElementById('admin-username-display');
  const adminRoleDisplay = document.getElementById('admin-role-display'); // Role Display
  const logoutButton = document.getElementById('logout-button');
@@ -64,12 +68,12 @@ const socket = io({
  const replyButton = document.getElementById('reply-button');
  const replyBox = document.getElementById('reply-box');
  const sendErrorSpan = replyBox.querySelector('.send-error-span'); // Get the error span
- 
+
  const currentChatInfoDiv = document.getElementById('current-chat-info'); // Container for name & status
  const currentChatIdDisplay = document.getElementById('current-chat-id-display');
  const currentChatStatusSpan = document.getElementById('current-chat-status'); // Chat status span
  const chatPickedStatus = document.getElementById('chat-picked-status'); // Picked status text
- 
+
  const chatActionsArea = document.getElementById('chat-actions-area'); // Container for actions
  const pickChatButton = document.getElementById('pick-chat-button');
  const releaseChatButton = document.getElementById('release-chat-button'); // New Release button
@@ -78,7 +82,7 @@ const socket = io({
  const delegateChatButton = document.getElementById('delegate-chat-button');
  const closeChatButton = document.getElementById('close-chat-button'); // Close chat button
  const openChatButton = document.getElementById('open-chat-button'); // Open chat button
- 
+
  const superadminPanel = document.getElementById('superadmin-panel'); // Super Admin Panel
  const addAdminButton = document.getElementById('add-admin-button'); // Add Admin Button
  const deleteAdminButton = document.getElementById('delete-admin-button'); // New Delete Admin Button
@@ -98,8 +102,8 @@ const socket = io({
  const qrFormStatusDiv = quickReplyManagementModal.querySelector('.qr-form-status');
  // NEW: Quick Reply Suggestions Elements (in reply box)
  const quickReplySuggestionsUl = replyBox.querySelector('.quick-reply-suggestions');
- 
- 
+
+
  const mediaButton = document.getElementById('media-button');
  const mediaInput = document.createElement('input'); // File input for media upload
  mediaInput.type = 'file';
@@ -107,10 +111,10 @@ const socket = io({
  mediaInput.accept = 'image/*,video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain'; // Added text/plain
  mediaInput.style.display = 'none'; // Hide the input
  document.body.appendChild(mediaInput);
- 
+
  const mediaPreviewContainer = document.getElementById('media-preview-container'); // Container for preview
  let selectedMedia = null; // State variable to hold selected media file data
- 
+
  // Media Modal Elements
  const mediaModal = document.getElementById('mediaModal');
  const closeModal = document.getElementById('closeModal');
@@ -120,12 +124,12 @@ const socket = io({
  const modalDocumentContent = document.getElementById('modalDocumentContent'); // Document
  const modalDocumentName = document.getElementById('modalDocumentName');
  const modalDocumentLink = document.getElementById('modalDocumentLink');
- 
+
  // Modal for Offline Admin Notification
  const offlineAdminModal = document.getElementById('offlineAdminModal');
  const offlineAdminMessage = document.getElementById('offlineAdminMessage');
  const offlineAdminModalClose = document.getElementById('offlineAdminModalClose');
- 
+
  // Modal for Add Admin
  const addAdminModal = document.getElementById('addAdminModal');
  const newAdminUsernameInput = document.getElementById('new-admin-username');
@@ -134,13 +138,13 @@ const socket = io({
  const newAdminRoleSelect = document.getElementById('new-admin-role');
  const submitAddAdminButton = document.getElementById('submit-add-admin');
  const addAdminFormStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
- 
+
  // Modal for Delete Admin
  const deleteAdminModal = document.getElementById('deleteAdminModal'); // New Delete Admin Modal
  const deleteAdminSelect = document.getElementById('delete-admin-select'); // New Delete Admin Select
  const submitDeleteAdminButton = document.getElementById('submit-delete-admin'); // New Delete Admin Submit Button
  const deleteAdminFormStatusDiv = deleteAdminModal.querySelector('.delete-admin-form-status'); // New Delete Admin Status Div
- 
+
  // --- Application State ---
  let currentChatId = null; // ID Chat yang sedang dibuka
  let currentUser = null; // Username admin yang login
@@ -154,13 +158,13 @@ const socket = io({
  let currentQrStatus = 'Memuat status WA...'; // State variable for QR/WA status text
  let quickReplyTemplates = []; // NEW: State variable for quick reply templates [{ id, shortcut, text }]
  let selectedSuggestionIndex = -1; // NEW: For keyboard navigation in suggestions
- 
- 
+
+
  // Track offline admin notifications to avoid repeated alerts for the same admin
  const offlineAdminNotified = new Set();
- 
+
  // --- Helper Functions ---
- 
+
  // Function to get CSS Variable value
  /**
   * Mendapatkan nilai CSS variable dari root element.
@@ -172,7 +176,7 @@ const socket = io({
      // Get the computed style of the root element
      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
  }
- 
+
  // Helper to show alerts from server events (Super Admin actions, etc.)
  /**
   * Menampilkan alert dari server (untuk aksi Super Admin).
@@ -185,16 +189,16 @@ const socket = io({
      const alertDiv = document.createElement('div');
      alertDiv.className = `server-alert ${isSuccess ? 'success' : 'error'}`;
      alertDiv.textContent = message;
- 
+
      document.body.appendChild(alertDiv);
- 
+
      setTimeout(() => {
          alertDiv.style.opacity = 0;
          setTimeout(() => alertDiv.remove(), 500); // Remove after fade out matches transition
      }, 5000); // Show for 5 seconds
  }
- 
- 
+
+
  /**
   * Menampilkan pesan error pada form login.
   * @function showLoginError
@@ -212,7 +216,7 @@ const socket = io({
          loginError.style.color = getCssVariable('--error-color');
      }
  }
- 
+
  /**
   * Memperbarui status koneksi WhatsApp di UI.
   * @function updateWhatsappStatus
@@ -224,17 +228,17 @@ const socket = io({
      currentQrStatus = statusText; // Update internal status variable
      whatsappStatusDiv.textContent = `Status WA: ${statusText}`; // Update sidebar display
      whatsappStatusDiv.style.color = isConnected ? '#a0ffa0' : '#ffb0b0'; // Light green for connected, light red for disconnected
- 
+
      // Also update the status text in the QR modal if it's open
      if (qrModal.style.display !== 'none') {
          qrStatus.textContent = statusText;
      }
- 
+
      // If WA is disconnected and requires QR (or fatal error), update QR modal content (Super Admin only)
      // This is handled by specific WA event handlers below.
  }
- 
- 
+
+
  /**
   * Mengatur state login dan menyesuaikan UI.
   * @function setLoginState
@@ -260,7 +264,7 @@ const socket = io({
          requestNotificationPermission();
          // Show/hide Super Admin panel based on role
          superadminPanel.style.display = (currentUserRole === 'superadmin') ? 'flex' : 'none';
- 
+
          // Ensure QR button and Quick Reply Manage button is shown only for Super Admin
          if (currentUserRole === 'superadmin') {
              showQrButton.style.display = 'flex'; // Use flex for icon alignment
@@ -269,15 +273,15 @@ const socket = io({
              showQrButton.style.display = 'none';
              manageQuickRepliesButton.style.display = 'none';
          }
- 
+
          // Request initial data will be handled by the server logic on successful login/reconnect (via 'request_initial_data' emission)
- 
+
          // On successful login/reconnect, clear any old QR display
          currentQrCode = null; // Clear stored QR data
          qrCodeDiv.innerHTML = ''; // Clear QR code display in the modal
          // qrStatus text will be updated by updateWhatsappStatus
          qrModal.style.display = 'none'; // Ensure QR modal is hidden
- 
+
      } else {
          currentUser = null;
          currentUserRole = null; // Clear role on logout
@@ -294,18 +298,18 @@ const socket = io({
          superadminPanel.style.display = 'none'; // Hide Super Admin panel
          showQrButton.style.display = 'none'; // Hide QR button on logout
          manageQuickRepliesButton.style.display = 'none'; // Hide Quick Reply Manage button on logout
- 
+
          // Hide and clear QR modal explicitly on logout
          qrModal.style.display = 'none';
          qrCodeDiv.innerHTML = '';
          qrStatus.textContent = '';
          currentQrCode = null;
-         currentQrStatus = 'Memuat status WA...'; // Reset status
+         currentQrStatus = 'Memuat status WA...'; // Reset stored status
          // Hide quick reply suggestions on logout
          hideQuickReplySuggestions();
      }
  }
- 
+
  /**
   * Meminta izin notifikasi dari pengguna.
   * @function requestNotificationPermission
@@ -325,7 +329,7 @@ const socket = io({
          console.warn("Browser does not support Notifications.");
      }
  }
- 
+
  /**
   * Menampilkan notifikasi browser.
   * @function showNotification
@@ -343,14 +347,14 @@ const socket = io({
              console.log(`Notification suppressed for active chat ${options.chatId}`);
              return; // Do not show notification
          }
- 
+
          try {
              const notification = new Notification(title, {
                  body: body,
                  icon: options.icon || '/favicon.ico',
                  tag: options.chatId // Use chat ID as tag to update existing notifications for the same chat
              });
- 
+
              // Add click handler to focus the window and navigate to the chat
              notification.onclick = function(event) {
                  event.preventDefault(); // Prevent the browser from focusing the tab that opened the notification
@@ -368,7 +372,7 @@ const socket = io({
          }
      }
  }
- 
+
  /**
   * Mereset area chat ke keadaan awal.
   * @function resetChatArea
@@ -381,22 +385,22 @@ const socket = io({
      currentChatStatusSpan.textContent = '';
      currentChatStatusSpan.className = ''; // Clear status class
      chatPickedStatus.textContent = ''; // Clear picked status text
- 
+
      pickChatButton.style.display = 'none';
      releaseChatButton.style.display = 'none'; // Hide Release button
      delegateChatContainer.style.display = 'none';
      delegateChatSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>'; // Reset delegate select
- 
+
      // Disable reply box and media button
      replyBox.classList.add('disabled');
      replyInput.disabled = true;
      replyButton.disabled = true;
      mediaButton.disabled = true;
- 
+
      closeChatButton.style.display = 'none'; // Hide close/open buttons
      openChatButton.style.display = 'none';
      deleteChatButton.style.display = 'none'; // Controlled by SuperAdmin role later
- 
+
      replyInput.value = ''; // Clear input value
      selectedMedia = null; // Clear selected media state
      updateMediaPreview(); // Hide media preview
@@ -409,7 +413,7 @@ const socket = io({
      // Hide quick reply suggestions
      hideQuickReplySuggestions();
  }
- 
+
  /**
   * Mereset seluruh UI ke keadaan awal.
   * @function resetUI
@@ -430,14 +434,14 @@ const socket = io({
      adminUsernameDisplay.textContent = '';
      adminRoleDisplay.textContent = ''; // Clear role display
      updateWhatsappStatus('Memuat status WA...', false); // Reset WA Status display
- 
+
      showLoginError(''); // Clear login error specifically
      superadminPanel.style.display = 'none'; // Hide Super Admin panel
      showQrButton.style.display = 'none'; // Hide QR button
      manageQuickRepliesButton.style.display = 'none'; // Hide Quick Reply Manage button
      quickReplyTemplates = []; // Clear quick reply templates
- 
-     // Hide and clear QR modal on full UI reset
+
+     // Hide and clear QR modal explicitly on logout
      qrModal.style.display = 'none';
      qrCodeDiv.innerHTML = '';
      qrStatus.textContent = '';
@@ -446,9 +450,9 @@ const socket = io({
      // Hide quick reply suggestions on reset
      hideQuickReplySuggestions();
  }
- 
+
  // --- Helper Functions ---
- 
+
  // Moved function declaration to a scope where it's available
  /**
   * Memperbarui status pick untuk semua item chat list.
@@ -463,36 +467,36 @@ const socket = io({
          updateUnreadIndicator(chatId); // Also ensure unread is correct
      });
  }
- 
- 
+
+
  function updateChatAreaForCurrentChat() {
      if (!currentChatId || !currentUser) {
          resetChatArea();
          return;
      }
- 
+
      // Find the chat name and status from the chatHistory state
      const chatEntry = chatHistory[currentChatId]; // Get the chat entry from state
      // Fallback to chat ID if chatListItems not ready or entry missing
      const chatName = chatListItems[currentChatId] ? chatListItems[currentChatId].dataset.chatName : currentChatId.split('@')[0];
      const chatStatus = chatEntry?.status || 'open'; // Get status, default to 'open'
- 
+
      const pickedBy = pickedChatsStatus[currentChatId];
- 
+
      currentChatIdDisplay.textContent = `Chat: ${chatName}`;
      document.title = `Chat: ${chatName}`;
- 
+
      // Update chat status display in header
      currentChatStatusSpan.style.display = 'inline-block'; // Use inline-block
      currentChatStatusSpan.textContent = chatStatus.toUpperCase();
      currentChatStatusSpan.className = `current-chat-status ${chatStatus}`; // Add class for styling
- 
+
      // Update picked status display in header
      chatPickedStatus.textContent = pickedBy ? `Diambil oleh: ${pickedBy}` : 'Belum diambil';
      chatPickedStatus.style.color = getCssVariable('--text-muted'); // Reset error color
- 
+
      hideSendError(); // Hide send error when switching chats
- 
+
      // Enable/Disable reply box and media button based on chat status AND pick status
      const canReply = chatStatus === 'open' && pickedBy === currentUser;
      if (canReply) {
@@ -508,7 +512,7 @@ const socket = io({
          setTimeout(() => {
              replyInput.style.height = replyInput.scrollHeight + 'px';
          }, 0);
- 
+
          setTimeout(() => replyInput.focus(), 100); // Auto-focus
      } else {
          replyBox.classList.add('disabled');
@@ -531,8 +535,8 @@ const socket = io({
          // Hide quick reply suggestions if reply box is disabled
          hideQuickReplySuggestions();
      }
- 
- 
+
+
      // Show/Hide action buttons based on pick status, chat status, and user role
      // Default hide all action buttons
      pickChatButton.style.display = 'none';
@@ -541,7 +545,7 @@ const socket = io({
      closeChatButton.style.display = 'none';
      openChatButton.style.display = 'none';
      deleteChatButton.style.display = 'none'; // Controlled by SuperAdmin role later
- 
+
      if (chatStatus === 'open') {
          // Show Pick button if not picked AND user is not Super Admin (Super Admin doesn't need to pick to delegate/reply)
          if (!pickedBy && currentUserRole !== 'superadmin') {
@@ -555,7 +559,7 @@ const socket = io({
              releaseChatButton.disabled = false; // Ensure release button is enabled when shown
              releaseChatButton.textContent = 'Lepas Chat'; // Reset text
          }
- 
+
          // Show Delegate container if picked by current user OR is Super Admin
          if (pickedBy === currentUser || currentUserRole === 'superadmin') {
              delegateChatContainer.style.display = 'flex'; // Use flex as container uses flex
@@ -568,8 +572,8 @@ const socket = io({
              closeChatButton.style.display = 'inline-block';
              closeChatButton.disabled = false; // Ensure button is enabled
          }
- 
- 
+
+
      } else { // ChatStatus is 'closed'
          // Only Superadmin can open closed chats
          if (currentUserRole === 'superadmin') {
@@ -577,31 +581,31 @@ const socket = io({
              openChatButton.disabled = false; // Ensure button is enabled
          }
      }
- 
+
      // Show/Hide Delete Chat button based on Super Admin role
      deleteChatButton.style.display = (currentUserRole === 'superadmin') ? 'inline-block' : 'none';
      deleteChatButton.disabled = false; // Ensure button is enabled when shown
- 
+
  }
- 
+
  function populateDelegateChatSelect() {
      console.log('[Delegate Select] Populating select. Current User:', currentUser);
      // Clear existing options except the disabled default
      delegateChatSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>';
- 
+
      const onlineAdminsSet = new Set(onlineAdmins || []); // Use the state variable
      // Ensure registeredAdmins is loaded
      if (!registeredAdmins || Object.keys(registeredAdmins).length === 0) {
          console.warn('[Delegate Select] registeredAdmins data not available yet.');
          return;
      }
- 
+
      const sortedAdminUsernames = Object.keys(registeredAdmins).sort();
- 
+
      sortedAdminUsernames.forEach(admin => {
          // Don't show current user in delegate list
          if (admin === currentUser) return;
- 
+
          const isOnline = onlineAdminsSet.has(admin);
          const option = document.createElement('option');
          option.value = admin;
@@ -615,16 +619,16 @@ const socket = io({
      delegateChatSelect.value = ""; // Select the disabled option
      console.log('[Delegate Select] Select populated.');
  }
- 
+
  // Function to populate the Delete Admin select dropdown AND manage submit button disabled state
  function populateDeleteAdminSelect() {
      console.log('[Delete Admin Select] Populating select. Current User:', currentUser);
      deleteAdminSelect.innerHTML = '<option value="" disabled selected>Pilih Admin</option>';
- 
+
      // Clear status message initially
      deleteAdminFormStatusDiv.textContent = '';
      deleteAdminFormStatusDiv.className = 'delete-admin-form-status';
- 
+
      if (!registeredAdmins || Object.keys(registeredAdmins).length === 0) {
          console.warn('[Delete Admin Select] registeredAdmins data not available yet or is empty.');
           const noAdminOption = document.createElement('option');
@@ -638,9 +642,9 @@ const socket = io({
           console.log('[Delete Admin Select] No registered admins found. Submit button disabled.');
          return;
      }
- 
+
      const sortedAdminUsernames = Object.keys(registeredAdmins).sort();
- 
+
      let hasOtherAdmins = false;
      sortedAdminUsernames.forEach(admin => {
          // Exclude the current user from the delete list
@@ -648,16 +652,16 @@ const socket = io({
               console.log(`[Delete Admin Select] Excluding current user: ${admin}`);
               return;
          }
- 
+
          hasOtherAdmins = true; // Found at least one other admin
          console.log(`[Delete Admin Select] Adding admin to select: ${admin}`);
- 
+
          const option = document.createElement('option');
          option.value = admin;
          option.textContent = admin;
          deleteAdminSelect.appendChild(option);
      });
- 
+
      if (!hasOtherAdmins) {
          const noAdminOption = document.createElement('option');
          noAdminOption.value = '';
@@ -667,25 +671,25 @@ const socket = io({
          deleteAdminFormStatusDiv.textContent = 'Tidak ada admin lain yang bisa dihapus.'; // Add status message
          deleteAdminFormStatusDiv.className = 'delete-admin-form-status info'; // Add info class
      }
- 
+
      // Reset selected option to the placeholder
      deleteAdminSelect.value = "";
      // Disable submit button if no other admins to delete
      submitDeleteAdminButton.disabled = !hasOtherAdmins;
      console.log(`[Delete Admin Select] Submit button disabled state set to: ${!hasOtherAdmins}. hasOtherAdmins: ${hasOtherAdmins}`);
  }
- 
+
  // NEW: Function to populate the Quick Reply management list
  function populateQuickReplyManagementList() {
      quickReplyListUl.innerHTML = ''; // Clear existing list
- 
+
      // --- FIX: Ensure quickReplyTemplates is an array before iterating ---
      if (!Array.isArray(quickReplyTemplates) || quickReplyTemplates.length === 0) {
          quickReplyListUl.innerHTML = '<li>Belum ada template balas cepat.</li>';
          return;
      }
      // --- END FIX ---
- 
+
      quickReplyTemplates.forEach(template => {
          const li = document.createElement('li');
          li.dataset.id = template.id;
@@ -707,40 +711,40 @@ const socket = io({
          button.addEventListener('click', handleDeleteQuickReplyClick);
      });
  }
- 
+
  // NEW: Function to handle Edit button click in QR management modal
  function handleEditQuickReplyClick(event) {
      const templateId = event.target.dataset.id;
      // --- FIX: Ensure quickReplyTemplates is an array before calling find ---
      const templateToEdit = Array.isArray(quickReplyTemplates) ? quickReplyTemplates.find(t => t.id === templateId) : null;
      // --- END FIX ---
- 
+
      if (templateToEdit) {
          qrEditIdInput.value = templateToEdit.id;
          qrShortcutInput.value = templateToEdit.shortcut;
          qrTextInput.value = templateToEdit.text;
- 
+
          // Change form state to 'editing'
          submitQrButton.textContent = 'Update Template';
          submitQrButton.classList.remove('add-new');
          submitQrButton.classList.add('update-existing');
          cancelEditQrButton.style.display = 'inline-block';
          addNewQrButton.style.display = 'none'; // Hide "Add New" button
- 
+
          qrFormStatusDiv.textContent = 'Mengedit template...';
          qrFormStatusDiv.className = 'qr-form-status'; // Reset status class
- 
+
          // Focus the shortcut input
          qrShortcutInput.focus();
      }
  }
- 
+
  // NEW: Function to handle Cancel Edit button click
  cancelEditQrButton.addEventListener('click', (event) => {
      event.preventDefault(); // Prevent form submission if it were inside a form
      resetQuickReplyForm();
  });
- 
+
  // NEW: Function to handle Add New button click in QR management modal
  if (addNewQrButton) {
      addNewQrButton.addEventListener('click', (event) => {
@@ -749,33 +753,33 @@ const socket = io({
          qrShortcutInput.focus(); // Focus shortcut input for new entry
      });
  }
- 
- 
+
+
  // NEW: Function to reset the QR management form
  function resetQuickReplyForm() {
      qrEditIdInput.value = '';
      qrShortcutInput.value = '';
      qrTextInput.value = '';
- 
+
      submitQrButton.textContent = 'Simpan Template';
      submitQrButton.classList.remove('update-existing');
      submitQrButton.classList.add('add-new'); // Optional: Add class for styling if needed
      if (cancelEditQrButton) cancelEditQrButton.style.display = 'none';
      if (addNewQrButton) addNewQrButton.style.display = 'inline-block'; // Show "Add New" button
- 
+
      if (qrFormStatusDiv) {
          qrFormStatusDiv.textContent = ''; // Clear status
          qrFormStatusDiv.className = 'qr-form-status'; // Reset status class
      }
  }
- 
+
  // NEW: Function to handle Delete button click in QR management modal
  function handleDeleteQuickReplyClick(event) {
      const templateId = event.target.dataset.id;
      // --- FIX: Ensure quickReplyTemplates is an array before calling find ---
      const templateToDelete = Array.isArray(quickReplyTemplates) ? quickReplyTemplates.find(t => t.id === templateId) : null;
      // --- END FIX ---
- 
+
      if (templateToDelete) {
          if (confirm(`Anda yakin ingin menghapus template "${sanitizeHTML(templateToDelete.shortcut)}"?`)) { // Use shortcut in confirmation
              console.log(`[UI] Super Admin ${currentUser} menghapus template QR: ${templateToDelete.shortcut}`);
@@ -786,21 +790,21 @@ const socket = io({
          }
      }
  }
- 
- 
+
+
  function updateChatListItemPickStatus(chatId) {
      const listItem = chatListItems[chatId];
      if (!listItem) {
          // console.warn("Elemen .chat-item-picked-by tidak ditemukan untuk chat:", chatId, "- List item not found.");
          return; // Chat list item might not exist yet if message is very first one
      }
- 
+
      let statusContainer = listItem.querySelector('.message-snippet'); // Find the snippet div
      if (!statusContainer) {
          console.warn("Elemen .message-snippet tidak ditemukan untuk chat:", chatId);
          return;
      }
- 
+
      let statusSpan = statusContainer.querySelector('.chat-item-picked-by');
      // Create the span if it doesn't exist (should be in initial template, but safety)
      if (!statusSpan) {
@@ -809,12 +813,12 @@ const socket = io({
          statusContainer.appendChild(statusSpan); // Append inside the snippet div
          // console.warn("Elemen .chat-item-picked-by DIBUAT untuk chat:", chatId);
      }
- 
- 
+
+
      const pickedBy = pickedChatsStatus[chatId];
      // Check if the chat is currently picked by the *current* user
      const isPickedByCurrentUser = pickedBy === currentUser;
- 
+
      if (pickedBy) {
          statusSpan.textContent = `(Oleh: ${pickedBy})`;
          statusSpan.style.display = 'inline';
@@ -832,54 +836,54 @@ const socket = io({
      // Ensure unread indicator is updated correctly after pick status change
      updateUnreadIndicator(chatId);
  }
- 
- 
+
+
  function updateUnreadIndicator(chatId) {
      const listItem = chatListItems[chatId];
      if (!listItem) return;
- 
+
      const unreadIndicator = listItem.querySelector('.unread-indicator');
      if (!unreadIndicator) return;
- 
+
      // Check actual unread status from chatHistory state
      // A message is unread if it's incoming AND its 'unread' flag is true.
      const hasUnread = chatHistory[chatId]?.messages?.some(msg => msg.type === 'incoming' && msg.unread) || false;
- 
+
      // Show unread indicator if there are unread messages AND the chat is NOT currently active
      const shouldShowUnread = hasUnread && chatId !== currentChatId;
- 
+
      unreadIndicator.style.display = shouldShowUnread ? 'inline' : 'none';
- 
+
  }
- 
+
  function updateChatListItemStatus(chatId, status) {
      const listItem = chatListItems[chatId];
      if (!listItem) return;
- 
+
      let statusSpan = listItem.querySelector('.chat-item-status');
      if (!statusSpan) {
          statusSpan = document.createElement('span');
          statusSpan.className = 'chat-item-status';
          listItem.appendChild(statusSpan);
      }
- 
+
      statusSpan.textContent = status.toUpperCase();
      statusSpan.className = `chat-item-status ${status}`; // Adds 'open' or 'closed' class
- 
+
      // Update list item class for styling
      if (status === 'closed') {
          listItem.classList.add('closed');
      } else {
          listItem.classList.remove('closed');
      }
- 
+
      // If the currently active chat's status changes, update the header area
      if (chatId === currentChatId) {
          updateChatAreaForCurrentChat(); // This re-evaluates button/reply box states
      }
  }
- 
- 
+
+
  function updateChatList(chatId, name, lastMessageText = '', timestamp = new Date().toISOString(), chatStatus = 'open', isInitialLoad = false) {
      let li = chatListItems[chatId];
      const messageTimestamp = new Date(timestamp);
@@ -892,10 +896,10 @@ const socket = io({
              minute: '2-digit'
          }) : messageTimestamp.toLocaleDateString()) :
          '--:--'; // Handle invalid dates
- 
+
      const snippetText = lastMessageText?.trim() || '[Media/Kosong]';
      const shortMessage = snippetText.substring(0, 30) + (snippetText.length > 30 ? '...' : '');
- 
+
      // Check if chat item already exists
      if (!li) {
          li = document.createElement('li');
@@ -914,46 +918,46 @@ const socket = io({
                    </div>
                     <span class="chat-item-status" style="display: none;"></span> <!-- Status will be set by updateChatListItemStatus -->
                `;
- 
+
          // Add click listener
          li.addEventListener('click', () => {
              // Prevent clicking on the currently selected chat
              if (currentChatId === chatId) return;
- 
+
              // Deselect previous chat item if any
              if (currentChatId && chatListItems[currentChatId]) {
                  chatListItems[currentChatId].classList.remove('selected');
              }
- 
+
              // Set new current chat and select the list item
              currentChatId = chatId;
              li.classList.add('selected');
- 
+
              // Mark chat as read and load messages
              markChatAsRead(chatId);
              loadChatMessages(chatId); // This will trigger 'chat_history' event
- 
+
              // Update chat area header and actions based on the newly selected chat
              // Call this *after* loadChatMessages, because chatHistory state might be updated by the response
              // No, updateChatAreaForCurrentChat needs the *initial* state to show placeholders.
              // It will be called *again* when 'chat_history' is received.
              updateChatAreaForCurrentChat(); // Show loading/initial state buttons
- 
+
              // Update unread indicator for the newly selected chat (should become hidden)
              updateUnreadIndicator(chatId); // This will hide the indicator
              // Hide quick reply suggestions when switching chats
              hideQuickReplySuggestions();
- 
+
          });
- 
+
          // Store reference to the created list item
          chatListItems[chatId] = li;
- 
+
          // Insert the new list item into the chat list, sorted by timestamp (newest first)
          let inserted = false;
          const currentItems = Array.from(chatList.children).filter(item => item.tagName === 'LI');
-         const newItemTime = messageTimestamp.getTime();
- 
+         const newItemTime = new Date(timestamp).getTime();
+
          for (let i = 0; i < currentItems.length; i++) {
              const existingItemId = currentItems[i].dataset.chatId;
              // Get the last message timestamp of the existing item from chatHistory state
@@ -961,8 +965,8 @@ const socket = io({
              const existingMessagesArray = existingChatEntry?.messages || [];
              const lastExistingMessage = existingMessagesArray.length > 0 ? existingMessagesArray[existingMessagesArray.length - 1] : null;
              const existingItemTime = lastExistingMessage ? new Date(lastExistingMessage.timestamp).getTime() : 0;
- 
- 
+
+
              if (newItemTime > existingItemTime) {
                  chatList.insertBefore(li, currentItems[i]);
                  inserted = true;
@@ -980,40 +984,40 @@ const socket = io({
          if (!inserted) {
              chatList.appendChild(li);
          }
- 
+
          // Remove the initial placeholder if it exists
          const initialPlaceholder = chatList.querySelector('.placeholder');
          if (initialPlaceholder) initialPlaceholder.remove();
- 
- 
+
+
      } else {
          // If chat item already exists, update its content
          li.querySelector('.chat-name').textContent = sanitizeHTML(name);
          li.querySelector('.last-message').textContent = sanitizeHTML(shortMessage);
          li.querySelector('.timestamp').textContent = formattedTime;
          li.dataset.chatName = name; // Update dataset in case name changed
- 
+
          // Update pick status and unread indicator for the existing item
          updateChatListItemPickStatus(chatId);
          updateUnreadIndicator(chatId); // Re-evaluate unread status
- 
+
          // Update the status display for the existing item
          updateChatListItemStatus(chatId, chatStatus);
- 
+
          // If it's a new incoming message (and not during initial load), move it to the top
          if (!isInitialLoad && chatId !== currentChatId) { // Don't move if current chat or during initial load
              // Find the correct position based on the new timestamp (newest first)
              const currentItems = Array.from(chatList.children).filter(item => item.tagName === 'LI');
              let insertBeforeElement = chatList.firstChild; // Default to placing at the beginning
-             const newItemTime = messageTimestamp.getTime();
- 
+             const newItemTime = new Date(timestamp).getTime();
+
              for (let i = 0; i < currentItems.length; i++) {
                  const existingItemId = currentItems[i].dataset.chatId;
                  const existingChatEntry = chatHistory[existingItemId];
                  const existingMessagesArray = existingChatEntry?.messages || [];
                  const lastExistingMessage = existingMessagesArray.length > 0 ? existingMessagesArray[existingMessagesArray.length - 1] : null;
                  const existingItemTime = lastExistingMessage ? new Date(lastExistingMessage.timestamp).getTime() : 0;
- 
+
                  // If the new item is newer than or equal to the current one in the list, insert before that one
                  if (newItemTime > existingItemTime) {
                      insertBeforeElement = currentItems[i];
@@ -1035,8 +1039,8 @@ const socket = io({
          }
      }
  }
- 
- 
+
+
  function markChatAsRead(chatId) {
      const listItem = chatListItems[chatId];
      if (listItem) {
@@ -1045,7 +1049,7 @@ const socket = io({
              unreadIndicator.style.display = 'none'; // Hide immediately in UI
          }
      }
- 
+
      // Update state and notify server
      if (chatHistory[chatId]?.messages) {
          let changed = false;
@@ -1067,7 +1071,7 @@ const socket = io({
          }
      }
  }
- 
+
  function loadChatMessages(chatId) {
      // Clear messages area and show loading placeholder
      messagesDiv.innerHTML = '<div class="placeholder">Memuat pesan...</div>';
@@ -1075,161 +1079,222 @@ const socket = io({
      // Request chat history from the server
      socket.emit('get_chat_history', chatId);
  }
- 
+
  function sanitizeHTML(str) {
      if (str === null || str === undefined) return '';
      const temp = document.createElement('div');
      temp.textContent = str; // Use textContent to escape HTML
      return temp.innerHTML.replace(/\n/g, '<br>'); // Convert newlines to <br>
  }
- 
+
  // Helper to determine the MIME type for data URL/blob based on original type or filename
  function getMimeTypeForDisplay(mediaType, mimeType, fileName) {
      // Use the actual MIME type if available from backend
      if (mimeType) return mimeType;
- 
+
      // Fallback based on Baileys message type or filename extension
-     if (mediaType === 'imageMessage') return 'image/jpeg';
-     if (mediaType === 'videoMessage') return 'video/mp4';
-     if (mediaType === 'audioMessage') return 'audio/mpeg'; // Common fallback, might need specific codecs
-     if (mediaType === 'stickerMessage') return 'image/webp';
- 
+     if (mediaType === 'imageMessage') return 'image/jpeg'; // Default image
+     if (mediaType === 'videoMessage') return 'video/mp4'; // Default video
+     if (mediaType === 'audioMessage') return 'audio/mpeg'; // Common audio fallback (MP3)
+     if (mediaType === 'stickerMessage') return 'image/webp'; // Stickers are often webp
+
      // Try to guess based on file extension for documents/unknowns
      if (fileName) {
          const ext = fileName.split('.').pop().toLowerCase();
+         // Assuming 'mime-types' library is imported elsewhere if needed,
+         // or you can hardcode common mappings here
+         // const mimeGuess = mime.lookup(ext);
+         // if (mimeGuess) return mimeGuess;
+         // Fallback to basic types if mime-types isn't used or fails
          if (ext === 'pdf') return 'application/pdf';
          if (ext === 'doc' || ext === 'docx') return 'application/msword';
          if (ext === 'xls' || ext === 'xlsx') return 'application/vnd.ms-excel';
          if (ext === 'ppt' || ext === 'pptx') return 'application/vnd.ms-powerpoint';
          if (ext === 'txt') return 'text/plain';
-         // Add more common types as needed
+
      }
- 
-     // Default generic type
+
+
+     // Default generic type if all else fails
      return 'application/octet-stream';
  }
- 
- 
+
+
+ // NEW: Helper function to create HTML elements safely and attach event listeners
+ function createElementWithClasses(tag, classes) {
+    const el = document.createElement(tag);
+    if (classes) {
+        el.className = classes;
+    }
+    return el;
+ }
+
  function appendMessage(msgData) {
      // Basic validation
      if (!msgData || !msgData.id || !msgData.type || !msgData.chatId) {
          console.error("Invalid message data received:", msgData);
          return;
      }
- 
+
+     // Destructure data, including filePath
      const {
          id,
          from,
          text,
          type,
-         mediaData,
+         mediaData, // Base64 data (only for new incoming usually)
+         filePath, // Path to the saved file on the server (preferred source)
          mediaType,
          mimeType,
          timestamp,
          fileName,
          initials,
          chatId
-     } = msgData; // Include chatId, mimeType
- 
+     } = msgData;
+
      // Check if this message is for the currently active chat
      if (chatId !== currentChatId) {
          // console.log(`Message for chat ${chatId} received, but current chat is ${currentChatId}. Ignoring append.`);
          return; // Only append messages for the currently viewed chat
      }
- 
+
      // Prevent adding duplicate messages to the UI
      if (messagesDiv.querySelector(`[data-message-id="${id}"]`)) {
          // console.warn(`Pesan dengan ID ${id} sudah ditampilkan, diabaikan penambahannya ke UI.`);
          return;
      }
- 
-     const messageDiv = document.createElement('div');
-     messageDiv.className = `message ${type}`;
+
+     const messageDiv = createElementWithClasses('div', `message ${type}`);
      messageDiv.dataset.messageId = id;
      messageDiv.dataset.timestamp = timestamp; // Store timestamp for sorting
- 
- 
-     let contentHTML = '';
- 
+
+
      // Add sender info for outgoing messages (Admin's initials)
-     // Display initials and a colon for outgoing messages, including the hyphen prefix
-     // Format: -[INITIALS]:
      if (type === 'outgoing' && initials) {
-         contentHTML += `<strong>-${sanitizeHTML(initials)}:</strong> `;
+         const senderInfo = createElementWithClasses('strong');
+         senderInfo.textContent = `-${initials}: `; // Text content handles escaping automatically
+         messageDiv.appendChild(senderInfo);
      }
- 
-     // Handle media content
-     if (mediaData) {
-         // Determine the appropriate MIME type for displaying the data URL
+
+     // --- START: Handle media content - CHECK filePath FIRST ---
+     let mediaSrc = null;
+     // Prefer filePath if available, as it points to the permanently saved file
+     if (filePath) {
+         mediaSrc = `/media/${filePath}`; // Construct URL to the backend endpoint
+     } else if (mediaData) {
+         // Fallback to mediaData (Base64) if filePath is not available (should only happen for new incoming before save)
          const displayMimeType = getMimeTypeForDisplay(mediaType, mimeType, fileName);
-         let dataUrl = mediaData;
-         // Ensure dataUrl has the correct format if it's just the base64 string
-         if (!mediaData.startsWith('data:')) {
-             dataUrl = `data:${displayMimeType};base64,${mediaData}`;
-         }
- 
-         // Display media based on its general type or MIME type
+         mediaSrc = `data:${displayMimeType};base64,${mediaData}`;
+     }
+
+
+     if (mediaSrc && mediaType && mediaType !== 'text') { // Check if we have a source (filePath or mediaData) and it's a media type
+         const displayMimeType = getMimeTypeForDisplay(mediaType, mimeType, fileName); // Still need this for type-specific handling
+
+         let mediaElement = null;
+
+         // Display media based on its general type or MIME type, using mediaSrc
          if (displayMimeType.startsWith('image/')) {
-             // Use onclick to open the image in the modal
-             contentHTML += `<img src="${dataUrl}" alt="Media Gambar" style="cursor: pointer;" onclick="openMediaModal('${dataUrl}', 'image')">`;
+             mediaElement = createElementWithClasses('img');
+             mediaElement.src = mediaSrc;
+             mediaElement.alt = fileName || 'Media Gambar';
+             mediaElement.style.cursor = 'pointer';
+             // Add click listener using addEventListener
+             mediaElement.addEventListener('click', () => {
+                 openMediaModal(mediaSrc, 'image'); // Call the modal function directly
+             });
          } else if (displayMimeType.startsWith('video/')) {
-             // Use <video> tag for videos
-             contentHTML += `<video controls src="${dataUrl}" preload="metadata"></video>`;
+             mediaElement = createElementWithClasses('video');
+             mediaElement.src = mediaSrc;
+             mediaElement.controls = true;
+             mediaElement.preload = 'metadata';
          } else if (displayMimeType.startsWith('audio/')) {
-             // Use <audio> tag for audio
-             contentHTML += `<audio controls src="${dataUrl}" type="${displayMimeType}" preload="metadata"></audio>`;
-         } else if (displayMimeType === 'application/pdf' || displayMimeType.startsWith('application/') || displayMimeType.startsWith('text/')) {
-             // Handle documents and text files - provide a link to open in modal or download
-             const docName = fileName || `${mediaType?.replace('Message', '') || 'Dokumen'}`;
-             // Use onclick to open the document info in the modal
-             contentHTML += `<a href="#" class="document-link" onclick="event.preventDefault(); openMediaModal('${dataUrl}', 'document', '${sanitizeHTML(docName)}')"><i class="fas fa-file-alt"></i> ${sanitizeHTML(docName)}</a>`;
+             mediaElement = createElementWithClasses('audio');
+             mediaElement.src = mediaSrc;
+             mediaElement.controls = true;
+             mediaElement.preload = 'metadata';
+             if (fileName && fileName !== 'Voice Note') {
+                  const fileNameSpan = createElementWithClasses('span', 'file-name');
+                  fileNameSpan.textContent = sanitizeHTML(fileName); // Display file name below audio
+                  messageDiv.appendChild(fileNameSpan); // Append filename span directly to messageDiv
+             }
+         } else if (mediaType === 'documentMessage' || displayMimeType === 'application/pdf' || displayMimeType.startsWith('application/') || displayMimeType.startsWith('text/')) {
+             // Handle documents and text files - provide a link
+             mediaElement = createElementWithClasses('a', 'document-link');
+             mediaElement.href = mediaSrc;
+             mediaElement.textContent = fileName || `${mediaType?.replace('Message', '') || 'Dokumen'}`;
+             mediaElement.target = '_blank'; // Open in new tab by default for direct link
+             mediaElement.download = fileName || 'document'; // Suggest download name
+             // Add click listener using addEventListener to open modal instead of direct link if desired
+             mediaElement.addEventListener('click', (event) => {
+                 event.preventDefault(); // Prevent default link behavior
+                 const docName = fileName || `${mediaType?.replace('Message', '') || 'Dokumen'}`;
+                 openMediaModal(mediaSrc, 'document', docName); // Call modal function
+             });
+             const fileIcon = createElementWithClasses('i', 'fas fa-file-alt');
+             mediaElement.prepend(fileIcon); // Add icon inside the link
          } else if (mediaType === 'stickerMessage') {
-             contentHTML += `<img src="${dataUrl}" alt="Stiker" style="max-width: 150px; max-height: 150px; border-radius: 5px;">`;
+             mediaElement = createElementWithClasses('img');
+             mediaElement.src = mediaSrc;
+             mediaElement.alt = fileName || 'Stiker';
+             mediaElement.style.maxWidth = '150px';
+             mediaElement.style.maxHeight = '150px';
+             mediaElement.style.borderRadius = '5px';
          } else {
              // Fallback for unsupported media types
-             contentHTML += `[Media tidak didukung: ${mediaType || 'Unknown'}]`;
+             const unsupportedSpan = document.createElement('span');
+             unsupportedSpan.textContent = `[Media tidak didukung atau tidak dapat dimuat: ${mediaType || 'Unknown'}]`;
+              messageDiv.appendChild(unsupportedSpan); // Append fallback text directly
+         }
+
+         // Append the created media element if it exists
+         if (mediaElement) {
+             messageDiv.appendChild(mediaElement);
          }
      }
- 
+     // --- END: Handle media content ---
+
+
      // Handle text content (caption for media, or plain text message)
      // Check if text exists and is not just whitespace
-     if (text && text.trim().length > 0) {
-         // Add text content div. Apply appropriate margin-top if it follows media or initials.
-         // The CSS rules (.message img + .caption, etc.) handle the margin-top based on siblings.
-         // We just need to add the div with the content.
-         // Ensure text is sanitized and newlines are converted.
-         contentHTML += `<div class="${mediaData ? 'caption' : 'text-content'}">${sanitizeHTML(text)}</div>`;
-     } else if (!mediaData && type === 'incoming' && (!text || text.trim().length === 0)) {
-         // Handle case where incoming message has no text and no recognized media
-         contentHTML += `<div class="text-content">[Pesan Kosong/Tidak Dikenal]</div>`;
+     // Only render text if it's a text message OR it's a media message with text/caption
+     if ((text && text.trim().length > 0) && (mediaType === 'text' || mediaType === 'conversation' || mediaSrc)) {
+         const textElement = createElementWithClasses('div', mediaSrc ? 'caption' : 'text-content');
+         textElement.innerHTML = sanitizeHTML(text); // Use innerHTML after sanitizing to keep <br>
+         messageDiv.appendChild(textElement);
+     } else if (!mediaSrc && type === 'incoming' && (!text || text.trim().length === 0) && (mediaType === 'unknown' || !mediaType)) {
+         // Handle case where incoming message has no text and no recognized media or filepath
+         const emptyMessage = createElementWithClasses('div', 'text-content');
+         emptyMessage.textContent = '[Pesan Kosong/Tidak Dikenal]';
+         messageDiv.appendChild(emptyMessage);
      }
- 
- 
+
+
      // Add timestamp at the bottom right of the bubble
      const msgTime = new Date(timestamp);
      if (!isNaN(msgTime.getTime())) {
-         contentHTML += `<span class="message-timestamp">${msgTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
+         const timestampSpan = createElementWithClasses('span', 'message-timestamp');
+         timestampSpan.textContent = msgTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+         messageDiv.appendChild(timestampSpan);
      }
- 
- 
-     messageDiv.innerHTML = contentHTML;
- 
+
+
      // Remove any placeholder text in the messages area
      const placeholder = messagesDiv.querySelector('.placeholder');
      if (placeholder) placeholder.remove();
- 
+
      // Append the new message div
      // Insert messages in chronological order based on timestamp
      const messages = Array.from(messagesDiv.children);
      let inserted = false;
      const newMessageTime = new Date(timestamp).getTime();
- 
+
      // Iterate from the latest message currently displayed
      for (let i = messages.length - 1; i >= 0; i--) {
          const existingMsg = messages[i];
          // Use dataset.timestamp for comparison
          const existingMsgTime = new Date(existingMsg.dataset.timestamp).getTime();
- 
+
          // If the new message is newer than or equal to the current message, insert after it
          if (newMessageTime >= existingMsgTime) {
              messagesDiv.insertBefore(messageDiv, existingMsg.nextSibling);
@@ -1241,14 +1306,14 @@ const socket = io({
      if (!inserted) {
          messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
      }
- 
+
      // --- START: Logika Scroll Otomatis ---
      // Hanya lakukan scroll jika pesan ini untuk chat yang sedang aktif
      if (chatId === currentChatId) {
          const scrollThreshold = 50; // Scroll jika kurang dari 50px dari bawah
          // Periksa apakah pengguna saat ini berada di dekat bagian bawah
          const isNearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop <= messagesDiv.clientHeight + scrollThreshold;
- 
+
          // Gulir ke bawah jika:
          // 1. Pesan yang baru saja ditambahkan adalah pesan *keluar* (outgoing).
          // 2. ATAU Pesan yang baru saja ditambahkan adalah pesan *masuk* (incoming), tetapi pengguna sudah berada di dekat bagian bawah.
@@ -1261,11 +1326,12 @@ const socket = io({
          }
      }
      // --- END: Logika Scroll Otomatis ---
- 
+
  }
- 
- 
+
+
  function openMediaModal(src, type, name = null) {
+     console.log(`[UI] Attempting to open media modal for type: ${type}, src: ${src}`); // Debug log
      // Reset all modal content displays
      modalMediaContent.style.display = 'none';
      modalVideoContent.style.display = 'none';
@@ -1274,25 +1340,37 @@ const socket = io({
      // Pause any playing media
      modalVideoContent.pause();
      modalAudioContent.pause();
- 
- 
+
+     // Clear previous sources to prevent loading incorrect content briefly
+     modalMediaContent.src = '';
+     modalVideoContent.src = '';
+     modalAudioContent.src = '';
+     modalDocumentLink.href = '';
+     modalDocumentName.textContent = '';
+
+
      let displayElement = null;
- 
+
+     // Handle different source types (data URL or regular URL)
+     const isDataUrl = src.startsWith('data:');
+     let mediaSourceUrl = src;
+
+
      if (type === 'image') {
-         modalMediaContent.src = src;
+         modalMediaContent.src = mediaSourceUrl;
          modalMediaContent.style.display = 'block';
          displayElement = modalMediaContent;
      } else if (type === 'video') {
-         modalVideoContent.src = src;
+         modalVideoContent.src = mediaSourceUrl;
          modalVideoContent.style.display = 'block';
          displayElement = modalVideoContent;
      } else if (type === 'audio') {
-         modalAudioContent.src = src;
+         modalAudioContent.src = mediaSourceUrl;
          modalAudioContent.style.display = 'block';
          displayElement = modalAudioContent;
      } else if (type === 'document') {
          modalDocumentName.textContent = name || 'Dokumen';
-         modalDocumentLink.href = src;
+         modalDocumentLink.href = mediaSourceUrl;
          // Suggest filename for download - basic sanitization
          const cleanName = (name || 'document').replace(/[^\w.-]/g, '_'); // Replace invalid chars with underscore
          modalDocumentLink.download = cleanName;
@@ -1302,10 +1380,11 @@ const socket = io({
          console.warn(`Unsupported media type for modal: ${type}`);
          alert(`Tidak bisa menampilkan media tipe: ${type}`);
      }
- 
+
      // Show the modal overlay if a display element was selected
      if (displayElement) {
          mediaModal.style.display = 'flex';
+         console.log('[UI] Media modal shown.'); // Debug
      }
  }
  // Close modal using the 'x' button (Media Modal only)
@@ -1313,9 +1392,13 @@ const socket = io({
      mediaModal.style.display = 'none';
      modalVideoContent.pause();
      modalAudioContent.pause();
-     modalMediaContent.src = ''; // Clear src to prevent loading issues
+     // Clearing src attributes is good practice when hiding
+     modalMediaContent.src = '';
      modalVideoContent.src = '';
      modalAudioContent.src = '';
+     modalDocumentLink.href = '';
+     modalDocumentName.textContent = '';
+     console.log('[UI] Media modal hidden (close button).'); // Debug
  });
  // Close modal by clicking outside the content (Media Modal only)
  mediaModal.addEventListener('click', (e) => {
@@ -1323,39 +1406,45 @@ const socket = io({
          mediaModal.style.display = 'none';
          modalVideoContent.pause();
          modalAudioContent.pause();
+         // Clearing src attributes is good practice when hiding
          modalMediaContent.src = '';
          modalVideoContent.src = '';
          modalAudioContent.src = '';
+         modalDocumentLink.href = '';
+         modalDocumentName.textContent = '';
+         console.log('[UI] Media modal hidden (overlay click).'); // Debug
      }
  });
- 
- 
+
+
  function showSendError(message) {
      sendErrorSpan.textContent = `Gagal mengirim: ${message}`;
      sendErrorSpan.style.display = 'block';
      setTimeout(hideSendError, 4000); // Hide after 4 seconds
  }
- 
+
  function hideSendError() {
      sendErrorSpan.textContent = '';
      sendErrorSpan.style.display = 'none';
  }
- 
+
  // Function to update the UI preview for selected media file before sending
  function updateMediaPreview() {
      mediaPreviewContainer.innerHTML = ''; // Clear previous preview
      if (selectedMedia) {
          mediaPreviewContainer.style.display = 'flex';
- 
+
          let previewElement = null;
          // Create appropriate preview element based on file type
          if (selectedMedia.type.startsWith('image/')) {
-             const img = document.createElement('img');
+             const img = createElementWithClasses('img');
+             // Use the original base64 data for the preview
              img.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
              img.alt = 'Thumbnail Gambar';
              previewElement = img;
          } else if (selectedMedia.type.startsWith('video/')) {
-             const video = document.createElement('video');
+             const video = createElementWithClasses('video');
+              // Use the original base64 data for the preview
              video.src = `data:${selectedMedia.type};base64,${selectedMedia.data}`;
              video.controls = false; // No controls in preview
              video.muted = true; // Mute video preview
@@ -1363,33 +1452,29 @@ const socket = io({
              video.loop = true; // Loop video preview
              previewElement = video;
          } else if (selectedMedia.type.startsWith('audio/')) {
-             const audioIcon = document.createElement('i');
-             audioIcon.className = 'fas fa-file-audio';
+             const audioIcon = createElementWithClasses('i', 'fas fa-file-audio');
              audioIcon.style.fontSize = '30px';
              audioIcon.style.color = getCssVariable('--text-dark');
              previewElement = audioIcon;
          } else { // Generic file icon
-             const fileIcon = document.createElement('i');
-             fileIcon.className = 'fas fa-file-alt';
+             const fileIcon = createElementWithClasses('i', 'fas fa-file-alt');
              fileIcon.style.fontSize = '30px';
              fileIcon.style.color = getCssVariable('--text-dark');
              previewElement = fileIcon;
          }
- 
+
          // Add the preview element to the container
          if (previewElement) {
              mediaPreviewContainer.appendChild(previewElement);
          }
- 
+
          // Add file info text
-         const fileInfo = document.createElement('span');
-         fileInfo.className = 'file-info';
+         const fileInfo = createElementWithClasses('span', 'file-info');
          fileInfo.textContent = selectedMedia.name || selectedMedia.type; // Use original name
          mediaPreviewContainer.appendChild(fileInfo);
- 
+
          // Add the clear button
-         const clearButton = document.createElement('button');
-         clearButton.className = 'clear-media-button';
+         const clearButton = createElementWithClasses('button', 'clear-media-button');
          clearButton.innerHTML = '<i class="fas fa-times-circle"></i>';
          clearButton.title = 'Hapus media terpilih';
          clearButton.style.color = getCssVariable('--button-danger-bg');
@@ -1399,14 +1484,14 @@ const socket = io({
              mediaInput.value = null; // Clear the file input value
          });
          mediaPreviewContainer.appendChild(clearButton);
- 
- 
+
+
      } else {
          // Hide the container if no media is selected
          mediaPreviewContainer.style.display = 'none';
      }
  }
- 
+
  // Function to update the QR Modal content based on stored state
  function updateQrModalContent() {
      // Only update if the modal is currently open
@@ -1414,14 +1499,24 @@ const socket = io({
          if (currentQrCode) {
              qrCodeDiv.innerHTML = ''; // Clear previous content
              try {
-                 const typeNumber = 0; // Auto-detect
-                 const errorCorrectionLevel = 'L'; // Low error correction
-                 const qr = qrcode(typeNumber, errorCorrectionLevel);
-                 qr.addData(currentQrCode);
-                 qr.make();
-                 const qrImg = qr.createImgTag(6, 6); // Module size 6, margin 6
-                 qrCodeDiv.innerHTML = qrImg;
-                 // Add basic styling to the image
+                 // Check if the QR code data is a Data URL (base64) or a simple string
+                 if (currentQrCode.startsWith('data:')) {
+                     // If it's already a data URL, just create an image tag
+                     const qrImg = document.createElement('img');
+                     qrImg.src = currentQrCode;
+                     qrCodeDiv.appendChild(qrImg);
+                 } else {
+                     // If it's a simple string, generate the QR code using qrcode library
+                     const typeNumber = 0; // Auto-detect
+                     const errorCorrectionLevel = 'L'; // Low error correction
+                     const qr = qrcode(typeNumber, errorCorrectionLevel);
+                     qr.addData(currentQrCode);
+                     qr.make();
+                     const qrImg = qr.createImgTag(6, 6); // Module size 6, margin 6
+                     qrCodeDiv.innerHTML = qrImg; // Set innerHTML directly
+                 }
+
+                 // Add basic styling to the image (apply to any img inside qrCodeDiv)
                  const qrImgElement = qrCodeDiv.querySelector('img');
                  if (qrImgElement) {
                      qrImgElement.style.maxWidth = '100%'; // Make it responsive
@@ -1440,8 +1535,8 @@ const socket = io({
          qrModal.querySelector('h3').textContent = `WhatsApp Connection: ${currentQrStatus}`; // Optional: Add status to modal title
      }
  }
- 
- 
+
+
  // NEW: Quick Reply Suggestion Handling
  function showQuickReplySuggestions(filterText) {
      // Hide if reply box is disabled
@@ -1449,60 +1544,62 @@ const socket = io({
          hideQuickReplySuggestions();
          return;
      }
- 
+
      // --- FIX: Ensure quickReplyTemplates is an array before filtering ---
      const templatesToFilter = Array.isArray(quickReplyTemplates) ? quickReplyTemplates : [];
      // --- END FIX ---
- 
+
      const filteredTemplates = templatesToFilter.filter(template =>
          template.shortcut.toLowerCase().includes(filterText.toLowerCase()) ||
          template.text.toLowerCase().includes(filterText.toLowerCase()) // Also search in text
      );
- 
+
      quickReplySuggestionsUl.innerHTML = ''; // Clear previous suggestions
- 
+
      if (filteredTemplates.length === 0) {
          hideQuickReplySuggestions();
          return;
      }
- 
+
      filteredTemplates.forEach((template, index) => {
          const li = document.createElement('li');
          li.dataset.shortcut = template.shortcut; // Store shortcut for use
          li.dataset.text = template.text; // Store full text
          li.dataset.index = index; // Store index for keyboard nav
- 
+
          li.innerHTML = `
                     <span class="qr-suggestion-shortcut">${sanitizeHTML(template.shortcut)}</span> <!-- Display /shortcut -->
                     <span class="qr-suggestion-text">${sanitizeHTML(template.text)}</span>
                 `;
- 
+
          li.addEventListener('click', handleSuggestionClick);
          quickReplySuggestionsUl.appendChild(li);
      });
- 
+
      quickReplySuggestionsUl.style.display = 'block'; // Show the suggestion list
      selectedSuggestionIndex = -1; // Reset selection index
+     // console.log('[UI] Suggestions shown.'); // Debug
  }
- 
- 
+
+
  function hideQuickReplySuggestions() {
      quickReplySuggestionsUl.style.display = 'none';
      quickReplySuggestionsUl.innerHTML = '';
      selectedSuggestionIndex = -1; // Reset index when hiding
+     // console.log('[UI] Suggestions hidden.'); // Debug
  }
- 
+
  function handleSuggestionClick(event) {
      const selectedText = event.currentTarget.dataset.text;
      applyQuickReplyTemplate(selectedText);
      hideQuickReplySuggestions(); // Hide suggestions after selection
      replyInput.focus(); // Put focus back on input
  }
- 
+
  function applyQuickReplyTemplate(templateText) {
      const currentValue = replyInput.value;
      const lastSlashIndex = currentValue.lastIndexOf('/');
- 
+
      if (lastSlashIndex !== -1) {
          // Replace the part from the last slash onwards with the template text
          const prefix = currentValue.substring(0, lastSlashIndex);
@@ -1511,12 +1608,12 @@ const socket = io({
          // If no slash found (shouldn't happen if triggered correctly), just replace everything
          replyInput.value = templateText;
      }
- 
+
      // Auto-size textarea after applying template
      replyInput.style.height = 'auto'; // Reset height to calculate scrollHeight correctly
      replyInput.style.height = replyInput.scrollHeight + 'px'; // Set height to fit content
  }
- 
+
  function updateSelectedSuggestionHighlight() {
      const suggestions = quickReplySuggestionsUl.querySelectorAll('li');
      suggestions.forEach((li, index) => {
@@ -1531,10 +1628,10 @@ const socket = io({
          }
      });
  }
- 
- 
+
+
  // --- Socket Event Handlers ---
- 
+
  socket.on('connect', () => {
      console.log('[SOCKET] WebSocket connected.');
      const storedUsername = localStorage.getItem('loggedInUsername');
@@ -1554,7 +1651,7 @@ const socket = io({
      // On connect, update WA status but don't show QR modal unless explicitly requested/needed later
      updateWhatsappStatus('Connected (WebSocket)', true);
  });
- 
+
  socket.on('reconnect_success', ({
      username,
      role,
@@ -1571,14 +1668,14 @@ const socket = io({
      qrCodeDiv.innerHTML = '';
      qrModal.style.display = 'none';
  });
- 
+
  socket.on('reconnect_failed', () => {
      console.log('[SOCKET] Reconnect failed (session invalid?). Forcing logout.');
      showLoginError('Sesi tidak valid atau koneksi terputus terlalu lama. Silakan login kembali.');
      // Wait a moment before showing the login form to allow user to read the message
      setTimeout(() => setLoginState(false), 1500);
  });
- 
+
  socket.on('connect_error', (error) => {
      console.error('[SOCKET] WebSocket connection error:', error);
      updateWhatsappStatus('Disconnected (Server Error)', false);
@@ -1595,7 +1692,7 @@ const socket = io({
          updateQrModalContent(); // Update modal content if open
      }
  });
- 
+
  socket.on('disconnect', (reason) => {
      console.log('[SOCKET] WebSocket disconnected:', reason);
      updateWhatsappStatus('Disconnected', false);
@@ -1626,7 +1723,7 @@ const socket = io({
      // Hide quick reply suggestions on disconnect
      hideQuickReplySuggestions();
  });
- 
+
  socket.on('login_success', ({
      username,
      initials,
@@ -1638,22 +1735,22 @@ const socket = io({
      setLoginState(true, username, role, currentPicks);
      // WhatsApp status will be updated by a separate WA event handler
      // updateWhatsappStatus('Connected', true); // Let WA event handle this
- 
+
      // Request initial chat data, admins, and quick replies after successful login
      socket.emit('request_initial_data');
- 
+
      // On successful login, ensure QR modal is hidden and state cleared
      currentQrCode = null;
      qrCodeDiv.innerHTML = '';
      qrModal.style.display = 'none';
  });
- 
+
  socket.on('login_failed', (data) => {
      console.log('[SOCKET] Login failed:', data?.message || 'Invalid credentials.');
      showLoginError(data?.message || 'Username atau password salah.');
      loginButton.disabled = false; // Re-enable login button
  });
- 
+
  // --- WhatsApp Connection Status Updates ---
  socket.on('whatsapp_connected', (data) => {
      console.log('[WA] WhatsApp Connected');
@@ -1665,9 +1762,9 @@ const socket = io({
      }
      currentQrCode = null; // Clear stored QR data
      updateQrModalContent(); // Update modal content if it happens to be open (should be hidden)
- 
+
  });
- 
+
  socket.on('whatsapp_connecting', () => {
      console.log('[WA] WhatsApp Status: Connecting...');
      updateWhatsappStatus('Connecting...', false); // Update status variable and sidebar
@@ -1678,8 +1775,8 @@ const socket = io({
          updateQrModalContent(); // Update modal content if open
      }
  });
- 
- 
+
+
  socket.on('whatsapp_disconnected', (data) => {
      console.warn('[WA] WhatsApp Disconnected:', data?.reason, data?.statusCode);
      updateWhatsappStatus(`Disconnected (${data?.reason || 'Unknown'})`, false); // Update status variable and sidebar
@@ -1698,13 +1795,13 @@ const socket = io({
              showServerAlert(`Koneksi WhatsApp terputus: ${data?.message || 'Hubungi Super Admin.'}`, false);
          }
      }
- 
+
  });
- 
+
  socket.on('whatsapp_fatal_disconnected', (data) => {
      console.error('[WA] WhatsApp Fatal Disconnect:', data?.reason, data?.statusCode, data?.message);
      updateWhatsappStatus(`FATAL Disconnected (${data?.reason || 'Unknown'})`, false); // Update status variable and sidebar
- 
+
      // If logged in as Super Admin and it requires a new QR (401, 419)
      if (currentUserRole === 'superadmin') {
          currentQrCode = null; // Clear stored QR data
@@ -1719,15 +1816,15 @@ const socket = io({
          showServerAlert(`Koneksi WhatsApp terputus secara fatal: ${data?.message || 'Hubungi Super Admin untuk memulihkan.'}`, false);
      }
  });
- 
+
  socket.on('whatsapp_qr', (qrCodeData) => {
      console.log('[WA] Received QR Code data.');
      updateWhatsappStatus('Waiting for Scan', false); // Update status variable and sidebar
- 
+
      // Store the QR code data (only if Super Admin, but store anyway for consistency)
      currentQrCode = qrCodeData;
      currentQrStatus = 'Silakan pindai QR Code di atas menggunakan aplikasi WhatsApp.'; // Specific QR status text
- 
+
      // If the QR modal is currently open AND user is Super Admin, render the QR
      if (currentUserRole === 'superadmin' && qrModal.style.display !== 'none') {
          updateQrModalContent(); // Update modal content to show QR
@@ -1742,9 +1839,9 @@ const socket = io({
          qrStatus.textContent = '';
      }
  });
- 
+
  // --- Initial Data & Message Handling ---
- 
+
  socket.on('initial_data', ({
      chatHistory: initialChatHistory,
      admins: registeredAdminList,
@@ -1755,19 +1852,19 @@ const socket = io({
      console.log('[SOCKET] Received registered admins data.');
      // --- FIX: Safely check if initialQuickReplies is an array ---
      console.log('[SOCKET] Received quick replies:', (Array.isArray(initialQuickReplies) ? initialQuickReplies.length : 'invalid'), 'templates');
-     quickReplyTemplates = Array.isArray(initialQuickReplies) ? initialQuickReplies : []; // Ensure quickReplyTemplates is always an array
+     quickReplyTemplates = Array.isArray(initialQuickReplies) ? initialQuickReplies : []; // Update the local state
      // --- END FIX ---
- 
- 
+
+
      registeredAdmins = registeredAdminList || {}; // Store registered admins
      currentUserRole = role; // Ensure current user role is set
- 
- 
+
+
      // Update admin dropdowns and super admin panel visibility
      populateDelegateChatSelect(); // Populate delegate select now that registered admins are known
      populateDeleteAdminSelect(); // Populate delete admin select
      superadminPanel.style.display = (currentUserRole === 'superadmin') ? 'flex' : 'none'; // Show/hide panel
- 
+
      // Ensure QR button and Quick Reply Manage button is shown only for Super Admin
      if (currentUserRole === 'superadmin') {
          showQrButton.style.display = 'flex'; // Use flex for icon alignment
@@ -1776,20 +1873,20 @@ const socket = io({
          showQrButton.style.display = 'none';
          manageQuickRepliesButton.style.display = 'none';
      }
- 
- 
+
+
      // On receiving initial data after login/reconnect, clear any old QR display state
      currentQrCode = null; // Clear stored QR data
      qrCodeDiv.innerHTML = ''; // Clear QR code display in the modal
      // qrStatus text will be updated by updateWhatsappStatus which should fire after initial_data
      qrModal.style.display = 'none'; // Ensure QR modal is hidden
- 
+
      chatHistory = initialChatHistory || {}; // Store chat history
- 
+
      // Clear current chat list UI and state
      chatList.innerHTML = '';
      chatListItems = {};
- 
+
      // Sort chat IDs by the timestamp of their last message (newest first)
      const sortedChatIds = Object.keys(chatHistory).sort((a, b) => {
          const messagesA = chatHistory[a]?.messages || [];
@@ -1799,7 +1896,7 @@ const socket = io({
          const lastMsgTimeB = messagesB.length > 0 ? new Date(messagesB[messagesB.length - 1].timestamp).getTime() : 0;
          return lastMsgTimeB - lastMsgTimeA; // Descending order
      });
- 
+
      // Populate the chat list UI
      sortedChatIds.forEach(chatId => {
          const chatEntry = chatHistory[chatId];
@@ -1815,10 +1912,10 @@ const socket = io({
              true // Indicate this is part of initial load
          );
      });
- 
+
      // After populating list, update pick status and unread indicators for all items
      updateAllChatListItemsPickStatus(); // Updates pick status display on list items
- 
+
      // If there was a previously selected chat (e.g. after reconnect), load its messages
      // Otherwise, reset the chat area to the default state
      if (currentChatId && chatListItems[currentChatId]) {
@@ -1828,9 +1925,9 @@ const socket = io({
          currentChatId = null; // Ensure currentChatId is null if no chat selected or found
          resetChatArea(); // Show default state
      }
- 
+
  });
- 
+
  socket.on('chat_history', ({
      chatId,
      messages,
@@ -1841,8 +1938,8 @@ const socket = io({
      if (!chatHistory[chatId]) chatHistory[chatId] = {}; // Ensure the chat entry exists
      chatHistory[chatId].status = status || 'open'; // Update/set status
      chatHistory[chatId].messages = messages || []; // Update messages (ensure it's an array)
- 
- 
+
+
      // Only update the UI if this is the currently viewed chat
      if (chatId === currentChatId) {
          messagesDiv.innerHTML = ''; // Clear current messages display
@@ -1857,7 +1954,7 @@ const socket = io({
                  if (!msg.id) msg.id = `${msg.timestamp}-${msg.from}-${Math.random().toString(36).substring(7)}`; // Generate fallback ID
                  if (!msg.timestamp) msg.timestamp = new Date().toISOString(); // Fallback timestamp
                  // Add other fallbacks if needed
- 
+
                  appendMessage(msg);
              });
          }
@@ -1870,8 +1967,8 @@ const socket = io({
              }, 100); // Delay 100ms
          }
          // --- END: Scroll Setelah History Diload ---
- 
- 
+
+
          // Ensure the chat area header and buttons are updated based on the loaded chat's state
          updateChatAreaForCurrentChat();
      } else {
@@ -1881,13 +1978,13 @@ const socket = io({
          updateUnreadIndicator(chatId); // Re-evaluate unread based on updated messages
      }
  });
- 
- 
+
+
  // --- Main Message Receiving Handler ---
  socket.on('new_message', (data) => {
      const chatId = data.chatId; // Get chatId from message data
      const messageId = data.id;
- 
+
      // Ensure chat entry exists in state, default to open status
      if (!chatHistory[chatId]) {
          chatHistory[chatId] = {
@@ -1904,17 +2001,17 @@ const socket = io({
      if (!chatHistory[chatId].status) {
          chatHistory[chatId].status = 'open';
      }
- 
- 
+
+
      // Add the new message to the history state if it's not a duplicate
      if (!chatHistory[chatId].messages.some(m => m.id === messageId)) {
          chatHistory[chatId].messages.push(data);
          console.log(`[HISTORY] Added new message (ID: ${messageId}, Type: ${data.type}) to history for chat ${chatId}`);
- 
+
          // Update the chat list item for this chat
          const chatName = chatListItems[chatId]?.dataset.chatName || chatId.split('@')[0]; // Get existing name or use ID
          const chatStatus = chatHistory[chatId].status; // Get status from updated state
- 
+
          updateChatList(
              chatId,
              chatName,
@@ -1922,7 +2019,7 @@ const socket = io({
              data.timestamp,
              chatStatus // Pass the current status
          );
- 
+
          // If this message is for the currently active chat, append it to the messages UI
          if (chatId === currentChatId) {
              // Ensure chatId is on the message object
@@ -1931,9 +2028,9 @@ const socket = io({
              if (!data.type) data.type = data.from === currentUser ? 'outgoing' : 'incoming'; // Guess type if missing
              if (!data.id) data.id = `${data.timestamp}-${data.from}-${Math.random().toString(36).substring(7)}`; // Generate fallback ID
              if (!data.timestamp) data.timestamp = new Date().toISOString(); // Fallback timestamp
- 
+
              appendMessage(data); // <--- appendMessage will now handle the scroll internally
- 
+
              // If it's an incoming message for the chat currently picked by THIS user, mark as read immediately
              const pickedBy = pickedChatsStatus[chatId];
              if (data.type === 'incoming' && pickedBy === currentUser) {
@@ -1951,7 +2048,7 @@ const socket = io({
                  });
              }
          }
- 
+
      } else {
          // Message is a duplicate, but if it's for the current chat and not displayed, add it.
          if (chatId === currentChatId && !messagesDiv.querySelector(`[data-message-id="${messageId}"]`)) {
@@ -1961,15 +2058,15 @@ const socket = io({
              if (!data.type) data.type = data.from === currentUser ? 'outgoing' : 'incoming'; // Guess type if missing
              if (!data.id) data.id = `${data.timestamp}-${data.from}-${Math.random().toString(36).substring(7)}`; // Generate fallback ID
              if (!data.timestamp) data.timestamp = new Date().toISOString(); // Fallback timestamp
- 
+
              appendMessage(data); // <--- Append duplicate if missing in UI, scroll logic inside
          } else {
              // console.log(`Duplicate message ${messageId} for chat ${chatId} already in history and UI, ignoring.`);
          }
      }
  });
- 
- 
+
+
  socket.on('update_pick_status', ({
      chatId,
      pickedBy
@@ -1986,7 +2083,7 @@ const socket = io({
      updateChatListItemPickStatus(chatId);
      // Update the unread indicator (might change if chat becomes picked by user)
      updateUnreadIndicator(chatId);
- 
+
      // If the updated chat is the one currently viewed, update the header/actions area
      if (chatId === currentChatId) {
          updateChatAreaForCurrentChat();
@@ -1998,7 +2095,7 @@ const socket = io({
      // The initial_pick_status event (sent by server on any pick/unpick/delegate)
      // will also update the entire pickedChatsStatus state, which is handled below.
  });
- 
+
  socket.on('initial_pick_status', (fullPickedStatus) => {
      console.log('[SOCKET] Received full initial pick status:', fullPickedStatus);
      pickedChatsStatus = fullPickedStatus || {}; // Update the entire state
@@ -2007,10 +2104,10 @@ const socket = io({
      if (currentChatId) {
          updateChatAreaForCurrentChat(); // Update header/actions for current chat
      }
-     // No need to populateDelegateChatSelect here, as update_online_admins/registered_admins do that.
+     // No need to populateDelegateChatSelect here, it's called by update_online_admins/registered_admins do that.
  });
- 
- 
+
+
  socket.on('pick_error', ({
      chatId,
      message
@@ -2034,7 +2131,7 @@ const socket = io({
      releaseChatButton.disabled = false; // Also re-enable release if it was the one pressed
      releaseChatButton.textContent = 'Lepas Chat'; // Reset text
  });
- 
+
  socket.on('send_error', ({
      to,
      text,
@@ -2057,13 +2154,13 @@ const socket = io({
          // Auto-size textarea after restoring text
          replyInput.style.height = 'auto';
          replyInput.style.height = replyInput.scrollHeight + 'px';
- 
+
      } else {
          // For errors on non-active chats, show a general server alert
          showServerAlert(`Gagal mengirim pesan ke ${to?.split('@')[0] || 'ID tidak valid'}: ${message}`, false);
      }
  });
- 
+
  socket.on('reply_sent_confirmation', ({
      sentMsgId,
      chatId
@@ -2077,8 +2174,8 @@ const socket = io({
          replyInput.focus(); // Put focus back
      }
  });
- 
- 
+
+
  socket.on('update_chat_read_status', ({
      chatId
  }) => {
@@ -2088,19 +2185,19 @@ const socket = io({
      // This event primarily signals the UI to re-check the unread status.
      updateUnreadIndicator(chatId);
  });
- 
+
  socket.on('auto_release_notification', ({
      chatId,
      message
  }) => {
      console.log(`Received auto-release notification for chat ${chatId}: ${message}`);
      showServerAlert(message, true); // Use a success style alert for notification
- 
+
      // The pick status for this chat will be updated by 'update_pick_status' event triggered by the server
      // after auto-release. So no need to manually update pick status here.
  });
- 
- 
+
+
  socket.on('delegate_success', ({
      chatId,
      targetAdminUsername
@@ -2115,23 +2212,23 @@ const socket = io({
      // Re-enable delegate buttons
      delegateChatButton.disabled = false;
      delegateChatSelect.disabled = false;
- 
+
  });
- 
+
  socket.on('delegate_error', ({
      chatId,
      message
  }) => {
      console.error(`Delegation error for chat ${chatId}: ${message}`);
      // Show an error message to the sender admin
-     showServerAlert(`Gagal mendelegasikan chat ${chatId?.split('@')[0] || 'yang dipilih'}: ${message}`, false);
+     showServerAlert(`Gagal mendelegasikan chat ${chatId?.split('@')[0] || 'ID tidak valid'}: ${message}`, false);
      // Re-enable delegate button if it was disabled (shouldn't be disabled currently, but good practice)
      delegateChatButton.disabled = false;
      delegateChatSelect.disabled = false;
      // Reset delegate select value if needed (optional)
      // delegateChatSelect.value = "";
  });
- 
+
  socket.on('chat_delegated_to_you', ({
      chatId,
      fromAdmin,
@@ -2153,15 +2250,15 @@ const socket = io({
      }
      // The pick status state (pickedChatsStatus) will be updated by the 'update_pick_status' event that the server sends.
  });
- 
- 
+
+
  socket.on('update_online_admins', (onlineAdminsList) => {
      console.log('[SOCKET] Received updated online admins');
      onlineAdmins = onlineAdminsList || []; // Update the online admins state
      // Repopulate the delegate select dropdown to reflect the current online status
      populateDelegateChatSelect();
  });
- 
+
  socket.on('registered_admins', (registeredAdminList) => {
      console.log('[SOCKET] Received updated registered admins:', registeredAdminList);
      registeredAdmins = registeredAdminList || {}; // Update the registered admins state
@@ -2172,29 +2269,56 @@ const socket = io({
          superadminPanel.style.display = 'flex';
      }
  });
- 
- // NEW: Quick Reply Templates Update Event
+
+ // NEW: Quick Reply Templates Update Event - FIX HANDLER
  socket.on('quick_reply_templates_updated', (templates) => {
-     // --- FIX: Safely store the templates ---
      console.log('[SOCKET] Received updated quick reply templates:', (Array.isArray(templates) ? templates.length : 'invalid'), 'templates');
+     // --- Safely store the templates ---
      quickReplyTemplates = Array.isArray(templates) ? templates : []; // Update the local state
-     // --- END FIX ---
- 
+     // --- END Safely store the templates ---
+
      // If the QR management modal is open, update the list display
      if (quickReplyManagementModal.style.display !== 'none') {
+         console.log('[UI] QR management modal is open, repopulating list.'); // Debug
          populateQuickReplyManagementList();
+         // After updating the list, ensure the form is reset if it was for the item just deleted/updated
+         // This is handled by superadmin_success, but doing it here after any template update
+         // might ensure the form is consistent.
+         // resetQuickReplyForm(); // Might not be needed if superadmin_success handles it
      }
-     // No need to update suggestions list here, it's rebuilt on input change
+
+     // NEW: If quick reply suggestions are currently visible in the reply box, re-render them
+     if (quickReplySuggestionsUl && quickReplySuggestionsUl.style.display !== 'none') {
+         console.log('[UI] Quick reply suggestions are visible, re-rendering based on updated templates.');
+         const currentValue = replyInput.value;
+         const lastSlashIndex = currentValue.lastIndexOf('/');
+         const cursorPosition = replyInput.selectionStart;
+         // Re-calculate filter text similarly to the input handler
+         const textAfterLastSlash = lastSlashIndex !== -1 ? currentValue.substring(lastSlashIndex + 1, cursorPosition) : '';
+         const isValidShortcutCharPart = /^[a-z0-9_-]*$/.test(textAfterLastSlash);
+
+         const filterText = (lastSlashIndex !== -1 && cursorPosition >= lastSlashIndex && isValidShortcutCharPart) // Use >= here too
+                            ? currentValue.substring(lastSlashIndex) // Filter includes the '/'
+                            : '';
+
+         if (filterText) { // Only re-show if there was a valid filter text being typed
+             showQuickReplySuggestions(filterText); // This will use the newly updated quickReplyTemplates state
+         } else {
+             // If suggestions were visible but the current input isn't a valid filter
+             // (e.g., user typed a space or deleted the slash), hide them.
+             hideQuickReplySuggestions();
+         }
+     }
  });
- 
+
  // --- Super Admin Event Handlers ---
- 
+
  socket.on('superadmin_error', ({
      message
  }) => {
      console.error(`Super Admin Error: ${message}`);
      showServerAlert(message, false); // Show error as a server alert
- 
+
      // If add admin modal is open, show error there too
      const addAdminStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
      if (addAdminModal.style.display !== 'none') {
@@ -2215,13 +2339,13 @@ const socket = io({
      newAdminInitialsInput.disabled = false;
      newAdminRoleSelect.disabled = false;
      submitAddAdminButton.disabled = false;
- 
+
      // Recalculate disabled state based on select content
      const hasOtherAdmins = deleteAdminSelect.options.length > 1 || (deleteAdminSelect.options.length === 1 && deleteAdminSelect.options[0].value !== "");
      submitDeleteAdminButton.disabled = !hasOtherAdmins;
- 
+
      deleteAdminSelect.disabled = false;
- 
+
      // If QR management modal is open, show error there too
      if (quickReplyManagementModal.style.display !== 'none') {
          qrFormStatusDiv.textContent = message;
@@ -2240,7 +2364,7 @@ const socket = io({
          }
      }
  });
- 
+
  socket.on('superadmin_success', ({
      message
  }) => {
@@ -2248,7 +2372,7 @@ const socket = io({
      if (showServerAlert) {
          showServerAlert(message, true); // Show success as a server alert
      }
- 
+
      // If add admin modal is open, show success there and close after a delay
      const addAdminStatusDiv = addAdminModal.querySelector('.add-admin-form-status');
      if (addAdminModal.style.display !== 'none') {
@@ -2260,7 +2384,7 @@ const socket = io({
          newAdminInitialsInput.disabled = false;
          newAdminRoleSelect.disabled = false;
          submitAddAdminButton.disabled = false;
- 
+
          setTimeout(() => addAdminModal.style.display = 'none', 1500); // Close modal on success
      }
      // If delete admin modal is open, show success there and close after a delay
@@ -2274,7 +2398,7 @@ const socket = io({
          // No need to call populateDeleteAdminSelect here, it's called by registered_admins event
          setTimeout(() => deleteAdminModal.style.display = 'none', 1500); // Close modal on success
      }
- 
+
      // If QR management modal is open, show success there and reset form
      if (quickReplyManagementModal.style.display !== 'none') {
          qrFormStatusDiv.textContent = message;
@@ -2285,14 +2409,14 @@ const socket = io({
          qrTextInput.disabled = false;
          submitQrButton.disabled = false;
      }
- 
- 
+
+
      // After success, re-populate relevant dropdowns just in case
      populateDelegateChatSelect();
      // populateDeleteAdminSelect() is called by registered_admins event
      // Quick Reply templates are updated by the separate 'quick_reply_templates_updated' event.
  });
- 
+
  socket.on('chat_history_deleted', ({
      chatId
  }) => {
@@ -2307,7 +2431,7 @@ const socket = io({
      delete chatListItems[chatId];
      // Remove pick status for this chat from local state
      delete pickedChatsStatus[chatId];
- 
+
      // If the deleted chat was the one currently viewed, reset the chat area
      if (currentChatId === chatId) {
          currentChatId = null; // Clear current chat
@@ -2320,7 +2444,7 @@ const socket = io({
      // No need to explicitly call update_pick_status or initial_pick_status here,
      // as the server already broadcasts initial_pick_status after deletion.
  });
- 
+
  socket.on('all_chat_history_deleted', () => {
      console.log('All chat history deleted.');
      // Reset all UI elements and state
@@ -2329,7 +2453,7 @@ const socket = io({
      chatList.innerHTML = '<div class="placeholder" style="color: rgba(255,255,255,0.7); text-align: center; margin-top: 20px;">Tidak ada percakapan.</div>';
      // initial_pick_status with empty state will be broadcast by server.
  });
- 
+
  socket.on('chat_status_updated', ({
      chatId,
      status
@@ -2341,16 +2465,16 @@ const socket = io({
      }
      // Update the status display on the chat list item
      updateChatListItemStatus(chatId, status);
- 
+
      // If the updated chat is the one currently viewed, update the chat area UI
      if (chatId === currentChatId) {
          updateChatAreaForCurrentChat(); // This re-evaluates button/reply box states
      }
  });
- 
- 
+
+
  // --- UI Event Listeners ---
- 
+
  // Login button click handler
  loginButton.addEventListener('click', () => {
      const username = usernameInput.value.trim();
@@ -2368,7 +2492,7 @@ const socket = io({
          showLoginError('Username dan password harus diisi.'); // Show validation error
      }
  });
- 
+
  // Allow login on Enter key press in password input
  passwordInput.addEventListener('keypress', (e) => {
      if (e.key === 'Enter') {
@@ -2376,7 +2500,7 @@ const socket = io({
          loginButton.click(); // Trigger login button click
      }
  });
- 
+
  // Logout button click handler
  logoutButton.addEventListener('click', () => {
      console.log('[UI] Logout initiated by user.');
@@ -2392,13 +2516,13 @@ const socket = io({
  socket.on('clear_cache', () => {
      console.log('[UI] Clearing browser cache and session storage');
      sessionStorage.clear();
-     localStorage.removeItem('adminUsername');
-     
+     localStorage.removeItem('loggedInUsername'); // Should remove loggedInUsername, not adminUsername
+
      // Force reload to clear any cached data
      window.location.reload(true);
  });
- 
- 
+
+
  // Pick chat button click handler
  pickChatButton.addEventListener('click', () => {
      // Ensure a chat is selected, user is logged in, and chat is not already picked
@@ -2425,7 +2549,7 @@ const socket = io({
          // Optional: Show a small error message or just do nothing
      }
  });
- 
+
  // Release chat button click handler (NEW)
  releaseChatButton.addEventListener('click', () => {
      // Ensure a chat is selected, user is logged in, and chat is picked by THIS user
@@ -2436,8 +2560,8 @@ const socket = io({
          console.log('[UI Debug Release] currentUser:', currentUser);
          console.log('[UI Debug Release] pickedChatsStatus[currentChatId]:', pickedChatsStatus[currentChatId]);
          console.log('[UI Debug Release] pickedChatsStatus[currentChatId] === currentUser:', pickedChatsStatus[currentChatId] === currentUser);
- 
- 
+
+
          const chatStatus = chatHistory[currentChatId]?.status || 'open';
          if (chatStatus === 'closed') {
              alert('Tidak bisa melepas chat yang sudah ditutup.'); // Should be hidden anyway by UI logic
@@ -2447,11 +2571,11 @@ const socket = io({
              releaseChatButton.textContent = 'Lepas Chat';
              return;
          }
- 
+
          releaseChatButton.disabled = true; // Disable button
          releaseChatButton.textContent = 'Melepas...'; // Change button text
          pickChatButton.disabled = true; // Disable pick button while releasing (should be hidden anyway)
- 
+
          socket.emit('unpick_chat', {
              chatId: currentChatId
          }); // Emit unpick event
@@ -2465,8 +2589,8 @@ const socket = io({
          alert('Gagal melepas chat. Chat mungkin belum diambil oleh Anda.');
      }
  });
- 
- 
+
+
  // Delegate button click handler
  delegateChatButton.addEventListener('click', () => {
      const targetAdminUsername = delegateChatSelect.value; // Get selected admin username
@@ -2475,26 +2599,26 @@ const socket = io({
          alert('Pilih admin tujuan untuk delegasi.');
          return; // Stop if no target admin is selected
      }
- 
+
      // Check chat status from local state
      const chatStatus = chatHistory[currentChatId]?.status || 'open';
      if (chatStatus === 'closed') {
          alert('Tidak bisa mendelegasikan chat yang sudah ditutup.');
          return; // Prevent delegating a closed chat
      }
- 
+
      // Get selected option to check online status visually (server does the final check)
-     const selectedOption = delegateChatSelect.options[delegateChatSelect.selectedIndex];
-     const isOnline = selectedOption?.classList.contains('online') || false;
- 
+     const onlineAdminsSet = new Set(onlineAdmins || []); // Ensure this set is correctly used
+     const isOnline = onlineAdminsSet.has(targetAdminUsername); // Correctly check against onlineAdminsSet
+
      // Check if current user is Super Admin OR is the one who picked the chat (Backend also validates this)
      const pickedBy = pickedChatsStatus[currentChatId];
      if (currentUserRole !== 'superadmin' && pickedBy !== currentUser) {
          alert('Anda tidak punya izin mendelegasikan chat ini. Ambil chat ini terlebih dahulu atau pastikan Anda Super Admin.');
          return; // Prevent delegation if user is not allowed
      }
- 
- 
+
+
      // If target is offline and we haven't notified the user yet, show modal
      if (!isOnline && !offlineAdminNotified.has(targetAdminUsername)) {
          offlineAdminNotified.add(targetAdminUsername); // Add to set to prevent repeat modals
@@ -2506,7 +2630,7 @@ const socket = io({
          // Disable buttons while delegating
          delegateChatButton.disabled = true;
          delegateChatSelect.disabled = true;
- 
+
          socket.emit('delegate_chat', {
              chatId: currentChatId,
              targetAdminUsername
@@ -2519,7 +2643,7 @@ const socket = io({
          delegateChatSelect.value = ""; // Select the disabled option
      }
  });
- 
+
  // Close offline admin modal handler
  offlineAdminModalClose.addEventListener('click', () => {
      offlineAdminModal.style.display = 'none'; // Hide the modal
@@ -2527,7 +2651,7 @@ const socket = io({
      delegateChatButton.disabled = false;
      delegateChatSelect.disabled = false;
  });
- 
+
  // Add Admin button click handler (Super Admin function)
  addAdminButton.addEventListener('click', () => {
      if (currentUserRole === 'superadmin') { // Check role before showing modal
@@ -2540,19 +2664,19 @@ const socket = io({
          addAdminFormStatusDiv.textContent = '';
          addAdminFormStatusDiv.className = 'add-admin-form-status'; // Reset class
          newAdminUsernameInput.focus(); // Focus first input
- 
+
          // Re-enable buttons and inputs
          newAdminUsernameInput.disabled = false;
          newAdminPasswordInput.disabled = false;
          newAdminInitialsInput.disabled = false;
          newAdminRoleSelect.disabled = false;
          submitAddAdminButton.disabled = false;
- 
+
      } else {
          showServerAlert('Akses ditolak. Anda bukan Super Admin.', false); // Role check fallback
      }
  });
- 
+
  // Submit Add Admin form handler (Super Admin function)
  submitAddAdminButton.addEventListener('click', () => {
      if (currentUserRole !== 'superadmin') { // Double check role
@@ -2564,7 +2688,7 @@ const socket = io({
      const password = newAdminPasswordInput.value.trim();
      const initials = newAdminInitialsInput.value.trim().toUpperCase(); // Convert initials to uppercase
      const role = newAdminRoleSelect.value;
- 
+
      // Basic frontend validation
      if (!username || !password || !initials) {
          addAdminFormStatusDiv.textContent = 'Username, password, dan initials harus diisi.';
@@ -2583,19 +2707,19 @@ const socket = io({
          addAdminFormStatusDiv.className = 'add-admin-form-status error';
          return;
      }
- 
- 
+
+
      addAdminFormStatusDiv.textContent = 'Menambahkan admin...';
      addAdminFormStatusDiv.className = 'add-admin-form-status'; // Clear error/success class
- 
-     // Disable input fields and buttons while processing
+
+     // Disable input fields dan buttons while processing
      newAdminUsernameInput.disabled = true;
      newAdminPasswordInput.disabled = true;
      newAdminInitialsInput.disabled = true;
      newAdminRoleSelect.disabled = true;
      submitAddAdminButton.disabled = true;
- 
- 
+
+
      // Emit add admin event to server
      socket.emit('add_admin', {
          username,
@@ -2605,19 +2729,19 @@ const socket = io({
      });
      // Server will send superadmin_success/error response
  });
- 
+
  // Delete Admin button click handler (NEW)
  deleteAdminButton.addEventListener('click', () => {
      if (currentUserRole === 'superadmin') { // Check role
          deleteAdminModal.style.display = 'flex'; // Show modal
          populateDeleteAdminSelect(); // Populate select when opening modal and set button state
          // Status message and button disabled state are now handled inside populateDeleteAdminSelect
- 
+
      } else {
          showServerAlert('Akses ditolak. Anda bukan Super Admin.', false);
      }
  });
- 
+
  // Submit Delete Admin form handler (NEW)
  submitDeleteAdminButton.addEventListener('click', () => {
      const usernameToDelete = deleteAdminSelect.value; // Get selected username
@@ -2626,25 +2750,25 @@ const socket = io({
          deleteAdminFormStatusDiv.className = 'delete-admin-form-status error';
          return;
      }
- 
+
      // Double confirmation for deletion
      if (confirm(`Anda yakin ingin menghapus admin "${usernameToDelete}"? Tindakan ini tidak bisa dibatalkan.`)) {
          console.log(`[UI] Super Admin ${currentUser} menghapus admin ${usernameToDelete}`);
          deleteAdminFormStatusDiv.textContent = 'Menghapus admin...';
          deleteAdminFormStatusDiv.className = 'delete-admin-form-status'; // Clear other classes
- 
+
          // Disable button while processing
          submitDeleteAdminButton.disabled = true;
          deleteAdminSelect.disabled = true;
- 
+
          socket.emit('delete_admin', {
              usernameToDelete
          }); // Emit delete admin event
          // Server will respond with superadmin_success/error
      }
  });
- 
- 
+
+
  // Close modal buttons handler (generic)
  document.querySelectorAll('.close-modal-button').forEach(button => {
      button.addEventListener('click', (e) => {
@@ -2677,8 +2801,8 @@ const socket = io({
          }
      });
  });
- 
- 
+
+
  // Delete single chat button click handler (Super Admin function)
  deleteChatButton.addEventListener('click', () => {
      // Check role and if a chat is selected
@@ -2689,6 +2813,7 @@ const socket = io({
      // Get chat name for confirmation message
      const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
      // Show confirmation dialog
+     // Role check is done on the server side as well.
      if (confirm(`Anda yakin ingin menghapus riwayat chat untuk "${chatName}"? Tindakan ini tidak bisa dibatalkan.`)) {
          console.log(`[UI] Super Admin ${currentUser} menghapus chat ${currentChatId}`);
          socket.emit('delete_chat', {
@@ -2696,7 +2821,7 @@ const socket = io({
          }); // Emit delete event
      }
  });
- 
+
  // Delete all chats button click handler (Super Admin function)
  deleteAllChatsButton.addEventListener('click', () => {
      // Check role
@@ -2712,12 +2837,12 @@ const socket = io({
          }
      }
  });
- 
+
  // Close chat button click handler
  closeChatButton.addEventListener('click', () => {
      // Check if a chat is selected
      if (!currentChatId) return;
- 
+
      // Get chat name for confirmation message
      const chatName = chatListItems[currentChatId]?.dataset.chatName || currentChatId.split('@')[0];
      // Show confirmation dialog
@@ -2729,7 +2854,7 @@ const socket = io({
          }); // Emit close chat event
      }
  });
- 
+
  // Open chat button click handler (Super Admin function)
  openChatButton.addEventListener('click', () => {
      // Check role and if a chat is selected
@@ -2746,7 +2871,7 @@ const socket = io({
          }); // Emit open chat event
      }
  });
- 
+
  // NEW: Show QR Button click handler (Super Admin Function)
  showQrButton.addEventListener('click', () => {
      // Only allow Super Admin to click this button (HTML display handled by setLoginState)
@@ -2758,7 +2883,7 @@ const socket = io({
          showServerAlert('Akses ditolak. Anda bukan Super Admin.', false);
      }
  });
- 
+
  // NEW: Manage Quick Replies button click handler (Super Admin Function)
  manageQuickRepliesButton.addEventListener('click', () => {
      // Only allow Super Admin to click this button
@@ -2770,25 +2895,25 @@ const socket = io({
          showServerAlert('Akses ditolak. Anda bukan Super Admin.', false);
      }
  });
- 
+
  // NEW: Submit Quick Reply form handler (Super Admin Function)
  submitQrButton.addEventListener('click', () => {
      if (currentUserRole !== 'superadmin') {
          showServerAlert('Akses ditolak.', false);
          return;
      }
- 
+
      const id = qrEditIdInput.value || null; // Will be null for new templates
      const shortcut = qrShortcutInput.value.trim().toLowerCase(); // Always lowercase shortcut
      const text = qrTextInput.value.trim();
- 
+
      // Basic frontend validation
      if (!shortcut || !text) {
          qrFormStatusDiv.textContent = 'Shortcut dan teks template harus diisi.';
          qrFormStatusDiv.className = 'qr-form-status error';
          return;
      }
- 
+
      // Validate shortcut format using the same regex as pattern
      const shortcutValidationRegex = /^\/[a-z0-9_-]+$/;
      if (!shortcutValidationRegex.test(shortcut)) {
@@ -2796,19 +2921,19 @@ const socket = io({
          qrFormStatusDiv.className = 'qr-form-status error';
          return;
      }
- 
- 
+
+
      qrFormStatusDiv.textContent = id ? 'Menyimpan perubahan...' : 'Menambah template...';
      qrFormStatusDiv.className = 'qr-form-status'; // Clear previous class
- 
-     // Disable form elements and buttons while processing
+
+     // Disable form elements dan buttons while processing
      if (qrShortcutInput) qrShortcutInput.disabled = true;
      if (qrTextInput) qrTextInput.disabled = true;
      if (submitQrButton) submitQrButton.disabled = true;
      if (cancelEditQrButton) cancelEditQrButton.disabled = true; // Disable cancel/add while saving
      if (addNewQrButton) addNewQrButton.disabled = true;
- 
- 
+
+
      if (id) { // Editing existing
          console.log(`[UI] Super Admin ${currentUser} mengupdate template QR ID ${id}`);
          socket.emit('update_quick_reply', {
@@ -2825,8 +2950,8 @@ const socket = io({
      }
      // Server will respond with superadmin_success/error and update via quick_reply_templates_updated
  });
- 
- 
+
+
  // Handle file selection for media button
  mediaInput.addEventListener('change', (event) => {
      const file = event.target.files[0]; // Get the selected file
@@ -2841,7 +2966,7 @@ const socket = io({
              updateMediaPreview(); // Hide preview
              return;
          }
- 
+
          // Use FileReader to read the file as a Base64 string
          const reader = new FileReader();
          reader.onload = () => {
@@ -2865,7 +2990,7 @@ const socket = io({
          reader.readAsDataURL(file); // Read file as Data URL (Base64)
      }
  });
- 
+
  // Media button click handler - triggers the hidden file input
  mediaButton.addEventListener('click', () => {
      // Check if user can send messages (chat picked by them and open)
@@ -2880,19 +3005,19 @@ const socket = io({
      }
      mediaInput.click(); // Programmatically click the hidden file input
  });
- 
- 
+
+
  // Reply button click handler
  replyButton.addEventListener('click', () => {
      const text = replyInput.value.trim(); // Get text input value
- 
+
      // Do not send if both text and media are empty
      if (!text && !selectedMedia) {
          hideSendError(); // Ensure no old error is shown
          replyInput.focus(); // Keep focus on input
          return;
      }
- 
+
      // Check if user is allowed to reply to the current chat (picked by them)
      if (currentChatId && pickedChatsStatus[currentChatId] === currentUser) {
          // Check chat status
@@ -2901,24 +3026,24 @@ const socket = io({
              showSendError('Tidak bisa mengirim balasan ke chat yang sudah ditutup.');
              return; // Prevent sending to closed chat
          }
- 
+
          // Prepare message data
          const messageData = {
              to: currentChatId,
              text: text || null, // Use null if text is empty
              media: selectedMedia || null // Use null if no media selected
          };
- 
+
          // Disable input and button while sending to prevent double sends
          replyInput.disabled = true;
          replyButton.disabled = true;
          mediaButton.disabled = true; // Disable media button too
          hideSendError(); // Hide any previous error message
          hideQuickReplySuggestions(); // Hide suggestions when sending
- 
+
          console.log('[UI] Sending message:', messageData); // Log message data before sending
          socket.emit('reply_message', messageData); // Emit reply event
- 
+
          // Clear input and media state immediately after sending
          replyInput.value = '';
          selectedMedia = null;
@@ -2927,7 +3052,7 @@ const socket = io({
          replyInput.style.height = 'auto'; // Reset height
          replyInput.rows = 1; // Reset rows
          // replyInput.style.height = replyInput.scrollHeight + 'px'; // Recalculate (may not be needed after clearing)
- 
+
      } else {
          // User not allowed to send
          console.warn("[UI] Send attempt in invalid state:", {
@@ -2939,7 +3064,7 @@ const socket = io({
          showSendError('Pilih atau ambil chat terlebih dahulu.');
      }
  });
- 
+
  // Allow sending message on Enter key press in textarea (Shift+Enter for newline)
  replyInput.addEventListener('keypress', (e) => {
      // If suggestion list is visible, Enter key selects a suggestion instead of sending
@@ -2952,22 +3077,22 @@ const socket = io({
          }
          return; // Stop further processing
      }
- 
+
      // Otherwise, handle Enter for sending if not Shift+Enter
      if (e.key === 'Enter' && !e.shiftKey) {
          e.preventDefault(); // Prevent default newline on Enter
          replyButton.click(); // Trigger reply button click
      }
  });
- 
+
  // NEW: Handle Keyboard Navigation for Quick Reply Suggestions
  replyInput.addEventListener('keydown', (e) => {
      const isSuggestionsVisible = quickReplySuggestionsUl.style.display !== 'none';
      const suggestions = quickReplySuggestionsUl.querySelectorAll('li');
      const numSuggestions = suggestions.length;
- 
+
      if (!isSuggestionsVisible || numSuggestions === 0) return; // Only proceed if suggestions are shown
- 
+
      if (e.key === 'ArrowDown') {
          e.preventDefault(); // Prevent cursor movement in textarea
          selectedSuggestionIndex = (selectedSuggestionIndex + 1) % numSuggestions;
@@ -2982,30 +3107,30 @@ const socket = io({
      }
      // Note: Enter key handling is done in the 'keypress' listener above
  });
- 
- 
+
+
  // NEW: Handle Quick Reply Shortcut Typing
  replyInput.addEventListener('input', () => {
      // Auto-size textarea based on content
      replyInput.style.height = 'auto'; // Reset height to calculate scrollHeight correctly
      replyInput.style.height = replyInput.scrollHeight + 'px'; // Set height to fit content
- 
+
      const currentValue = replyInput.value;
      const lastSlashIndex = currentValue.lastIndexOf('/');
- 
+
      // Check if a slash is typed and it's the last character (or followed by something)
      // And ensure the cursor is right after the slash or within the potential shortcut
      const cursorPosition = replyInput.selectionStart;
      const textAfterLastSlash = lastSlashIndex !== -1 ? currentValue.substring(lastSlashIndex + 1, cursorPosition) : '';
- 
+
      // Only show suggestions if:
      // 1. A slash is present AND
      // 2. The cursor is right after the slash, or within the typed text after the slash
      // 3. The text before the cursor after the slash contains only allowed characters for a shortcut part
      const isValidShortcutCharPart = /^[a-z0-9_-]*$/.test(textAfterLastSlash);
- 
- 
-     if (lastSlashIndex !== -1 && cursorPosition > lastSlashIndex && isValidShortcutCharPart) {
+
+
+     if (lastSlashIndex !== -1 && cursorPosition >= lastSlashIndex && isValidShortcutCharPart) { // Use >= here too
          const filterText = currentValue.substring(lastSlashIndex); // Filter includes the '/'
          showQuickReplySuggestions(filterText);
      } else {
@@ -3013,22 +3138,29 @@ const socket = io({
          hideQuickReplySuggestions();
      }
  });
- 
+
  // Hide quick reply suggestions when clicking anywhere outside the input/suggestions area
  document.addEventListener('click', (e) => {
      const isClickInsideReplyBox = replyBox.contains(e.target);
      const isClickInsideSuggestions = quickReplySuggestionsUl.contains(e.target);
- 
+     const isClickInsideQRModal = quickReplyManagementModal.contains(e.target); // Check if click is inside the QR modal
+
+
+     // Hide suggestions if click is outside the reply box AND outside the suggestions list
      if (!isClickInsideReplyBox && !isClickInsideSuggestions) {
          hideQuickReplySuggestions();
      }
      // Close modals when clicking outside (generic modal overlay handles this)
+     // Ensure clicking inside the QR Management modal does NOT close it if it's open and isn't the background
+     if (quickReplyManagementModal.style.display === 'flex' && e.target === quickReplyManagementModal) {
+          quickReplyManagementModal.style.display = 'none';
+          resetQuickReplyForm(); // Reset form when closing modal
+     }
  });
- 
- 
- 
+
+
  // --- Initialization ---
- 
+
  // Run when DOM is fully loaded
  document.addEventListener('DOMContentLoaded', () => {
      console.log('[UI] DOM fully loaded.');
@@ -3049,10 +3181,10 @@ const socket = io({
          // Ensure QR modal is hidden on initial load
          qrModal.style.display = 'none';
      }
- 
+
      // Get application version from imported config
      document.getElementById('app-version').textContent = config.version || 'N/A';
- 
+
      // Add click handler to the initial chat list placeholder message
      const initialPlaceholder = chatList.querySelector('.placeholder');
      if (initialPlaceholder) {
@@ -3067,7 +3199,7 @@ const socket = io({
              }
          });
      }
- 
+
      // Initialize textarea height
      replyInput.style.height = 'auto';
      replyInput.rows = 1; // Set initial rows
@@ -3075,6 +3207,6 @@ const socket = io({
      setTimeout(() => {
          replyInput.style.height = replyInput.scrollHeight + 'px';
      }, 0);
- 
- 
+
+
  });

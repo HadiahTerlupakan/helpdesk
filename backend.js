@@ -10,7 +10,8 @@ const io = new Server(server, {
     cors: {
         origin: "*", // Ganti dengan domain frontend spesifik Anda jika sudah production
         methods: ["GET", "POST"]
-    }
+    },
+     maxHttpBufferSize: 5e7 // Tambahkan ini jika mengirim/menerima media besar via socket (50MB)
 });
 import qrcode from 'qrcode-terminal';
 import session from 'express-session';
@@ -19,8 +20,13 @@ import path from 'path';
 import pino from 'pino';
 import config from './config.js';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto'; // Untuk nama file sementara jika perlu
+import mime from 'mime-types'; // Untuk mendapatkan ekstensi dari mime type
+import { Buffer } from 'buffer'; // Import Buffer
 
-// SQLite Imports
+globalThis.Buffer = Buffer; // Memastikan Buffer tersedia secara global untuk kompatibilitas
+
+// SQLite Imports (perhatikan getDb sekarang diimpor)
 import {
     initDatabase,
     closeDatabase,
@@ -30,32 +36,33 @@ import {
     deleteAllChatHistory,
     saveAdmins,
     loadAdmins,
-    saveQuickReplyTemplates, // Fungsi dari database.js untuk menyimpan ke DB
-    loadQuickReplyTemplates, // Fungsi dari database.js untuk memuat dari DB
-    getDb
+    saveQuickReplyTemplates,
+    loadQuickReplyTemplates,
+    getDb // <-- getDb diimpor untuk endpoint media
 } from './database.js';
 
 
 // --- Konfigurasi & State ---
 let admins = {};
 let chatHistory = {};
-let quickReplyTemplates = {}; // State backend: { shortcut: { id, shortcut, text } }
+let quickReplyTemplates = {};
 
-const adminSockets = {}; // socket ID -> { username: '...', role: '...' }
-const usernameToSocketId = {}; // username -> socket ID
-const pickedChats = {}; // chatId (normalized) -> username
-const chatReleaseTimers = {}; // chatId (normalized) -> setTimeout ID
-let reconnectTimer = null; // Timer untuk reconnect WhatsApp
+const adminSockets = {};
+const usernameToSocketId = {};
+const pickedChats = {};
+const chatReleaseTimers = {};
+let reconnectTimer = null;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const superAdminUsername = config.superAdminUsername;
+const mediaDir = path.join(__dirname, 'media'); // <-- Path ke folder media
 
 // Variabel state untuk koneksi WA (Baileys)
-let sock; // Instance socket Baileys
-let qrDisplayed = false; // Flag untuk menandai apakah QR sudah ditampilkan via kode kita
-let currentQrCode = null; // Variabel untuk menyimpan QR code saat ini (string base64/URL)
+let sock;
+let qrDisplayed = false;
+let currentQrCode = null;
 
 
 // --- Logger ---
@@ -69,9 +76,13 @@ async function loadDataFromDatabase() {
     console.log("[DATABASE] Memuat data dari SQLite...");
 
     try {
-        await initDatabase(); // Akan membuka koneksi jika belum ada
+        // initDatabase akan memastikan direktori data dan media ada,
+        // serta membuka koneksi DB dan inisialisasi skema jika perlu.
+        await initDatabase();
+        console.log("[DATABASE] Database diinisialisasi/dibuka.");
 
         console.log('[DATABASE] Mencoba memuat riwayat chat...');
+        // loadChatHistory sekarang akan memuat filePath, bukan mediaData
         chatHistory = await loadChatHistory();
         console.log(`[DATABASE] Riwayat chat berhasil dimuat dari database. Total chat: ${Object.keys(chatHistory).length}`);
 
@@ -84,7 +95,7 @@ async function loadDataFromDatabase() {
                 console.log('[DATABASE] Menyimpan admin dari config.js ke database.');
                 await saveAdmins(admins);
             } else {
-                console.error('[DATABASE] TIDAK ADA DATA ADMIN DITEMUKAN DI CONFIG.JS ATAU DATABASE!');
+                console.error('[DATABASE] TIDAK ADA DATA ADMIN DITEMUKAN DI CONFIG.JS ATAU DATABASE! Fungsi admin mungkin tidak bekerja.');
             }
         } else {
             admins = loadedAdmins;
@@ -106,12 +117,14 @@ async function loadDataFromDatabase() {
             message: error.message,
             stack: error.stack
         });
-        throw error; // Lempar kembali error fatal
+        // Error di sini fatal, server tidak bisa jalan tanpa data admin/history
+        throw error;
     }
 }
 
 function validateSuperAdmin(adminsData) {
-    const superAdminsInDb = [];
+    // ... (kode validasi superadmin dari backend.js asli) ...
+     const superAdminsInDb = [];
     for (const [user, adminData] of Object.entries(adminsData)) {
         if (adminData?.role === 'superadmin') {
             superAdminsInDb.push(user);
@@ -134,11 +147,11 @@ function validateSuperAdmin(adminsData) {
     }
 }
 
-
 // Menyimpan Chat History ke Database (async, fire-and-forget)
 async function saveChatHistoryToDatabase() {
     try {
-        await saveChatHistory(chatHistory); // Gunakan objek chatHistory dari memory
+        // saveChatHistory sekarang hanya menyimpan metadata dan filePath
+        await saveChatHistory(chatHistory);
         // console.log('[DATABASE] Riwayat chat berhasil disimpan ke database.'); // Verbose logging
     } catch (error) {
         console.error('[DATABASE] Gagal menyimpan riwayat chat ke database:', error);
@@ -146,10 +159,10 @@ async function saveChatHistoryToDatabase() {
     }
 }
 
-
 // Menyimpan Quick Reply Templates ke Database DAN memberi tahu klien via Socket.IO
 async function saveAndEmitQuickReplyTemplates(templates) {
-    try {
+    // ... (kode saveAndEmitQuickReplyTemplates dari backend.js asli) ...
+     try {
         // Panggil fungsi save yang sebenarnya ada di database.js
         await saveQuickReplyTemplates(templates);
         console.log('[DATABASE] Quick reply templates berhasil disimpan ke database (via wrapper).');
@@ -166,14 +179,8 @@ async function saveAndEmitQuickReplyTemplates(templates) {
     }
 }
 
-
-// Menghapus Chat History dari Database (fungsi diimport dari database.js)
-// async function deleteChatHistory(chatId) { ... }
-
-// Menghapus Semua Chat History dari Database (fungsi diimport dari database.js)
-// async function deleteAllChatHistory() { ... }
-
-
+// ... (kode clearAutoReleaseTimer, startAutoReleaseTimer, getOnlineAdminUsernames,
+//      getAdminInfoBySocketId, cleanupAdminState, normalizeChatId, isSuperAdmin dari backend.js asli) ...
 // Membatalkan timer auto-release
 function clearAutoReleaseTimer(chatId) {
   const normalizedChatId = normalizeChatId(chatId);
@@ -230,11 +237,15 @@ function getAdminInfoBySocketId(socketId) {
 }
 
 // Membersihkan state admin saat disconnect/logout
-function cleanupAdminState(socketId) {
+function cleanupAdminState(socketId, socket) {
     const adminInfo = getAdminInfoBySocketId(socketId);
     if (adminInfo) {
         const username = adminInfo.username;
-        console.log(`[ADMIN] Membersihkan state untuk admin ${username} (Socket ID: ${socketId})`);
+        if (!socket || !socket.id) {
+            console.error('[ADMIN] Error: Socket tidak valid saat membersihkan state untuk admin', username);
+            return null;
+        }
+        console.log(`[ADMIN] Membersihkan state untuk admin ${username} (Socket ID: ${socket.id})`);
 
         const chatsToRelease = Object.keys(pickedChats).filter(chatId => pickedChats[chatId] === username);
         for (const chatId of chatsToRelease) {
@@ -263,13 +274,14 @@ function normalizeChatId(chatId) {
   const groupRegex = /^\d+-\d+@g\.us$/;
   const broadcastRegex = /^\d+@broadcast$/;
   const statusRegex = /^status@broadcast$/;
-  const otherValidCharsRegex = /^[a-zA-Z0-9._\-:]+$/;
+  const otherValidCharsRegex = /^[a-zA-Z0-9._\-:]+$/; // Added more valid JID chars
 
   if (personalRegex.test(chatId) || groupRegex.test(chatId) || broadcastRegex.test(chatId) || statusRegex.test(chatId)) {
       return chatId;
   }
 
-   const cleanedForNumberPatterns = chatId.replace(/^\+/, '').replace(/[^\d\-]/g, '');
+   // Attempt to normalize common patterns like just a number
+   const cleanedForNumberPatterns = chatId.replace(/^\+/, '').replace(/[^\d\-]/g, ''); // Remove leading + and non-digits/hyphens
 
     if(/^\d+$/.test(cleanedForNumberPatterns)) {
          return `${cleanedForNumberPatterns}@s.whatsapp.net`;
@@ -278,10 +290,12 @@ function normalizeChatId(chatId) {
           return `${cleanedForNumberPatterns}@g.us`;
      }
 
+
     if (otherValidCharsRegex.test(chatId)) {
          console.warn(`[NORMALIZE] Chat ID tidak cocok pola standar tapi hanya berisi karakter valid JID. Mengembalikan apa adanya: ${chatId}`);
-         return chatId;
+         return chatId; // Return as is if it contains valid JID characters but not standard patterns
     }
+
 
   console.warn(`[NORMALIZE] Chat ID format tidak dikenali dan tidak dapat dinormalisasi: ${chatId}`);
   return null;
@@ -291,6 +305,12 @@ function normalizeChatId(chatId) {
 // Fungsi untuk mengecek apakah admin adalah Super Admin
 function isSuperAdmin(username) {
      return admins[username]?.role === 'superadmin';
+}
+
+// Helper untuk mendapatkan ekstensi file dari mime type
+function getFileExtension(mimeType) {
+    const ext = mime.extension(mimeType);
+    return ext ? `.${ext}` : '';
 }
 
 
@@ -303,8 +323,47 @@ async function startApp() {
         await loadDataFromDatabase();
         console.log("[SERVER] Data database siap. Memulai koneksi WhatsApp dan Server HTTP.");
 
+        // Endpoint untuk melayani file media
+        expressApp.get('/media/:filename', async (req, res) => {
+             const requestedFilename = req.params.filename;
+             if (!requestedFilename || requestedFilename.includes('..')) { // Basic check for directory traversal
+                  console.warn(`[MEDIA] Permintaan media dengan nama file invalid: ${requestedFilename}`);
+                  return res.status(400).send('Invalid filename.');
+             }
+
+             const fullPath = path.join(mediaDir, requestedFilename);
+
+             // Keamanan: Pastikan file yang diminta benar-benar berada di dalam direktori media
+             const resolvedMediaPath = path.resolve(mediaDir);
+             const resolvedRequestedPath = path.resolve(fullPath);
+
+             if (!resolvedRequestedPath.startsWith(resolvedMediaPath)) {
+                  console.warn(`[MEDIA] Percobaan directory traversal: ${requestedFilename} -> ${resolvedRequestedPath}`);
+                  return res.status(403).send('Access denied.');
+             }
+
+             try {
+                 // Periksa apakah file ada
+                 await fs.promises.access(fullPath, fs.constants.R_OK);
+                 // Kirim file
+                 console.log(`[MEDIA] Melayani file: ${fullPath}`);
+                 res.sendFile(fullPath);
+             } catch (error) {
+                 if (error.code === 'ENOENT') {
+                     console.warn(`[MEDIA] File tidak ditemukan: ${fullPath}`);
+                     res.status(404).send('File not found.');
+                 } else {
+                     console.error(`[MEDIA] Error saat melayani file ${fullPath}:`, error);
+                     res.status(500).send('Internal server error.');
+                 }
+             }
+        });
+
+
         connectToWhatsApp().catch(err => {
             console.error("[WA] Gagal memulai koneksi WhatsApp awal:", err);
+            // Ini tidak fatal karena server HTTP tetap jalan, admin bisa login dan lihat history
+            // tapi status WA akan disconnected.
         });
 
         await new Promise(resolve => {
@@ -316,7 +375,7 @@ async function startApp() {
         });
 
     } catch (err) {
-        console.error("[SERVER] Gagal memuat data awal dari database. Server tidak dapat dimulai.", err);
+        console.error("[SERVER] Gagal memuat data awal dari database atau setup server. Server tidak dapat dimulai.", err);
         await closeDatabase().catch(dbErr => console.error('[DATABASE] Error closing DB after startup failure:', dbErr));
         process.exit(1);
     }
@@ -353,7 +412,51 @@ async function connectToWhatsApp() {
     logger: logger,
     syncFullHistory: false,
     getMessage: async (key) => {
-        return undefined;
+        // Fungsi ini dipanggil oleh Baileys jika perlu mengambil pesan sebelumnya
+        // Kita bisa coba ambil dari DB, tapi untuk meminimalkan kompleksitas awal, kita biarkan Baileys handle sendiri
+        // atau biarkan null jika tidak mendukung sync penuh.
+        const db = await getDb().catch(() => null);
+        if (!db) return undefined; // Tidak bisa akses DB
+
+        try {
+            const messageRow = await db.get('SELECT * FROM messages WHERE id = ? AND chat_id = ?', [key.id, normalizeChatId(key.remoteJid)]);
+            if (messageRow) {
+                // Rekonstruksi pesan dari DB, termasuk memuat media jika filePath ada
+                const message = {
+                    key: {
+                        remoteJid: messageRow.chat_id,
+                        fromMe: messageRow.type === 'outgoing',
+                        id: messageRow.id,
+                        participant: messageRow.type === 'incoming' ? messageRow.sender : null // Participant for group messages maybe needed
+                    },
+                    messageTimestamp: messageRow.timestamp,
+                    // Ini adalah struktur pesan Baileys, perlu rekonstruksi lebih detail
+                    // Berdasarkan mediaType, mimeType, text, filePath, etc.
+                    // Ini cukup kompleks dan mungkin tidak sepenuhnya akurat tanpa skema lengkap Baileys
+                    // Contoh sederhana untuk teks:
+                    message: messageRow.text ? { conversation: messageRow.text } :
+                             (messageRow.mediaType === 'imageMessage' ? { imageMessage: { mimetype: messageRow.mimeType, caption: messageRow.text } /* Media data will be missing! */ } :
+                              null) // Tambahkan tipe lain jika perlu
+                     // Catatan: Media data sebenarnya TIDAK dimuat di sini dari file.
+                     // Baileys biasanya mengelola unduhan media sendiri jika perlu sinkronisasi.
+                     // Menyediakan hanya metadata mungkin cukup, atau mungkin tidak.
+                     // Jika ini menyebabkan masalah, perlu strategi yang lebih canggih untuk getMessage.
+                     // Untuk saat ini, biarkan sederhana dan mungkin media lama tidak muncul di WA jika resync.
+                };
+                console.log(`[WA:getMessage] Menemukan pesan ${key.id} di DB.`);
+                // Warning: Objek pesan yang direkonstruksi mungkin tidak lengkap untuk kebutuhan internal Baileys, terutama media.
+                // Ini adalah keterbatasan pendekatan sederhana ini.
+                 return message;
+
+            } else {
+                 // console.log(`[WA:getMessage] Pesan ${key.id} tidak ditemukan di DB.`); // Terlalu verbose
+                return undefined;
+            }
+        } catch (dbError) {
+            console.error(`[WA:getMessage] Error saat mengambil pesan ${key.id} dari DB:`, dbError);
+            return undefined;
+        }
+
     }
   });
 
@@ -371,18 +474,55 @@ async function connectToWhatsApp() {
        for (const socketId in currentAdminSockets) {
             if (Object.prototype.hasOwnProperty.call(currentAdminSockets, socketId) && currentAdminSockets[socketId]?.role === 'superadmin') {
                  if (io.sockets.sockets.get(socketId)) {
-                    io.to(socketId).emit('whatsapp_qr', qr);
+                    // Kirim QR sebagai string base64 ke frontend superadmin
+                    // Frontend perlu mengubah string ini menjadi data URL (e.g., 'data:image/png;base64,...')
+                    // Baileys memberikan QR string biasa, bukan base64 secara default, jadi kita perlu mengkonversinya jika ingin mengirim base64.
+                    // qrcode.generate juga bisa menghasilkan string atau stream. Mari kita gunakan qrcode.toDataURL jika perlu base64 di frontend.
+                    // Untuk kesederhanaan sekarang, kita kirim string mentah dan biarkan frontend (jika perlu) generate QR dari string,
+                    // atau kita bisa generate data URL di backend dan kirim data URL.
+                    // Contoh menggunakan qrcode library untuk generate data URL:
+                    qrcode.toDataURL(qr, { errorCorrectionLevel: 'H' }, function (err, url) {
+                        if (err) {
+                            console.error('[WA] Gagal generate QR data URL:', err);
+                            io.to(socketId).emit('whatsapp_qr', 'Error generating QR'); // Kirim pesan error
+                        } else {
+                            io.to(socketId).emit('whatsapp_qr', url); // Kirim data URL
+                        }
+                    });
                  }
             }
        }
+    } else if (qr && qrDisplayed) {
+        // If QR is updated while still displayed, update superadmins
+         console.log('[WA] QR Code diperbarui, mengirim ke Super Admin yang login.');
+        const currentAdminSockets = { ...adminSockets };
+       for (const socketId in currentAdminSockets) {
+            if (Object.prototype.hasOwnProperty.call(currentAdminSockets, socketId) && currentAdminSockets[socketId]?.role === 'superadmin') {
+                 if (io.sockets.sockets.get(socketId)) {
+                     qrcode.toDataURL(qr, { errorCorrectionLevel: 'H' }, function (err, url) {
+                        if (err) {
+                            console.error('[WA] Gagal generate QR data URL (update):', err);
+                            io.to(socketId).emit('whatsapp_qr', 'Error generating QR');
+                        } else {
+                            io.to(socketId).emit('whatsapp_qr', url);
+                        }
+                    });
+                 }
+            }
+       }
+        currentQrCode = qr; // Simpan QR string mentah juga jika perlu
     }
+
 
     if (connection === 'close') {
       qrDisplayed = false;
       currentQrCode = null;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const reason = lastDisconnect?.error?.message || 'Unknown';
-      const shouldReconnect = ![401, 403, 411, 419, 440].includes(statusCode);
+      // Baileys guide suggests reconnecting on all errors except 401
+      // https://github.com/whiskeysockets/baileys?tab=readme-nt-latest#reconnect-mode
+      const shouldReconnect = (statusCode && statusCode !== 401) || !statusCode;
+
 
       console.error(`[WA] Koneksi WhatsApp terputus: ${reason} (Code: ${statusCode || 'N/A'}), Mencoba menyambung kembali: ${shouldReconnect}`);
       io.emit('whatsapp_disconnected', { reason: reason, statusCode, message: reason });
@@ -395,7 +535,9 @@ async function connectToWhatsApp() {
         console.error("[WA] Tidak dapat menyambung kembali otomatis. Mungkin sesi invalid atau konflik. Perlu scan ulang QR.");
         const fatalMessage = statusCode === 440
             ? 'Sesi digunakan di tempat lain. Tutup WhatsApp di perangkat lain atau scan ulang QR.'
-            : 'Sesi invalid atau konflik. Silakan hubungi Super Admin untuk menampilkan QR untuk memulihkan (perlu scan ulang).';
+             : statusCode === 401
+             ? 'Sesi tidak valid. Silakan hapus folder auth_info_baileys dan restart server untuk scan ulang QR.'
+             : 'Sesi invalid atau konflik fatal. Silakan hubungi Super Admin untuk memulihkan.';
 
         const currentAdminSockets = { ...adminSockets };
         for (const socketId in currentAdminSockets) {
@@ -433,9 +575,18 @@ async function connectToWhatsApp() {
     if (!messages || messages.length === 0) return;
 
     for (const message of messages) {
+      // Ignore messages from self, status updates, or broadcast
       if (message.key.fromMe || message.key.remoteJid === 'status@broadcast' || (sock?.user?.id && message.key.remoteJid === sock.user.id)) {
-        continue;
-      }
+           // Jika pesan dari diri sendiri, cek apakah itu pesan outgoing yang baru saja kita kirim
+           // dan belum mendapatkan status terkirim/terbaca.
+           // Baileys akan mengupsert pesan fromMe yang baru dikirim.
+           // Kita perlu memastikan pesan ini sudah ada di history_state dan terupdate (misalnya timestamp).
+           // Kita tidak perlu menambahkannya lagi jika sudah ada by ID.
+           // Logika penambahan/update history outgoing sudah ada di handler reply_message.
+           // Jadi, kita bisa abaikan upsert pesan fromMe di sini.
+            continue;
+       }
+
 
       const chatId = normalizeChatId(message.key.remoteJid);
        if (!chatId) {
@@ -446,14 +597,18 @@ async function connectToWhatsApp() {
       const dbChatId = chatId;
 
       let messageContent = null;
-      let mediaData = null;
+      let mediaDataForFrontend = null; // <-- Ini akan null jika media disimpan di file
+      let filePath = null; // <-- Path file media di server (nama file)
       let mediaType = null;
       let mimeType = null;
-      let fileName = null;
+      let fileName = null; // Original filename for display in UI
       let messageTextSnippet = '';
 
       const messageBaileysType = message.message ? Object.keys(message.message)[0] : null;
       const messageProps = message.message?.[messageBaileysType];
+
+        // Declare buffer outside the try/catch block
+        let buffer = null; // <-- Deklarasikan di sini dan inisialisasi null
 
        switch (messageBaileysType) {
            case 'conversation':
@@ -464,55 +619,73 @@ async function connectToWhatsApp() {
                break;
            case 'imageMessage':
            case 'videoMessage':
-           case 'audioMessage':
+           case 'audioMessage': // Includes Voice Notes
            case 'documentMessage':
            case 'stickerMessage':
                mediaType = messageBaileysType;
                mimeType = messageProps?.mimetype;
+               // Use original filename if available, otherwise fallback
                fileName = messageProps?.fileName || messageProps?.caption || `${mediaType.replace('Message', '')}_file`;
-               if (mediaType === 'audioMessage' && messageProps?.ptt) fileName = 'Voice Note';
+               if (mediaType === 'audioMessage' && messageProps?.ptt) fileName = 'Voice Note'; // Label voice notes
 
                messageContent = messageProps?.caption || `[${mediaType.replace('Message', '')}]`;
                messageTextSnippet = messageProps?.caption ? messageProps.caption.substring(0, 100) + (messageProps.caption.length > 100 ? '...' : '') : `[${mediaType.replace('Message', '')}]`;
 
                try {
-                 const buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
+                 // Assign buffer inside the try block
+                 buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
                  if (buffer) {
-                     mediaData = buffer.toString('base64');
+                     // Dapatkan ekstensi dari mimeType atau tebak jika tidak ada
+                     const fileExtension = getFileExtension(mimeType);
+                     // Buat nama file unik menggunakan ID pesan
+                     const uniqueFilename = `${message.key.id}${fileExtension}`;
+                     const fullFilePath = path.join(mediaDir, uniqueFilename);
+
+                     // Simpan buffer ke file
+                     await fs.promises.writeFile(fullFilePath, buffer);
+                     console.log(`[MEDIA] Pesan masuk media disimpan: ${uniqueFilename}`);
+
+                     filePath = uniqueFilename; // Simpan hanya nama file relatif ke folder media
+                     // mediaDataForFrontend tetap null di sini, akan diisi di bawah JIKA buffer valid
                  } else {
                      console.warn(`[WA] Gagal mengunduh media (buffer kosong) dari ${chatId} untuk pesan ${message.key.id}`);
                      messageContent = `[Gagal mengunduh media ${mediaType.replace('Message', '')}]` + (messageProps?.caption ? `\n${messageProps.caption}` : '');
                      messageTextSnippet = `[Gagal unduh media ${mediaType.replace('Message', '')}]`;
-                     mediaData = null;
+                     filePath = null;
+                     buffer = null; // Ensure buffer is null if download failed
                  }
                } catch (error) {
-                 console.error(`[WA] Error mengunduh media dari ${chatId} untuk pesan ${message.key.id}:`, error);
+                 console.error(`[WA] Error mengunduh atau menyimpan media dari ${chatId} untuk pesan ${message.key.id}:`, error);
                  messageContent = `[Gagal memuat media ${mediaType.replace('Message', '')}]` + (messageProps?.caption ? `\n${messageProps.caption}` : '');
                  messageTextSnippet = `[Error media ${mediaType.replace('Message', '')}]`;
-                 mediaData = null;
+                 filePath = null;
+                 buffer = null; // Ensure buffer is null if error occurred
                }
                break;
             case 'locationMessage':
                 messageContent = `[Lokasi: ${messageProps?.degreesLatitude}, ${messageProps?.degreesLongitude}]`;
                 messageTextSnippet = '[Lokasi]';
                 mediaType = 'location';
+                // Lokasi biasanya tidak perlu disimpan file, data ada di props message
                 break;
             case 'contactMessage':
                 messageContent = `[Kontak: ${messageProps?.displayName || 'Nama tidak diketahui'}]`;
                  messageTextSnippet = `[Kontak]`;
                  mediaType = 'contact';
+                 // Kontak biasanya tidak perlu disimpan file
                  break;
             case 'liveLocationMessage':
                  messageContent = '[Live Lokasi]';
                  messageTextSnippet = '[Live Lokasi]';
                  mediaType = 'liveLocation';
+                 // Live Lokasi tidak perlu disimpan file
                  break;
             case 'protocolMessage':
             case 'reactionMessage':
             case 'senderKeyDistributionMessage':
             case 'editedMessage':
             case 'keepalive':
-                 continue;
+                 continue; // Abaikan tipe pesan ini
             default:
                 console.warn(`[WA] Menerima pesan dengan tipe tidak dikenal atau tidak ditangani: ${messageBaileysType || 'N/A'} dari ${chatId}`);
                 messageContent = `[Pesan tidak dikenal: ${messageBaileysType || 'N/A'}]`;
@@ -520,12 +693,14 @@ async function connectToWhatsApp() {
                 mediaType = 'unknown';
        }
 
-      const messageData = {
+      // Objek pesan untuk disimpan ke state memory dan database
+      const messageDataForHistory = {
         id: message.key.id,
-        chatId: chatId,
-        from: chatId,
+        chatId: chatId, // Normalisasi chatId untuk penyimpanan konsisten
+        from: chatId, // Pengirim adalah customer (JID)
         text: messageContent || null,
-        mediaData: mediaData,
+        // mediaData: null, // <-- Tidak lagi menyimpan base64
+        filePath: filePath, // <-- Simpan path file jika ada
         mediaType: mediaType,
         mimeType: mimeType,
         fileName: fileName,
@@ -533,9 +708,21 @@ async function connectToWhatsApp() {
         timestamp: message.messageTimestamp
           ? new Date(parseInt(message.messageTimestamp) * 1000).toISOString()
           : new Date().toISOString(),
-        unread: true,
+        unread: true, // Pesan masuk default unread
         type: 'incoming'
       };
+
+      // Objek pesan untuk dikirim ke frontend (mungkin perlu mediaData untuk display instan?)
+      // Kirim mediaData (Base64) ke frontend HANYA untuk pesan masuk yang baru saja tiba DAN berhasil diunduh.
+      // Untuk pesan lama yang dimuat dari DB, frontend akan menggunakan filePath.
+      // Gunakan variabel 'buffer' yang sudah dideklarasikan di luar try/catch.
+      const messageDataForFrontend = {
+          ...messageDataForHistory,
+          // Hanya sertakan mediaData jika buffer ada DAN valid.
+          // filePath juga disertakan untuk frontend.
+          mediaData: buffer && Buffer.isBuffer(buffer) ? buffer.toString('base64') : null,
+      };
+
 
       if (!chatHistory[dbChatId] || !Array.isArray(chatHistory[dbChatId].messages)) {
         console.log(`[HISTORY] Membuat/memperbaiki entri baru untuk chat ${chatId}.`);
@@ -545,17 +732,22 @@ async function connectToWhatsApp() {
            chatHistory[dbChatId].status = 'open';
        }
 
-      if (!chatHistory[dbChatId].messages.some(m => m && typeof m === 'object' && m.id === messageData.id)) {
-        console.log(`[HISTORY] Menambahkan pesan masuk baru (ID: ${messageData.id}) ke chat ${chatId}`);
-        chatHistory[dbChatId].messages.push(messageData);
-        saveChatHistoryToDatabase();
+      // Cek apakah pesan sudah ada di history state
+      const existingMessageIndex = chatHistory[dbChatId].messages.findIndex(m => m && typeof m === 'object' && m.id === messageDataForHistory.id);
 
+      if (existingMessageIndex === -1) {
+        console.log(`[HISTORY] Menambahkan pesan masuk baru (ID: ${messageDataForHistory.id}, Type: ${messageDataForHistory.mediaType}) ke chat ${chatId}`);
+        chatHistory[dbChatId].messages.push(messageDataForHistory); // Simpan ke state memory (tanpa base64 mediaData, hanya filePath)
+        saveChatHistoryToDatabase(); // Simpan ke DB (juga tanpa base64 mediaData)
+
+        // Kirim pesan baru ke semua klien
         io.emit('new_message', {
-             ...messageData,
+             ...messageDataForFrontend, // Kirim objek yang ada base64-nya untuk tampilan instan (jika ada)
              chatId: chatId,
              chatStatus: chatHistory[dbChatId].status
          });
 
+        // Kirim notifikasi ke admin yang tidak sedang menangani chat
         const pickedBy = pickedChats[chatId];
         const onlineAdmins = getOnlineAdminUsernames();
         onlineAdmins.forEach(adminUsername => {
@@ -574,10 +766,18 @@ async function connectToWhatsApp() {
         });
 
       } else {
-         // console.log(`[WA] Duplicate message detected in upsert (ID: ${messageData.id}), ignored.`);
+         // Pesan sudah ada (misal dari sync atau duplikasi upsert)
+         // Mungkin perlu update jika ada info tambahan, tapi umumnya diabaikan.
+         // Contoh: update status pesan dari pending ke sent/delivered/read (tapi Baileys handle ini di event lain)
+          // console.log(`[WA] Duplicate message detected in upsert (ID: ${messageDataForHistory.id}), ignored adding to history.`);
       }
     }
   });
+
+  // Baileys events for message status updates might be handled here if needed
+  // e.g., 'messages.update' to update status (sent, delivered, read)
+  // sock.ev.on('messages.update', (messages) => { ... });
+
 
 }
 
@@ -587,32 +787,26 @@ io.on('connection', (socket) => {
   console.log(`[SOCKET] Admin terhubung: ${socket.id}`);
 
   // --- START: PENGECEKAN DEFENSIF SAAT KONEKSI AWAL ---
-  // Memastikan variabel WA Baileys sudah terdefinisi sebelum mengirim status awal
   if (sock === undefined || qrDisplayed === undefined || currentQrCode === undefined) {
        console.warn(`[SOCKET] Early connection (${socket.id}) received before WA variables fully initialized. Deferring initial status update.`);
-       // Kirim status connecting yang aman dan biarkan WA event handler mengupdate nanti
        socket.emit('whatsapp_connecting', { message: 'Menunggu status WhatsApp...' });
-       // Masih kirim data awal lain yang tidak bergantung pada state WA
        socket.emit('registered_admins', admins);
        io.emit('update_online_admins', getOnlineAdminUsernames());
        socket.emit('initial_pick_status', pickedChats);
-       io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates)); // Tetap kirim template
+       io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates));
 
-       return; // Keluar dari handler ini
+       return;
   }
   // --- END: PENGECEKAN DEFENSIF ---
 
 
   // Jika pengecekan di atas lolos, lanjutkan dengan logika pengiriman status WA awal yang lebih detail
-
-  // Kirim data awal yang diperlukan segera setelah koneksi (admins, status online, pick, template)
   socket.emit('registered_admins', admins);
   io.emit('update_online_admins', getOnlineAdminUsernames());
   socket.emit('initial_pick_status', pickedChats);
-  io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates)); // Kirim template sebagai array
+  io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates));
 
 
-  // Kirim status WhatsApp saat ini pada koneksi
   if (sock?.ws?.readyState === sock.ws.OPEN) {
        socket.emit('whatsapp_connected', { username: sock.user?.id || 'N/A' });
   } else if (sock?.ws?.readyState === sock.ws.CONNECTING) {
@@ -620,10 +814,17 @@ io.on('connection', (socket) => {
   } else if (qrDisplayed && currentQrCode) {
        socket.emit('whatsapp_fatal_disconnected', { message: 'Sesi invalid. Menunggu QR Code baru...' });
        if (getAdminInfoBySocketId(socket.id)?.role === 'superadmin') {
-           socket.emit('whatsapp_qr', currentQrCode);
+            // Generate dan kirim QR data URL saat ada superadmin login dan QR tersedia
+             qrcode.toDataURL(currentQrCode, { errorCorrectionLevel: 'H' }, function (err, url) {
+                if (err) {
+                    console.error('[WA] Gagal generate QR data URL saat admin login:', err);
+                    socket.emit('whatsapp_qr', 'Error generating QR');
+                } else {
+                    socket.emit('whatsapp_qr', url);
+                }
+            });
        }
-  }
-   else {
+  } else {
        socket.emit('whatsapp_disconnected', { reason: 'Not Connected', statusCode: 'N/A', message: 'Koneksi WhatsApp belum siap atau terputus.' });
   }
 
@@ -638,11 +839,13 @@ io.on('connection', (socket) => {
 
         const chatEntry = chatHistory[chatId];
          if (chatEntry && Array.isArray(chatEntry.messages)) {
+             // Saat mengirim ke frontend, pesan media hanya memiliki filePath, BUKAN mediaData
             chatHistoryForClient[chatId] = {
                 status: chatEntry.status || 'open',
                 messages: chatEntry.messages.map((message) => ({
                     ...message,
-                    chatId: chatId
+                    chatId: chatId,
+                    mediaData: null // Pastikan mediaData null saat dikirim dari history
                 }))
             };
          } else if (chatEntry) {
@@ -653,12 +856,12 @@ io.on('connection', (socket) => {
               console.warn(`[SOCKET] Chat history untuk ${chatId} memiliki struktur pesan tidak valid.`);
          }
       }
-       // Kirim data awal termasuk chat history, admin, role, dan template balasan cepat (sebagai array)
+       // Kirim data awal termasuk chat history (dengan filePath, tanpa mediaData untuk pesan lama), admin, role, dan template
       socket.emit('initial_data', {
           chatHistory: chatHistoryForClient,
           admins: admins,
           currentUserRole: adminInfo.role,
-          quickReplies: Object.values(quickReplyTemplates) // Kirim template sebagai array
+          quickReplies: Object.values(quickReplyTemplates)
       });
     } else {
       console.warn(`[SOCKET] Socket ${socket.id} meminta data awal sebelum login.`);
@@ -678,9 +881,11 @@ io.on('connection', (socket) => {
     }
 
     const chatEntry = chatHistory[normalizedChatId];
+    // Saat mengirim history spesifik ke frontend, pesan media hanya memiliki filePath, BUKAN mediaData
     const history = Array.isArray(chatEntry?.messages) ? chatEntry.messages.map((message) => ({
       ...message,
-      chatId: normalizedChatId
+      chatId: normalizedChatId,
+      mediaData: null // Pastikan mediaData null saat dikirim dari history
     })) : [];
     const status = chatEntry?.status || 'open';
 
@@ -688,6 +893,7 @@ io.on('connection', (socket) => {
     socket.emit('chat_history', { chatId: normalizedChatId, messages: history, status: status });
   });
 
+  // ... (kode admin_login, admin_reconnect, admin_logout, pick_chat, unpick_chat, delegate_chat dari backend.js asli) ...
   socket.on('admin_login', ({ username, password }) => {
       console.log(`[ADMIN] Menerima percobaan login untuk: ${username}`);
     const adminUser = admins[username];
@@ -930,7 +1136,6 @@ io.on('connection', (socket) => {
       socket.emit('delegate_success', { chatId: normalizedChatId, targetAdminUsername, message: `Chat berhasil didelegasikan ke ${targetAdminUsername}.` });
   });
 
-
   socket.on('reply_message', async ({ to, text, media }) => {
     const adminInfo = getAdminInfoBySocketId(socket.id);
     if (!adminInfo) {
@@ -968,70 +1173,85 @@ io.on('connection', (socket) => {
           chatHistory[chatId] = { status: 'open', messages: [] };
       }
 
+    let sentMsgResult;
+    let sentMediaType = null;
+    let sentMimeType = null;
+    let sentFileName = null;
+    let sentFilePath = null; // <-- Simpan filePath untuk pesan keluar
+    let sentTextContentForHistory = text?.trim() || '';
+
     try {
       const adminInfoFromAdmins = admins[username];
       const adminInitials = (adminInfoFromAdmins?.initials || username.substring(0, 3).toUpperCase()).substring(0,3);
 
-      const textContent = text?.trim() || '';
-      const textForSendingToWA = textContent.length > 0
-        ? `${textContent}\n\n-${adminInitials}`
+      const textForSendingToWA = sentTextContentForHistory.length > 0
+        ? `${sentTextContentForHistory}\n\n-${adminInitials}`
         : (media ? `-${adminInitials}` : '');
 
 
-      let sentMsgResult;
-      let sentMediaType = null;
-      let sentMimeType = null;
-      let sentFileName = null;
-      let sentTextContentForHistory = textContent;
+      let mediaBuffer = null;
+      if (media?.data) {
+           try {
+               mediaBuffer = Buffer.from(media.data, 'base64');
+               sentMimeType = media.mimeType || media.type;
+               sentFileName = media.name || 'file';
+               sentMediaType = media.type.startsWith('image/') ? 'imageMessage' :
+                               media.type.startsWith('video/') ? 'videoMessage' :
+                               media.type.startsWith('audio/') ? 'audioMessage' :
+                               media.type === 'application/pdf' || media.type.startsWith('application/') || media.type.startsWith('text/') ? 'documentMessage' :
+                               'unknown';
 
-      if (media) {
-        if (!media.data || !media.type) {
-             console.error(`[REPLY] Media data atau type kosong untuk chat ${chatId}`);
-             return socket.emit('send_error', { to: chatId, text, media, message: 'Data media tidak valid.' });
-        }
-        const mediaBuffer = Buffer.from(media.data, 'base64');
-        const mediaMimeType = media.mimeType || media.type;
+               if (sentMediaType === 'unknown') {
+                    console.warn(`[REPLY] Tipe media tidak didukung untuk dikirim: ${media.type}`);
+                    socket.emit('send_error', { to: chatId, text, media, message: 'Tipe media tidak didukung.' });
+                    return;
+               }
 
+           } catch (bufferError) {
+               console.error('[REPLY] Gagal membuat buffer dari Base64 media:', bufferError);
+               socket.emit('send_error', { to: chatId, text, media, message: 'Gagal memproses data media.' });
+               return;
+           }
+      }
+
+
+      if (mediaBuffer) {
         const mediaOptions = {
-          mimetype: mediaMimeType,
-          fileName: media.name || 'file',
+          mimetype: sentMimeType,
+          fileName: sentFileName,
           caption: textForSendingToWA.length > 0 ? textForSendingToWA : undefined
         };
 
-        console.log(`[WA] Mengirim media (${mediaMimeType}) ke ${chatId} oleh ${username}...`);
+        console.log(`[WA] Mengirim media (${sentMimeType}) ke ${chatId} oleh ${username}...`);
 
-        if (media.type.startsWith('image/')) {
+        if (sentMediaType === 'imageMessage') {
              sentMsgResult = await sock.sendMessage(chatId, { image: mediaBuffer, ...mediaOptions });
-             sentMediaType = 'imageMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name;
-        } else if (media.type.startsWith('video/')) {
+        } else if (sentMediaType === 'videoMessage') {
              sentMsgResult = await sock.sendMessage(chatId, { video: mediaBuffer, ...mediaOptions });
-             sentMediaType = 'videoMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name;
-        } else if (media.type.startsWith('audio/')) {
-           const isVoiceNote = mediaOptions.mimetype === 'audio/ogg; codecs=opus' || mediaOptions.mimetype === 'audio/mpeg' || mediaOptions.mimetype === 'audio/wav' || media.isVoiceNote;
+        } else if (sentMediaType === 'audioMessage') {
+           const isVoiceNote = media.isVoiceNote || mediaOptions.mimetype === 'audio/ogg; codecs=opus' || mediaOptions.mimetype === 'audio/mpeg' || mediaOptions.mimetype === 'audio/wav'; // Assume isVoiceNote prop from frontend for VN intent
 
             if (isVoiceNote) {
                  sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: true });
-                 sentMediaType = 'audioMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = 'Voice Note';
-                 if (textContent.length > 0) {
+                 sentFileName = 'Voice Note'; // Override filename for VN
+                 // Jika ada caption untuk VN, kirim terpisah
+                 if (sentTextContentForHistory.length > 0) { // Use original text content for separate message
                      console.log(`[WA] Mengirim teks caption VN terpisah ke ${chatId}`);
-                     await sock.sendMessage(chatId, { text: `-${adminInitials}: ${textContent}` });
+                     // Optional: Kirim teksnya tanpa inisial atau dengan inisial tergantung preferensi
+                     await sock.sendMessage(chatId, { text: `${sentTextContentForHistory}\n\n-${adminInitials}` });
+                     // Set sentTextContentForHistory to null for the media message history entry
+                     sentTextContentForHistory = null;
                  }
             } else {
                  sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: false, caption: mediaOptions.caption });
-                 sentMediaType = 'audioMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name;
             }
 
-        } else if (media.type === 'application/pdf' || media.type.startsWith('application/') || media.type.startsWith('text/')) {
+        } else if (sentMediaType === 'documentMessage') {
              sentMsgResult = await sock.sendMessage(chatId, { document: mediaBuffer, ...mediaOptions });
-              sentMediaType = 'documentMessage'; sentMimeType = mediaOptions.mimetype; sentFileName = media.name;
         }
-        else {
-          console.warn(`[REPLY] Tipe media tidak didukung untuk dikirim: ${media.type}`);
-          socket.emit('send_error', { to: chatId, text, media, message: 'Tipe media tidak didukung.' });
-          return;
-        }
-
+         // Tidak perlu case default lagi karena sudah dicek di atas
       } else {
+        // Kirim hanya teks jika tidak ada media atau mediaBuffer gagal dibuat
         if (textForSendingToWA.trim().length > 0) {
            console.log(`[WA] Mengirim teks ke ${chatId} oleh ${username}...`);
            sentMsgResult = await sock.sendMessage(chatId, { text: textForSendingToWA });
@@ -1039,8 +1259,8 @@ io.on('connection', (socket) => {
             sentMimeType = 'text/plain';
             sentFileName = null;
         } else {
-            console.warn(`[REPLY] Admin ${username} mencoba kirim pesan kosong (hanya spasi?).`);
-            socket.emit('send_error', { to: chatId, text, media, message: 'Tidak ada konten untuk dikirim.' });
+            console.warn(`[REPLY] Admin ${username} mencoba kirim pesan kosong (hanya spasi atau media invalid?).`);
+            socket.emit('send_error', { to: chatId, text: sentTextContentForHistory, media, message: 'Tidak ada konten valid untuk dikirim.' });
             return;
         }
       }
@@ -1053,22 +1273,49 @@ io.on('connection', (socket) => {
           return;
       }
 
+      // Jika pesan adalah media dan buffer berhasil dibuat/didapat
+      if (mediaBuffer && sentMediaType !== 'unknown') {
+           try {
+               // Dapatkan ekstensi dari mimeType atau tebak jika tidak ada
+               const fileExtension = getFileExtension(sentMimeType);
+               // Buat nama file unik menggunakan ID pesan Baileys yang baru saja didapat
+               const uniqueFilename = `${sentMsg.key.id}${fileExtension}`;
+               const fullFilePath = path.join(mediaDir, uniqueFilename);
+
+               // Simpan buffer media keluar ke file
+               await fs.promises.writeFile(fullFilePath, mediaBuffer);
+               console.log(`[MEDIA] Pesan keluar media disimpan: ${uniqueFilename}`);
+               sentFilePath = uniqueFilename; // Simpan hanya nama file relatif
+
+           } catch (fileSaveError) {
+               console.error(`[MEDIA] Gagal menyimpan file media keluar untuk pesan ${sentMsg.key.id}:`, fileSaveError);
+               // File gagal disimpan, tapi pesan sudah terkirim di WA.
+               // Lanjutkan, tapi log error dan set filePath ke null.
+               sentFilePath = null;
+               // Ini akan menyebabkan media tidak muncul di history UI, tapi pesan teks/captionnya tetap ada.
+           }
+      }
+
+      // Objek pesan untuk disimpan ke state memory dan database
       const outgoingMessageData = {
         id: sentMsg.key.id,
         chatId: chatId,
-        from: username,
-        text: sentTextContentForHistory || null,
+        from: username, // Pengirim adalah username admin
+        text: sentTextContentForHistory || null, // Teks asli dari frontend, bukan yang ditambah inisial
         mediaType: sentMediaType,
         mimeType: sentMimeType,
-        mediaData: media?.data || null,
-        fileName: sentFileName,
+        // mediaData: null, // Tidak lagi menyimpan base64
+        filePath: sentFilePath, // Simpan path file jika ada
+        fileName: sentFileName, // Original filename for display
         initials: adminInitials,
         timestamp: sentMsg.messageTimestamp
           ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString()
           : new Date().toISOString(),
         type: 'outgoing',
-        unread: false,
-        snippet: sentTextContentForHistory?.substring(0, 100) + (sentTextContentForHistory?.length > 100 ? '...' : '') || sentFileName || `[${sentMediaType?.replace('Message', '') || 'Media'}]`
+        unread: false, // Pesan keluar tidak perlu unread
+        snippet: sentTextContentForHistory?.substring(0, 100) + (sentTextContentForHistory?.length > 100 ? '...' : '')
+                 || sentFileName
+                 || `[${sentMediaType?.replace('Message', '') || 'Media'}]`
       };
 
       const dbChatId = chatId;
@@ -1078,34 +1325,56 @@ io.on('connection', (socket) => {
            chatHistory[dbChatId] = { status: chatHistory[dbChatId]?.status || 'open', messages: [] };
        }
 
-       if (!chatHistory[dbChatId].messages.some(m => m && typeof m === 'object' && m.id === outgoingMessageData.id)) {
-         console.log(`[HISTORY] Menambahkan pesan keluar baru (ID: ${outgoingMessageData.id}) ke chat ${chatId}`);
-         chatHistory[dbChatId].messages.push(outgoingMessageData);
-         saveChatHistoryToDatabase();
+       // Tambahkan pesan keluar ke history state dan database
+       // Cek duplikasi berdasarkan ID
+       const existingMessageIndex = chatHistory[dbChatId].messages.findIndex(m => m && typeof m === 'object' && m.id === outgoingMessageData.id);
+
+       if (existingMessageIndex === -1) {
+            console.log(`[HISTORY] Menambahkan pesan keluar baru (ID: ${outgoingMessageData.id}, Type: ${outgoingMessageData.mediaType}) ke chat ${chatId}`);
+            chatHistory[dbChatId].messages.push(outgoingMessageData); // Simpan ke state memory (dan database)
+            saveChatHistoryToDatabase(); // Simpan ke DB (juga tanpa base64 mediaData)
        } else {
-           console.warn(`[HISTORY] Pesan keluar duplikat terdeteksi (ID: ${outgoingMessageData.id}), diabaikan penambahannya ke history state.`);
+           // Pesan keluar sudah ada, mungkin diupdate dengan info tambahan jika diperlukan
+           // Untuk saat ini, kita asumsikan objek awal sudah cukup lengkap
+           // console.warn(`[HISTORY] Pesan keluar duplikat terdeteksi (ID: ${outgoingMessageData.id}), diabaikan penambahannya ke history state.`);
+           // Atau update jika timestamp/info lain berubah?
+           chatHistory[dbChatId].messages[existingMessageIndex] = {
+               ...chatHistory[dbChatId].messages[existingMessageIndex], // Keep existing properties
+               ...outgoingMessageData // Overwrite with new data (like final timestamp, etc)
+           };
+            console.log(`[HISTORY] Mengupdate pesan keluar (ID: ${outgoingMessageData.id}) di chat ${chatId}.`);
+            saveChatHistoryToDatabase(); // Simpan update ke DB
        }
 
+
+      // Kirim pesan keluar yang baru ke semua klien
+      // Pesan keluar ke frontend juga hanya akan punya filePath, BUKAN mediaData
       io.emit('new_message', {
           ...outgoingMessageData,
           chatId: chatId,
-          chatStatus: chatHistory[dbChatId]?.status || 'open'
+          chatStatus: chatHistory[dbChatId]?.status || 'open',
+          mediaData: null // Pastikan mediaData null saat dikirim ke frontend (kecuali untuk pesan masuk baru)
       });
 
+      // Kirim konfirmasi berhasil kirim ke pengirim
       socket.emit('reply_sent_confirmation', {
           sentMsgId: outgoingMessageData.id,
           chatId: outgoingMessageData.chatId
       });
 
+      // Reset timer auto-release jika diaktifkan
       if (pickedChats[chatId] === username && config.chatAutoReleaseTimeoutMinutes > 0) {
            startAutoReleaseTimer(chatId, username);
       }
 
     } catch (error) {
       console.error(`[REPLY] Gagal mengirim pesan ke ${chatId} oleh ${username}:`, error);
-      socket.emit('send_error', { to: chatId, text: textContent, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
+      socket.emit('send_error', { to: chatId, text: sentTextContentForHistory, media, message: 'Gagal mengirim: ' + (error.message || 'Error tidak diketahui') });
     }
   });
+
+  // ... (kode mark_as_read, delete_chat, delete_all_chats, add_admin, delete_admin,
+  //      close_chat, open_chat, template handlers dari backend.js asli) ...
 
   socket.on('mark_as_read', ({ chatId }) => {
      const adminInfo = getAdminInfoBySocketId(socket.id);
@@ -1134,7 +1403,7 @@ io.on('connection', (socket) => {
                        chatEntry.messages[i].unread = false;
                        changed = true;
                    } else if (chatEntry.messages[i].type === 'outgoing') {
-                        break;
+                        break; // Stop marking unread once we hit an outgoing message
                    }
               }
               if (changed) {
@@ -1165,6 +1434,12 @@ io.on('connection', (socket) => {
 
         console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menghapus chat history untuk ${normalizedChatId}`);
 
+        // NOTE: Penghapusan chat history dari DB TIDAK menghapus file media terkait di folder media/.
+        // Jika ingin menghapus file, Anda perlu query dulu semua file paths dari chat_id ini di tabel messages
+        // SEBELUM menghapus dari chat_history, lalu hapus file-file tersebut secara manual.
+        // Ini menambahkan kompleksitas yang cukup besar dan risiko kehilangan data jika gagal.
+        // Untuk saat ini, file media akan tetap ada di disk meskipun chat history dihapus.
+
         if (chatHistory[normalizedChatId]) {
             delete chatHistory[normalizedChatId];
             if (pickedChats[normalizedChatId]) {
@@ -1178,9 +1453,8 @@ io.on('connection', (socket) => {
                 if (success) {
                     io.emit('chat_history_deleted', { chatId: normalizedChatId });
                     io.emit('initial_pick_status', pickedChats);
-                    socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dihapus.` });
+                    socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dihapus (metadata).` });
                 } else {
-                     // Chat not found in DB but was in state. Log warning, proceed as deleted from state perspective.
                      console.warn(`[SUPERADMIN] Chat ${normalizedChatId} not found in DB for deletion, but removed from state.`);
                      io.emit('chat_history_deleted', { chatId: normalizedChatId });
                      io.emit('initial_pick_status', pickedChats);
@@ -1188,7 +1462,6 @@ io.on('connection', (socket) => {
                 }
             } catch (error) {
                  console.error(`[SUPERADMIN] Gagal menghapus chat ${normalizedChatId} dari database:`, error);
-                 // Attempt to restore state if DB delete failed? Complex. Just report error.
                  socket.emit('superadmin_error', { message: 'Gagal menghapus chat dari database.' });
             }
         } else {
@@ -1205,6 +1478,10 @@ io.on('connection', (socket) => {
         }
 
          console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menghapus SEMUA chat history.`);
+
+         // NOTE: Penghapusan ini TIDAK menghapus file media di folder media/.
+         // Menghapus semua file di folder media/ secara otomatis saat deleteAllChats
+         // memiliki risiko tinggi. Pertimbangkan menghapus file secara manual jika perlu.
 
          const chatIdsWithTimers = Object.keys(chatReleaseTimers);
          if (chatIdsWithTimers.length > 0) {
@@ -1223,13 +1500,13 @@ io.on('connection', (socket) => {
             if (success) {
                 io.emit('all_chat_history_deleted');
                 io.emit('initial_pick_status', pickedChats);
-                socket.emit('superadmin_success', { message: 'Semua chat history berhasil dihapus.' });
+                socket.emit('superadmin_success', { message: 'Semua chat history berhasil dihapus (metadata).' });
             } else {
                  console.error(`[SUPERADMIN] Gagal menghapus semua chat dari database.`);
                  socket.emit('superadmin_error', { message: 'Gagal menghapus semua chat dari database.' });
             }
          } catch (error) {
-             console.error(`[SUPERADMIN] Error menghapus semua chat dari database:`, error);
+             console.error(`[SUPERADMIN] Error saat menghapus semua chat dari database:`, error);
              socket.emit('superadmin_error', { message: 'Error saat menghapus semua chat dari database.' });
          }
      });
@@ -1360,7 +1637,6 @@ io.on('connection', (socket) => {
            }
       });
 
-
      socket.on('close_chat', async ({ chatId }) => {
         console.log(`[CHAT STATUS] Permintaan tutup chat: ${chatId}`);
         const adminInfo = getAdminInfoBySocketId(socket.id);
@@ -1474,7 +1750,7 @@ io.on('connection', (socket) => {
          }
      });
 
-    // --- QUICK REPLY TEMPLATES HANDLERS (SUPER ADMIN) ---
+
     socket.on('add_quick_reply', async ({ shortcut, text }) => {
         const adminInfo = getAdminInfoBySocketId(socket.id);
         if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
@@ -1501,7 +1777,7 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: `Template dengan shortcut '${cleanedShortcut}' sudah ada.` });
         }
 
-        const templateId = cleanedShortcut;
+        const templateId = cleanedShortcut; // Use shortcut as the unique ID
 
         const updatedTemplates = {
             ...quickReplyTemplates,
@@ -1544,7 +1820,7 @@ io.on('connection', (socket) => {
              return socket.emit('superadmin_error', { message: 'Shortcut baru harus diawali dengan "/" dan hanya berisi huruf kecil, angka, hyphen (-), atau underscore (_).' });
         }
 
-         const oldShortcut = id;
+         const oldShortcut = id; // In this design, id is the old shortcut
 
          if (!quickReplyTemplates[oldShortcut]) {
              console.warn(`[TEMPLATES] Template dengan ID ${id} (shortcut ${oldShortcut}) tidak ditemukan untuk diupdate oleh ${adminInfo.username}.`);
@@ -1597,7 +1873,7 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: 'Template ID tidak valid.' });
         }
 
-        const shortcutToDelete = id;
+        const shortcutToDelete = id; // In this design, id is the shortcut
 
         if (!quickReplyTemplates[shortcutToDelete]) {
             console.warn(`[TEMPLATES] Template dengan ID ${id} (shortcut ${shortcutToDelete}) tidak ditemukan untuk dihapus oleh ${adminInfo.username}.`);
@@ -1617,7 +1893,6 @@ io.on('connection', (socket) => {
               socket.emit('superadmin_error', { message: `Gagal menghapus template '${shortcutToDelete}' dari database.` });
          }
     });
-    // --- END QUICK REPLY TEMPLATES HANDLERS ---
 
 
   socket.on('disconnect', (reason) => {
@@ -1655,8 +1930,10 @@ const shutdownHandler = async (signal) => {
     console.log('[SOCKET] Menutup server Socket.IO...');
     try {
         await new Promise(resolve => {
+             // io.close() takes an optional callback
              io.close(() => {
                 console.log('[SOCKET] Callback penutupan server Socket.IO terpicu.');
+                 // Check if server is still listening before closing HTTP server
                  if (server.listening) {
                      console.log('[SERVER] Menutup server HTTP setelah Socket.IO...');
                      server.close((err) => {
@@ -1665,11 +1942,11 @@ const shutdownHandler = async (signal) => {
                           } else {
                              console.log('[SERVER] Server HTTP tertutup.');
                           }
-                          resolve();
+                          resolve(); // Resolve the promise after HTTP server closes
                      });
                  } else {
                      console.log('[SERVER] Server HTTP sudah tidak mendengarkan.');
-                     resolve();
+                     resolve(); // Resolve immediately if HTTP server wasn't listening
                  }
             });
         });
@@ -1678,12 +1955,14 @@ const shutdownHandler = async (signal) => {
          console.error('[SOCKET] Error saat menutup server Socket.IO atau HTTP:', e);
     }
 
+
     if (sock && sock.ws?.readyState !== sock.ws?.CLOSED && sock.ws?.readyState !== sock.ws?.CLOSING) {
         console.log('[WA] Menutup koneksi WhatsApp...');
         try {
+            // Use Promise.race with a timeout for a more robust shutdown
             await Promise.race([
                 sock.logout(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('WhatsApp logout timed out')), 5000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('WhatsApp logout timed out')), 5000)) // 5 seconds timeout
             ]);
             console.log('[WA] Koneksi WhatsApp ditutup dengan graceful.');
         } catch (e) {
@@ -1699,16 +1978,17 @@ const shutdownHandler = async (signal) => {
          console.log('[WA] Koneksi WhatsApp sudah tertutup atau belum diinisialisasi.');
      }
 
+
     console.log('[DATABASE] Menutup koneksi database...');
     try {
-        await closeDatabase();
+        await closeDatabase(); // Menunggu koneksi DB ditutup
         console.log('[DATABASE] Koneksi database berhasil ditutup.');
     } catch (e) {
          console.error('[DATABASE] Error saat menutup database:', e);
     }
 
     console.log('[SERVER] Server dimatikan.');
-    process.exit(0);
+    process.exit(0); // Exit successfully
 };
 
 server.on('close', () => {
@@ -1720,16 +2000,18 @@ process.on('SIGTERM', () => shutdownHandler('SIGTERM').catch(console.error));
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[ERROR] Unhandled Rejection at:', promise, 'reason:', reason);
+   // Give it a moment before attempting shutdown to log the error fully
    setTimeout(() => {
       console.error('[SERVER] Mencoba shutdown karena unhandled rejection...');
       shutdownHandler('unhandledRejection').catch(console.error);
-  }, 1000);
+  }, 1000); // 1 second delay
 });
 
 process.on('uncaughtException', (err) => {
   console.error('[ERROR] Uncaught Exception:', err);
+   // Give it a moment before attempting shutdown
    setTimeout(() => {
        console.error('[SERVER] Mencoba shutdown karena uncaught exception...');
        shutdownHandler('uncaughtException').catch(console.error);
-  }, 1000);
+  }, 1000); // 1 second delay
 });

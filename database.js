@@ -10,17 +10,23 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Pastikan direktori database ada
+// Pastikan direktori data dan media ada
 const dbDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dbDir)) {
-    console.log(`[DATABASE] Membuat direktori database: ${dbDir}`);
-    fs.mkdirSync(dbDir, { recursive: true });
-}
-
+const mediaDir = path.join(__dirname, 'media'); // <-- Tambahkan direktori media
 const dbPath = path.join(dbDir, 'helpdesk.db');
 
+// Fungsi untuk memastikan direktori ada
+function ensureDirectoryExists(dirPath) {
+    if (!fs.existsSync(dirPath)) {
+        console.log(`[DATABASE] Membuat direktori: ${dirPath}`);
+        fs.mkdirSync(dirPath, { recursive: true });
+    } else {
+        // console.log(`[DATABASE] Direktori sudah ada: ${dirPath}`); // Opsional: verbose log
+    }
+}
+
+
 // Singleton untuk koneksi database
-// Menggunakan 'let' karena instance akan di-reassign saat pertama kali dibuat dan saat ditutup
 let dbInstance = null;
 
 /**
@@ -29,24 +35,22 @@ let dbInstance = null;
  * @returns {Promise<import('sqlite').Database>} Instance koneksi database.
  * @throws {Error} Jika gagal membuat koneksi database.
  */
-export async function getDb() {
-    // Jika instance sudah ada, kembalikan instance yang ada.
-    // Dengan sqlite/sqlite3, kita asumsikan jika instance ada, itu masih valid,
-    // atau error akan muncul saat menjalankan query.
+async function getDb() {
     if (dbInstance) {
         return dbInstance;
     }
 
     try {
+        // Pastikan direktori database dan media ada sebelum membuka DB
+        ensureDirectoryExists(dbDir);
+        ensureDirectoryExists(mediaDir); // <-- Pastikan direktori media juga ada
+
         console.log(`[DATABASE] Membuka database: ${dbPath}`);
-        // Menggunakan library 'sqlite' sebagai pembungkus 'sqlite3' untuk Promise API
         dbInstance = await open({
             filename: dbPath,
-            driver: sqlite3.Database // Gunakan driver sqlite3
+            driver: sqlite3.Database
         });
 
-        // Aktifkan FOREIGN KEY constraints (baik untuk integritas data)
-        // Ini harus dipanggil setiap kali koneksi baru dibuka
         await dbInstance.exec('PRAGMA foreign_keys = ON;');
         console.log('[DATABASE] FOREIGN KEY constraints diaktifkan.');
 
@@ -54,8 +58,8 @@ export async function getDb() {
         return dbInstance;
     } catch (error) {
         console.error('[DATABASE] Gagal membuat koneksi SQLite:', error);
-        dbInstance = null; // Reset instance jika gagal agar percobaan berikutnya membuat koneksi baru
-        throw error; // Lempar kembali error fatal agar backend tahu ada masalah fatal saat startup
+        dbInstance = null;
+        throw error;
     }
 }
 
@@ -64,39 +68,36 @@ export async function getDb() {
  * @returns {Promise<void>}
  */
 async function closeDatabase() {
-    // Periksa apakah instance dbInstance ada sebelum mencoba menutup
     if (dbInstance) {
-        console.log('[DATABASE] Menutup koneksi database...'); // Log hanya jika ada instance untuk ditutup
+        console.log('[DATABASE] Menutup koneksi database...');
         try {
-            // Metode .close() dari library sqlite (pembungkus sqlite3)
             await dbInstance.close();
-            console.log('[DATABASE] Koneksi database ditutup.'); // Log sukses di sini
+            console.log('[DATABASE] Koneksi database ditutup.');
         } catch (error) {
              console.error('[DATABASE] Gagal menutup koneksi database:', error);
-             // Log error tapi jangan lempar agar shutdown berlanjut
         } finally {
-            dbInstance = null; // Selalu reset instance setelah percobaan tutup
+            dbInstance = null;
         }
-    } else {
-         // console.log('[DATABASE] Koneksi database sudah tertutup atau tidak ada instance.'); // Opsional: log jika tidak ada yang perlu ditutup
     }
 }
 
 
 /**
  * Inisialisasi skema database (membuat tabel jika belum ada).
- * Fungsi ini aman dipanggil berulang kali.
+ * Juga memastikan direktori data dan media ada.
  * @async
  * @function initDatabase
  * @returns {Promise<void>}
  * @throws {Error} Jika gagal mengeksekusi perintah SQL untuk membuat tabel.
  */
 async function initDatabase() {
-    // Dapatkan atau buat instance database terlebih dahulu
-    const db = await getDb();
+    // Pastikan direktori ada sebelum mendapatkan koneksi DB
+    ensureDirectoryExists(dbDir);
+    ensureDirectoryExists(mediaDir); // <-- Pastikan direktori media juga ada
+
+    const db = await getDb(); // Ini akan membuka koneksi dan membuat dir jika diperlukan
 
     try {
-        // Buat tabel untuk chat history
         await db.exec(`
             CREATE TABLE IF NOT EXISTS chat_history (
                 chat_id TEXT PRIMARY KEY,
@@ -105,30 +106,27 @@ async function initDatabase() {
             )
         `);
 
-        // Buat tabel untuk pesan
-        // Menggunakan skema yang diperbarui sesuai diskusi
+        // Buat tabel untuk pesan - Dihapus mediaData, Ditambah filePath
         await db.exec(`
             CREATE TABLE IF NOT EXISTS messages (
                 id TEXT PRIMARY KEY, -- Message ID dari Baileys
                 chat_id TEXT, -- FOREIGN KEY ke chat_history
                 timestamp INTEGER, -- Unix timestamp (detik)
                 type TEXT, -- e.g., 'incoming', 'outgoing'
-                sender TEXT, -- customer JID for incoming, admin username for outgoing (ini yang di DB)
+                sender TEXT, -- customer JID for incoming, admin username for outgoing
                 initials TEXT, -- admin initials for outgoing
                 text TEXT, -- Text content (caption for media)
                 mediaType TEXT, -- Baileys message type string or custom ('text', 'location', etc.)
                 mimeType TEXT, -- Actual MIME type for media
-                fileName TEXT, -- Original file name for media
-                mediaData TEXT, -- Base64 string for media (WARNING: INEFFICIENT for large data, pertimbangkan penyimpanan file)
+                fileName TEXT, -- Original file name for media (for display)
+                filePath TEXT, -- Path to media file on server (relative to media dir)
                 snippet TEXT, -- Snippet untuk preview di daftar chat
                 unread BOOLEAN DEFAULT 1, -- Untuk incoming messages (1=true, 0=false)
 
-                -- Definisi Foreign Key constraint
                 FOREIGN KEY (chat_id) REFERENCES chat_history(chat_id) ON DELETE CASCADE
             )
         `);
 
-        // Buat tabel untuk admin
         await db.exec(`
             CREATE TABLE IF NOT EXISTS admins (
                 username TEXT PRIMARY KEY,
@@ -138,7 +136,6 @@ async function initDatabase() {
             )
         `);
 
-        // Buat tabel untuk template balasan cepat
         await db.exec(`
             CREATE TABLE IF NOT EXISTS quick_reply_templates (
                 id TEXT PRIMARY KEY, -- Gunakan shortcut sebagai ID yang unik
@@ -150,7 +147,6 @@ async function initDatabase() {
         console.log('[DATABASE] Skema database berhasil diinisialisasi/diverifikasi');
     } catch (error) {
         console.error('[DATABASE] Gagal menginisialisasi skema database:', error);
-        // Lempar kembali error fatal saat startup
         throw error;
     }
 }
@@ -172,60 +168,41 @@ async function saveChatHistory(chatHistory) {
     try {
         await db.run('BEGIN TRANSACTION');
 
-        // Hapus semua data yang ada untuk melakukan write-ulang
-        // Karena FOREIGN KEY ON DELETE CASCADE, menghapus dari chat_history akan menghapus pesan terkait.
+        // Hapus semua data yang ada
         await db.run('DELETE FROM chat_history');
-        // Opsional: Hapus pesan secara terpisah jika ingin memastikan, tapi cascade harusnya cukup.
-        // await db.run('DELETE FROM messages');
 
-
-        // Persiapkan statement untuk operasi INSERT baru
+        // Sesuaikan INSERT query untuk kolom filePath (dan hilangkan mediaData)
         const insertChatStmt = await db.prepare('INSERT INTO chat_history (chat_id, status, created_at) VALUES (?, ?, ?)');
         const insertMessageStmt = await db.prepare(
-            'INSERT INTO messages (id, chat_id, timestamp, type, sender, initials, text, mediaType, mimeType, fileName, mediaData, snippet, unread) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO messages (id, chat_id, timestamp, type, sender, initials, text, mediaType, mimeType, fileName, filePath, snippet, unread) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
 
-        // Iterasi melalui state chatHistory di memory
         for (const chatId in chatHistory) {
-            // Pastikan properti adalah milik objek itu sendiri, bukan dari prototype chain
             if (!Object.prototype.hasOwnProperty.call(chatHistory, chatId)) continue;
 
             const chatData = chatHistory[chatId];
 
-            // Validasi dasar struktur data chat
             if (!chatData || !Array.isArray(chatData.messages)) {
                 console.warn(`[DATABASE] Data chat tidak valid atau array messages missing/invalid untuk chatId: ${chatId}. Melewati.`);
                 continue;
             }
 
-            // Tambahkan chat baru ke tabel chat_history
-             // Ambil created_at dari pesan pertama jika ada, atau gunakan waktu saat ini sebagai fallback
             const firstMessageTimestamp = chatData.messages.length > 0 ? new Date(chatData.messages[0].timestamp).toISOString() : new Date().toISOString();
              await insertChatStmt.run(
                  chatId,
-                 chatData.status || 'open', // Default status 'open'
-                 firstMessageTimestamp // Gunakan timestamp pesan pertama atau waktu saat ini
+                 chatData.status || 'open',
+                 firstMessageTimestamp
              );
 
-            // Tambahkan pesan-pesan untuk chat ini ke tabel messages
             for (const message of chatData.messages) {
-                // Validasi dasar struktur data pesan
                 if (!message || typeof message !== 'object' || !message.id || !message.type) {
                     console.warn(`[DATABASE] Pesan tidak valid dalam chat ${chatId}:`, message, '. Melewati.');
                     continue;
                 }
 
-                 // Sesuaikan data pesan dari state memory agar sesuai dengan skema DB
-                 // 'sender' di DB adalah JID pengirim untuk incoming, username admin untuk outgoing
-                 // 'from' di memory state bisa jadi JID atau username admin.
-                 // 'initials' di DB hanya untuk pesan outgoing.
-                 const dbSender = message.type === 'incoming' ? message.from : message.from; // message.from di memory state untuk outgoing adalah username admin
+                 const dbSender = message.type === 'incoming' ? message.from : message.from;
                  const dbInitials = message.type === 'outgoing' ? message.initials : null;
-
-                 // Pastikan unread adalah 0 atau 1
                  const dbUnread = message.unread ? 1 : 0;
-
-                 // Konversi timestamp ISO string ke Unix timestamp (detik)
                  const dbTimestamp = message.timestamp ? Math.floor(new Date(message.timestamp).getTime() / 1000) : Math.floor(Date.now() / 1000);
 
 
@@ -236,28 +213,24 @@ async function saveChatHistory(chatHistory) {
                     message.type,
                     dbSender,
                     dbInitials,
-                    message.text || null, // Simpan null jika teks kosong
+                    message.text || null,
                     message.mediaType || null,
                     message.mimeType || null,
                     message.fileName || null,
-                    message.mediaData || null, // WARNING: Base64 data
-                    message.snippet || null, // Simpan null jika snippet kosong
+                    message.filePath || null, // <-- Simpan filePath, bukan mediaData
+                    message.snippet || null,
                     dbUnread
                 );
             }
         }
 
-        // Finalisasi prepared statements
         await insertChatStmt.finalize();
         await insertMessageStmt.finalize();
 
         await db.run('COMMIT');
-        // console.log('[DATABASE] Chat history dan pesan berhasil disimpan ke database'); // Log sukses
     } catch (error) {
-        // Rollback transaksi jika ada error selama proses
         await db.run('ROLLBACK');
         console.error('[DATABASE] Gagal menyimpan chat history dan pesan ke database (ROLLBACK):', error);
-        // Lempar kembali error agar pemanggil tahu transaksi gagal
         throw error;
     }
 }
@@ -277,62 +250,50 @@ async function loadChatHistory() {
     try {
         const chatHistory = {};
 
-        // Ambil semua chat dari tabel chat_history
         const chats = await db.all('SELECT chat_id, status FROM chat_history');
 
-        // Siapkan prepared statement untuk mengambil pesan per chat, diurutkan berdasarkan timestamp
-        // Ambil semua kolom yang relevan dari tabel messages
-        const messagesStmt = await db.prepare('SELECT id, timestamp, type, sender, initials, text, mediaType, mimeType, fileName, mediaData, snippet, unread FROM messages WHERE chat_id = ? ORDER BY timestamp ASC');
+        // Sesuaikan SELECT query untuk filePath (dan hilangkan mediaData)
+        const messagesStmt = await db.prepare('SELECT id, timestamp, type, sender, initials, text, mediaType, mimeType, fileName, filePath, snippet, unread FROM messages WHERE chat_id = ? ORDER BY timestamp ASC');
 
         for (const chat of chats) {
-            // Ambil pesan-pesan untuk chat ini menggunakan prepared statement
             const messageRows = await messagesStmt.all(chat.chat_id);
 
-            // Rekonstruksi objek pesan dari baris database
             const messages = messageRows.map(row => {
-                // Pastikan row adalah objek yang valid
                 if (!row || typeof row !== 'object' || !row.id) {
                      console.warn('[DATABASE] Melewati baris pesan dengan data tidak lengkap saat memuat:', row);
-                     return null; // Lewati baris yang tidak valid
+                     return null;
                 }
 
                 return {
                     id: row.id,
-                    chatId: chat.chat_id, // Tambahkan chatId ke objek pesan
-                    timestamp: row.timestamp ? new Date(parseInt(row.timestamp) * 1000).toISOString() : new Date().toISOString(), // Konversi Unix timestamp ke ISO string
-                    type: row.type || 'unknown', // Default type jika null
-                    // 'from' di objek pesan di memory state digunakan untuk menampilkan siapa pengirim di UI
-                    // Untuk incoming, pengirimnya adalah customer (sender kolom DB). Untuk outgoing, pengirimnya adalah admin (initials kolom DB).
-                    // Jika initials null (misal admin pertama belum set), fallback ke sender (yang harusnya username admin).
-                    from: row.type === 'incoming' ? row.sender : row.initials || row.sender || 'Unknown Admin', // Gunakan sender/initials sesuai type
-                    sender: row.sender || null, // Simpan sender asli dari DB juga
-                    initials: row.initials || null, // Simpan initials asli dari DB juga
-                    text: row.text || null, // Simpan null jika teks kosong di DB
+                    chatId: chat.chat_id,
+                    timestamp: row.timestamp ? new Date(parseInt(row.timestamp) * 1000).toISOString() : new Date().toISOString(),
+                    type: row.type || 'unknown',
+                    from: row.type === 'incoming' ? row.sender : row.initials || row.sender || 'Unknown Admin',
+                    sender: row.sender || null,
+                    initials: row.initials || null,
+                    text: row.text || null,
                     mediaType: row.mediaType || null,
                     mimeType: row.mimeType || null,
                     fileName: row.fileName || null,
-                    mediaData: row.mediaData || null, // WARNING: Base64 data loaded here can be huge
-                    snippet: row.snippet || null, // Simpan null jika snippet kosong di DB
-                    unread: row.unread === 1 ? true : false // Konversi INTEGER ke Boolean
+                    filePath: row.filePath || null, // <-- Muat filePath
+                    mediaData: null, // <-- Tidak lagi memuat mediaData dari DB
+                    snippet: row.snippet || null,
+                    unread: row.unread === 1 ? true : false
                 };
-            }).filter(msg => msg !== null); // Filter pesan yang mungkin null karena data tidak valid
+            }).filter(msg => msg !== null);
 
             chatHistory[chat.chat_id] = {
-                status: chat.status || 'open', // Default status open jika null
+                status: chat.status || 'open',
                 messages: messages
             };
         }
 
-        // Finalisasi prepared statement
         await messagesStmt.finalize();
-
-        // console.log(`[DATABASE] Chat history berhasil dimuat dari database. Total chat: ${Object.keys(chatHistory).length}`); // Log ini ada di backend.js
         return chatHistory;
     } catch (error) {
         console.error('[DATABASE] Gagal memuat chat history dari database:', error);
-        // Error SQLITE_ERROR di sini menandakan skema DB tidak cocok atau error DB lainnya
-        // Jika ini terjadi saat startup, aplikasi mungkin tidak bisa jalan dengan benar
-        throw error; // Lempar kembali error agar backend tahu ada masalah fatal
+        throw error;
     }
 }
 
@@ -348,7 +309,6 @@ async function loadChatHistory() {
 async function deleteChatHistory(chatId) {
     const db = await getDb();
 
-    // Validasi input chatId
     if (!chatId || typeof chatId !== 'string') {
         console.error('[DATABASE] deleteChatHistory: Chat ID tidak valid', chatId);
         return false;
@@ -359,15 +319,15 @@ async function deleteChatHistory(chatId) {
 
         // Hapus chat history. Karena FOREIGN KEY ON DELETE CASCADE di tabel 'messages',
         // pesan-pesan terkait akan otomatis terhapus.
+        // PERHATIAN: Ini TIDAK menghapus file media di folder media/. Itu perlu dilakukan terpisah jika diinginkan.
         const result = await db.run('DELETE FROM chat_history WHERE chat_id = ?', [chatId]);
 
         await db.run('COMMIT');
-        // console.log(`[DATABASE] Chat history untuk ${chatId} berhasil dihapus dari database`); // Log sukses di backend.js
-        return result.changes > 0; // Mengembalikan true jika setidaknya satu baris terpengaruh (chat_id ditemukan)
+        return result.changes > 0;
     } catch (error) {
         await db.run('ROLLBACK');
         console.error(`[DATABASE] Gagal menghapus chat history untuk ${chatId} dari database (ROLLBACK):`, error);
-        throw error; // Lempar error agar pemanggil tahu ada masalah
+        throw error;
     }
 }
 
@@ -384,24 +344,25 @@ async function deleteAllChatHistory() {
     try {
         await db.run('BEGIN TRANSACTION');
 
-        // Hapus semua pesan
+        // Hapus semua pesan (tidak menghapus file media di disk)
         await db.run('DELETE FROM messages');
 
         // Hapus semua chat history
         await db.run('DELETE FROM chat_history');
 
         await db.run('COMMIT');
-        console.log('[DATABASE] Semua chat history berhasil dihapus dari database'); // Log sukses
+        console.log('[DATABASE] Semua chat history berhasil dihapus dari database');
         return true;
     } catch (error) {
         await db.run('ROLLBACK');
         console.error('[DATABASE] Gagal menghapus semua chat history dari database (ROLLBACK):', error);
-        throw error; // Lempar error
+        throw error;
     }
 }
 
-// Fungsi-fungsi untuk operasi admin
-
+// --- Fungsi-fungsi Admin & Quick Reply (Tidak Berubah Sehubungan Perubahan Media) ---
+// (Sertakan kembali kode admin dan quick reply dari database.js asli Anda di sini)
+// ... Kode saveAdmins, loadAdmins, saveQuickReplyTemplates, loadQuickReplyTemplates ...
 /**
  * Menyimpan data admin ke database.
  * Menghapus semua admin yang ada di tabel admins, lalu menulis ulang dari objek state memory.
@@ -488,8 +449,6 @@ async function loadAdmins() {
         return {};
     }
 }
-
-// Fungsi-fungsi untuk operasi template balasan cepat
 
 /**
  * Menyimpan template balasan cepat ke database.
@@ -578,17 +537,18 @@ async function loadQuickReplyTemplates() {
     }
 }
 
+
 // Ekspor fungsi-fungsi yang akan digunakan di backend
 export {
-    // getDb, // Biasanya tidak perlu diekspor jika hanya digunakan internal oleh fungsi-fungsi di file ini
     initDatabase,
-    closeDatabase, // Diekspor untuk shutdown handling di backend
+    closeDatabase,
     saveChatHistory,
     loadChatHistory,
     deleteChatHistory,
     deleteAllChatHistory,
-    saveAdmins, // Diekspor untuk inisialisasi/update admin
-    loadAdmins, // Diekspor untuk memuat admin saat startup/login
-    saveQuickReplyTemplates, // Diekspor untuk menyimpan template dari backend
-    loadQuickReplyTemplates // Diekspor untuk memuat template saat startup
+    saveAdmins,
+    loadAdmins,
+    saveQuickReplyTemplates,
+    loadQuickReplyTemplates,
+    getDb // Ini tetap diekspor karena digunakan di backend.js untuk endpoint media
 };
