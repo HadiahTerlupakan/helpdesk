@@ -15,8 +15,8 @@ const io = new Server(server, {
 });
 import qrcode from 'qrcode-terminal';
 import session from 'express-session';
-import fs from 'fs';
-import path from 'path';
+import fs from 'fs'; // <-- Impor modul file system
+import path from 'path'; // <-- Impor modul path
 import pino from 'pino';
 import config from './config.js';
 import { fileURLToPath } from 'url';
@@ -24,9 +24,10 @@ import { randomBytes } from 'crypto'; // Untuk nama file sementara jika perlu
 import mime from 'mime-types'; // Untuk mendapatkan ekstensi dari mime type
 import { Buffer } from 'buffer'; // Import Buffer
 
-globalThis.Buffer = Buffer; // Memastikan Buffer tersedia secara global untuk kompatibilitas
+// Eksplisitkan Buffer ke global scope untuk kompatibilitas library
+globalThis.Buffer = Buffer;
 
-// SQLite Imports (perhatikan getDb sekarang diimpor)
+// SQLite Imports (perhatikan getDb, getMediaFilePathsForChat, getAllMediaFilePaths sekarang diimpor)
 import {
     initDatabase,
     closeDatabase,
@@ -38,7 +39,9 @@ import {
     loadAdmins,
     saveQuickReplyTemplates,
     loadQuickReplyTemplates,
-    getDb // <-- getDb diimpor untuk endpoint media
+    getDb, // <-- getDb diimpor untuk endpoint media
+    getMediaFilePathsForChat, // <-- Import fungsi baru
+    getAllMediaFilePaths // <-- Import fungsi baru
 } from './database.js';
 
 
@@ -58,6 +61,7 @@ const __dirname = path.dirname(__filename);
 
 const superAdminUsername = config.superAdminUsername;
 const mediaDir = path.join(__dirname, 'media'); // <-- Path ke folder media
+
 
 // Variabel state untuk koneksi WA (Baileys)
 let sock;
@@ -241,11 +245,13 @@ function cleanupAdminState(socketId, socket) {
     const adminInfo = getAdminInfoBySocketId(socketId);
     if (adminInfo) {
         const username = adminInfo.username;
-        if (!socket || !socket.id) {
-            console.error('[ADMIN] Error: Socket tidak valid saat membersihkan state untuk admin', username);
-            return null;
+        // Check if socket object is available and valid before trying to access its properties
+        if (!socket || !socket.id || typeof socket.id !== 'string') {
+            console.error('[ADMIN] Error: Invalid socket object provided during state cleanup for admin', username);
+            // Still proceed with cleanup if username is found via adminSockets[socketId]
         }
-        console.log(`[ADMIN] Membersihkan state untuk admin ${username} (Socket ID: ${socket.id})`);
+        console.log(`[ADMIN] Membersihkan state untuk admin ${username} (Socket ID: ${socket.id || 'N/A'})`);
+
 
         const chatsToRelease = Object.keys(pickedChats).filter(chatId => pickedChats[chatId] === username);
         for (const chatId of chatsToRelease) {
@@ -256,12 +262,20 @@ function cleanupAdminState(socketId, socket) {
         }
 
         delete adminSockets[socketId];
-        delete usernameToSocketId[username];
+        // Also remove from usernameToSocketId mapping, but only if the stored socketId matches the current one
+        // This prevents accidentally removing a *new* socketId if an admin rapidly reconnects.
+        if(usernameToSocketId[username] === socketId) {
+             delete usernameToSocketId[username];
+        } else {
+             console.warn(`[ADMIN] Did not remove usernameToSocketId mapping for ${username} as stored ID ${usernameToSocketId[username]} does not match disconnected ID ${socketId}.`);
+        }
+
 
         io.emit('update_online_admins', getOnlineAdminUsernames());
-        io.emit('initial_pick_status', pickedChats);
-
+        io.emit('initial_pick_status', pickedChats); // Send updated pick status
         return username;
+    } else {
+         console.warn(`[ADMIN] cleanupAdminState called for unknown socket ID ${socket.id || 'N/A'}.`);
     }
     return null;
 }
@@ -343,7 +357,7 @@ async function startApp() {
              }
 
              try {
-                 // Periksa apakah file ada
+                 // Periksa apakah file ada sebelum mencoba mengirim
                  await fs.promises.access(fullPath, fs.constants.R_OK);
                  // Kirim file
                  console.log(`[MEDIA] Melayani file: ${fullPath}`);
@@ -478,8 +492,6 @@ async function connectToWhatsApp() {
                     // Frontend perlu mengubah string ini menjadi data URL (e.g., 'data:image/png;base64,...')
                     // Baileys memberikan QR string biasa, bukan base64 secara default, jadi kita perlu mengkonversinya jika ingin mengirim base64.
                     // qrcode.generate juga bisa menghasilkan string atau stream. Mari kita gunakan qrcode.toDataURL jika perlu base64 di frontend.
-                    // Untuk kesederhanaan sekarang, kita kirim string mentah dan biarkan frontend (jika perlu) generate QR dari string,
-                    // atau kita bisa generate data URL di backend dan kirim data URL.
                     // Contoh menggunakan qrcode library untuk generate data URL:
                     qrcode.toDataURL(qr, { errorCorrectionLevel: 'H' }, function (err, url) {
                         if (err) {
@@ -632,8 +644,8 @@ async function connectToWhatsApp() {
                messageTextSnippet = messageProps?.caption ? messageProps.caption.substring(0, 100) + (messageProps.caption.length > 100 ? '...' : '') : `[${mediaType.replace('Message', '')}]`;
 
                try {
-                 // Assign buffer inside the try block
-                 buffer = await downloadMediaMessage(message, 'buffer', {}, { logger });
+                 // downloadMediaMessage atau internal Baileys di sini mungkin memerlukan Buffer
+                 buffer = await downloadMediaMessage(message, 'buffer', {}, { logger }); // <--- Ini baris tempat error buffer sebelumnya
                  if (buffer) {
                      // Dapatkan ekstensi dari mimeType atau tebak jika tidak ada
                      const fileExtension = getFileExtension(mimeType);
@@ -768,7 +780,7 @@ async function connectToWhatsApp() {
       } else {
          // Pesan sudah ada (misal dari sync atau duplikasi upsert)
          // Mungkin perlu update jika ada info tambahan, tapi umumnya diabaikan.
-         // Contoh: update status pesan dari pending ke sent/delivered/read (tapi Baileys handle ini di event lain)
+         // Contoh: update status pesan dari pending ke sent/delivered/read (tapi Baileys handle this di event lain)
           // console.log(`[WA] Duplicate message detected in upsert (ID: ${messageDataForHistory.id}), ignored adding to history.`);
       }
     }
@@ -818,9 +830,9 @@ io.on('connection', (socket) => {
              qrcode.toDataURL(currentQrCode, { errorCorrectionLevel: 'H' }, function (err, url) {
                 if (err) {
                     console.error('[WA] Gagal generate QR data URL saat admin login:', err);
-                    socket.emit('whatsapp_qr', 'Error generating QR');
+                    io.to(socketId).emit('whatsapp_qr', 'Error generating QR'); // Kirim pesan error
                 } else {
-                    socket.emit('whatsapp_qr', url);
+                    io.to(socketId).emit('whatsapp_qr', url); // Kirim data URL
                 }
             });
        }
@@ -906,7 +918,8 @@ io.on('connection', (socket) => {
       }
        if (existingSocketId && !io.sockets.sockets.get(existingSocketId)) {
             console.log(`[ADMIN] Admin ${username} login. Membersihkan state socket lama ${existingSocketId} yang sudah tidak aktif.`);
-            cleanupAdminState(existingSocketId);
+            // Pass socket object for proper cleanup logic within the helper
+            cleanupAdminState(existingSocketId, io.sockets.sockets.get(existingSocketId)); // Pass the old socket object if available
        }
 
       console.log(`[ADMIN] Login berhasil: ${username} (Socket ID: ${socket.id})`);
@@ -930,7 +943,8 @@ io.on('connection', (socket) => {
         const existingSocketId = usernameToSocketId[username];
         if (existingSocketId && existingSocketId !== socket.id && io.sockets.sockets.get(existingSocketId)) {
              console.warn(`[ADMIN] Admin ${username} mereconnect. Menutup socket lama ${existingSocketId}.`);
-             cleanupAdminState(existingSocketId);
+             // Pass socket object for proper cleanup logic within the helper
+             cleanupAdminState(existingSocketId, io.sockets.sockets.get(existingSocketId)); // Pass the old socket object
              setTimeout(() => {
                   const oldSocket = io.sockets.sockets.get(existingSocketId);
                   if (oldSocket) {
@@ -946,7 +960,8 @@ io.on('connection', (socket) => {
              }, 100);
         } else if (existingSocketId && !io.sockets.sockets.get(existingSocketId)) {
              console.log(`[ADMIN] Admin ${username} mereconnect. Socket lama ${existingSocketId} sudah tidak aktif. Membersihkan state lama.`);
-              cleanupAdminState(usernameToSocketId[username]);
+              // Pass null for socket object since it's gone
+              cleanupAdminState(usernameToSocketId[username], null);
         }
 
         console.log(`[ADMIN] Reconnect berhasil untuk ${username} (Socket ID: ${socket.id})`);
@@ -965,16 +980,17 @@ io.on('connection', (socket) => {
 
 
   socket.on('admin_logout', () => {
-    const username = cleanupAdminState(socket.id);
+    const username = cleanupAdminState(socket.id, socket); // Pass socket object to cleanup
     if (username) {
         console.log(`[ADMIN] Admin ${username} logout dari socket ${socket.id}.`);
-        socket.emit('clear_cache');
-        socket.emit('logout_success');
+        socket.emit('clear_cache'); // Signal frontend to clear cache and reload
+        // socket.emit('logout_success'); // No need, clear_cache will trigger reload
     } else {
          console.warn(`[ADMIN] Socket ${socket.id} mencoba logout tapi tidak terdaftar sebagai admin login.`);
          socket.emit('logout_failed', { message: 'Not logged in.' });
     }
   });
+
 
   socket.on('pick_chat', ({ chatId }) => {
     const adminInfo = getAdminInfoBySocketId(socket.id);
@@ -992,7 +1008,8 @@ io.on('connection', (socket) => {
       if (!chatEntry) {
           console.warn(`[PICK] Admin ${username} mengambil chat baru ${normalizedChatId} yang belum ada di history state.`);
            chatHistory[normalizedChatId] = { status: 'open', messages: [] };
-           saveChatHistoryToDatabase();
+           // No need to save to DB here, save happens when messages are added or status changes
+           // saveChatHistoryToDatabase();
       }
 
     if (pickedBy && pickedBy !== username) {
@@ -1002,30 +1019,41 @@ io.on('connection', (socket) => {
       pickedChats[normalizedChatId] = username;
       console.log(`[PICK] Admin ${username} mengambil/mereset pick chat ${normalizedChatId}`);
       io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: username });
-      io.emit('initial_pick_status', pickedChats);
+      io.emit('initial_pick_status', pickedChats); // Broadcast the full pick status state
+
 
       if (config.chatAutoReleaseTimeoutMinutes > 0) {
            startAutoReleaseTimer(normalizedChatId, username);
       }
 
+       // Mark incoming messages as read for this chat IF the current user picks it
        const updatedChatEntry = chatHistory[normalizedChatId];
        if (updatedChatEntry?.messages) {
            let changed = false;
+           // Iterate backwards from the end
            for (let i = updatedChatEntry.messages.length - 1; i >= 0; i--) {
                 if (!updatedChatEntry.messages[i] || typeof updatedChatEntry.messages[i] !== 'object') continue;
 
+                // Only mark incoming and unread messages
                 if (updatedChatEntry.messages[i].type === 'incoming' && updatedChatEntry.messages[i].unread) {
-                    updatedChatEntry.messages[i].unread = false;
-                    changed = true;
+                    updatedChatEntry.messages[i].unread = false; // Mark as read in state
+                    changed = true; // Mark that changes occurred
                 } else if (updatedChatEntry.messages[i].type === 'outgoing') {
-                    break;
+                     // Optimization: If we hit an outgoing message, all messages before it must have been read previously
+                     // in this chat's history context (unless imported). We can stop here.
+                     break;
                 }
            }
+           // Only save to DB and emit update if there were actual changes
            if (changed) {
-               console.log(`[MARK] Menandai pesan masuk sebagai dibaca untuk chat ${normalizedChatId} oleh ${adminInfo.username}.`);
-               saveChatHistoryToDatabase();
-               io.emit('update_chat_read_status', { chatId: normalizedChatId });
+               console.log(`[MARK] Menandai pesan masuk sebagai dibaca untuk chat ${normalizedChatId} oleh ${adminInfo.username} setelah pick.`);
+               saveChatHistoryToDatabase(); // Save updated state to DB (async)
+               io.emit('update_chat_read_status', { chatId: normalizedChatId }); // Notify frontend(s)
+           } else {
+               console.log(`[MARK] Tidak ada pesan masuk yang belum dibaca untuk ditandai di chat ${normalizedChatId}.`);
            }
+       } else {
+            console.warn(`[PICK] Chat ${normalizedChatId} history not found or invalid during pick read marking.`);
        }
     }
   });
@@ -1038,31 +1066,39 @@ io.on('connection', (socket) => {
     if (!normalizedChatId) return socket.emit('pick_error', { chatId, message: 'Chat ID tidak valid.' });
 
     const pickedBy = pickedChats[normalizedChatId];
+    // Allow release if picked by current user OR Super Admin
     if (pickedBy === username || isSuperAdmin(username)) {
-        if (pickedBy) {
-            clearAutoReleaseTimer(normalizedChatId);
-            delete pickedChats[normalizedChatId];
+        if (pickedBy) { // Only try to release if it's actually picked
+            clearAutoReleaseTimer(normalizedChatId); // Clear timer
+            delete pickedChats[normalizedChatId]; // Remove from state
             console.log(`[PICK] Admin ${username} melepas chat ${normalizedChatId}`);
-            io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null });
-             io.emit('initial_pick_status', pickedChats);
+            io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null }); // Notify clients of status change
+             io.emit('initial_pick_status', pickedChats); // Broadcast the full pick status state (redundant but safe)
             socket.emit('pick_success', { chatId: normalizedChatId, pickedBy: null, message: 'Chat berhasil dilepas.' });
         } else {
             console.warn(`[PICK] Admin ${username} mencoba melepas chat ${normalizedChatId} yang tidak diambil.`);
-             socket.emit('pick_error', { chatId: normalizedChatId, message: 'Chat ini tidak sedang diambil.' });
+             // If Super Admin tries to unpick a chat that isn't picked, treat as success (just clean up timer if any)
+             if (isSuperAdmin(username)) {
+                  clearAutoReleaseTimer(normalizedChatId);
+                  console.log(`[PICK] Super Admin ${username} mencoba melepas chat ${normalizedChatId} yang tidak diambil. Membersihkan timer jika ada.`);
+                   // No status change to emit if it wasn't picked by anyone
+                  socket.emit('pick_success', { chatId: normalizedChatId, pickedBy: null, message: 'Chat berhasil dilepas (tidak diambil oleh siapa pun).' });
+             } else {
+                  // Normal admin tries to unpick unpicked chat -> error
+                  socket.emit('pick_error', { chatId: normalizedChatId, message: 'Chat ini tidak sedang diambil oleh Anda.' });
+             }
         }
     } else if (pickedBy) {
        console.warn(`[PICK] Admin ${username} mencoba melepas chat ${normalizedChatId} yang diambil oleh ${pickedBy}. Akses ditolak.`);
        socket.emit('pick_error', { chatId: normalizedChatId, message: `Hanya ${pickedBy} atau Super Admin yang bisa melepas chat ini.` });
     } else {
-          if (isSuperAdmin(username)) {
-              console.log(`[PICK] Super Admin ${username} mencoba melepas chat ${normalizedChatId} yang tidak diambil. Membersihkan timer jika ada.`);
-              clearAutoReleaseTimer(normalizedChatId);
-              socket.emit('pick_success', { chatId: normalizedChatId, pickedBy: null, message: 'Chat berhasil dilepas (tidak diambil oleh siapa pun).' });
-          } else {
-               socket.emit('pick_error', { chatId: normalizedChatId, message: 'Chat ini tidak sedang diambil.' });
-          }
+          // Normal admin tries to unpick unpicked chat (handled in the first branch now)
+          // This else block might be redundant but kept for clarity if logic changes
+          // console.warn(`[PICK] Admin ${username} (not Super Admin) tried to unpick unpicked chat ${normalizedChatId}.`);
+          // socket.emit('pick_error', { chatId: normalizedChatId, message: 'Chat ini tidak sedang diambil oleh siapa pun.' });
     }
   });
+
 
   socket.on('delegate_chat', async ({ chatId, targetAdminUsername }) => {
       console.log(`[DELEGATE] Permintaan delegasi chat ${chatId} ke ${targetAdminUsername}`);
@@ -1085,42 +1121,59 @@ io.on('connection', (socket) => {
       }
 
       const currentPickedBy = pickedChats[normalizedChatId];
-      if (currentPickedBy !== senderAdminUsername && !isSuperAdmin(senderAdminUsername)) {
-          console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba delegasi chat ${normalizedChatId} yang diambil oleh ${currentPickedBy || 'tidak ada'}. Akses ditolak.`);
-          return socket.emit('delegate_error', { chatId: normalizedChatId, message: currentPickedBy ? `Chat ini sedang ditangani oleh ${currentPickedBy}.` : 'Chat ini belum diambil oleh Anda.' });
+      // Only sender admin or Super Admin can delegate a picked chat.
+      // Super Admin can delegate *any* open chat.
+      const chatEntry = chatHistory[normalizedChatId];
+      const chatStatus = chatEntry?.status || 'open';
+
+       if (chatStatus === 'closed') {
+           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan chat tertutup ${normalizedChatId}`);
+           return socket.emit('delegate_error', { chatId: normalizedChatId, message: 'Chat sudah ditutup. Tidak bisa didelegasikan.' });
+       }
+
+      // Check if user is authorized to delegate this specific chat
+      // User must be Super Admin OR (user must be the current picker AND chat is open)
+      const isAuthorizedToDelegate = isSuperAdmin(senderAdminUsername) || (currentPickedBy === senderAdminUsername && chatStatus === 'open');
+
+      if (!isAuthorizedToDelegate) {
+           const errorMsg = currentPickedBy ? `Hanya ${currentPickedBy} atau Super Admin yang bisa mendelegasikan chat ini.` : 'Ambil chat ini terlebih dahulu atau pastikan Anda Super Admin.';
+           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba delegasi chat ${normalizedChatId} yang diambil oleh ${currentPickedBy || 'tidak ada'}. Akses ditolak.`);
+           return socket.emit('delegate_error', { chatId: normalizedChatId, message: errorMsg });
       }
-      if (senderAdminUsername === targetAdminUsername) {
-          console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan ke diri sendiri.`);
-          return socket.emit('delegate_error', { chatId: normalizedChatId, message: 'Tidak bisa mendelegasikan ke diri sendiri.' });
+
+
+       if (!chatEntry) {
+          console.warn(`[DELEGATE] Admin ${senderAdminUsername} mendelegasikan chat baru ${normalizedChatId} yang belum ada di history state.`);
+           // Create minimal entry if it doesn't exist
+           chatHistory[normalizedChatId] = { status: 'open', messages: [] };
+           // Save to DB to ensure the chat_history entry exists for the delegate process
+           saveChatHistoryToDatabase(); // Async save
       }
+
       const targetAdminInfo = admins[targetAdminUsername];
       if (!targetAdminInfo) {
           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan ke admin target tidak dikenal: ${targetAdminUsername}`);
           return socket.emit('delegate_error', { chatId: normalizedChatId, message: `Admin target '${targetAdminUsername}' tidak ditemukan.` });
       }
+       if (senderAdminUsername === targetAdminUsername) {
+           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan ke diri sendiri.`);
+           return socket.emit('delegate_error', { chatId: normalizedChatId, message: 'Tidak bisa mendelegasikan ke diri sendiri.' });
+       }
 
-      const chatEntry = chatHistory[normalizedChatId];
-      if (chatEntry?.status === 'closed') {
-          console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan chat tertutup ${normalizedChatId}`);
-          return socket.emit('delegate_error', { chatId: normalizedChatId, message: 'Chat sudah ditutup. Tidak bisa didelegasikan.' });
-      }
-      if (!chatEntry) {
-          console.warn(`[DELEGATE] Admin ${senderAdminUsername} mendelegasikan chat baru ${normalizedChatId} yang belum ada di history state.`);
-           chatHistory[normalizedChatId] = { status: 'open', messages: [] };
-           saveChatHistoryToDatabase();
-      }
 
       console.log(`[DELEGATE] Admin ${senderAdminUsername} mendelegasikan chat ${normalizedChatId} ke ${targetAdminUsername}`);
-      clearAutoReleaseTimer(normalizedChatId);
-      pickedChats[normalizedChatId] = targetAdminUsername;
+      clearAutoReleaseTimer(normalizedChatId); // Clear old timer
+      pickedChats[normalizedChatId] = targetAdminUsername; // Update state
 
       if (config.chatAutoReleaseTimeoutMinutes > 0) {
-          startAutoReleaseTimer(normalizedChatId, targetAdminUsername);
+          startAutoReleaseTimer(normalizedChatId, targetAdminUsername); // Start new timer for target admin
       }
 
-      io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: targetAdminUsername });
-      io.emit('initial_pick_status', pickedChats);
+      io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: targetAdminUsername }); // Notify clients of status change
+      io.emit('initial_pick_status', pickedChats); // Broadcast the full pick status state
 
+
+      // Notify target admin if they are online
       const targetSocketId = usernameToSocketId[targetAdminUsername];
       if (targetSocketId && io.sockets.sockets.get(targetSocketId)) {
           io.to(targetSocketId).emit('chat_delegated_to_you', {
@@ -1129,12 +1182,14 @@ io.on('connection', (socket) => {
               message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} didelegasikan kepada Anda oleh ${senderAdminUsername}.`
           });
       } else {
-           console.warn(`[DELEGATE] Target admin ${targetAdminUsername} offline atau socket terputus, tidak mengirim notifikasi delegasi via Socket.IO.`);
+           console.warn(`[DELEGATE] Target admin ${targetAdminUsername} offline or socket disconnected, not sending delegation notification via Socket.IO.`);
+           // Optionally send a message to the sender admin indicating target is offline
            socket.emit('delegate_info', { chatId: normalizedChatId, targetAdminUsername, message: `Chat berhasil didelegasikan ke ${targetAdminUsername}, tetapi admin tersebut sedang offline.` });
       }
 
       socket.emit('delegate_success', { chatId: normalizedChatId, targetAdminUsername, message: `Chat berhasil didelegasikan ke ${targetAdminUsername}.` });
   });
+
 
   socket.on('reply_message', async ({ to, text, media }) => {
     const adminInfo = getAdminInfoBySocketId(socket.id);
@@ -1145,16 +1200,24 @@ io.on('connection', (socket) => {
     const username = adminInfo.username;
 
     const chatId = normalizeChatId(to);
-    if (!chatId || (!text?.trim() && !media?.data)) {
-        console.warn(`[REPLY] Admin ${username} mencoba kirim pesan dengan data tidak lengkap atau ID chat tidak valid.`);
-        return socket.emit('send_error', { to: chatId, text, message: 'Data tidak lengkap (ID chat, teks, atau media kosong) atau ID chat tidak valid.' });
+    if (!chatId) {
+        console.warn(`[REPLY] Admin ${username} mencoba kirim pesan dengan ID chat tidak valid.`);
+        return socket.emit('send_error', { to: chatId, text, message: 'Chat ID tidak valid.' });
     }
+     // Only allow sending if text or media data is actually present
+     if (!text?.trim() && (!media || !media.data)) {
+         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan kosong ke ${chatId}.`);
+         return socket.emit('send_error', { to: chatId, text, media, message: 'Tidak ada konten valid untuk dikirim.' });
+     }
+
+
     if (!sock || sock.ws?.readyState !== sock.ws.OPEN) {
         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan, tapi koneksi WA tidak siap.`);
         return socket.emit('send_error', { to: chatId, text, media, message: 'Koneksi WhatsApp belum siap. Silakan coba lagi nanti.' });
     }
 
     const pickedBy = pickedChats[chatId];
+    // Allow reply if picked by current user OR is Super Admin
     const canReply = pickedBy === username || isSuperAdmin(username);
 
     if (!canReply) {
@@ -1171,6 +1234,8 @@ io.on('connection', (socket) => {
      if (!chatEntry) {
           console.log(`[REPLY] Admin ${username} mengirim pesan ke chat baru ${chatId} yang belum ada di history state.`);
           chatHistory[chatId] = { status: 'open', messages: [] };
+          // No need to save to DB here, save happens after message is sent/added
+          // saveChatHistoryToDatabase();
       }
 
     let sentMsgResult;
@@ -1178,15 +1243,16 @@ io.on('connection', (socket) => {
     let sentMimeType = null;
     let sentFileName = null;
     let sentFilePath = null; // <-- Simpan filePath untuk pesan keluar
-    let sentTextContentForHistory = text?.trim() || '';
+    let sentTextContentForHistory = text?.trim() || ''; // Original text from frontend without initials
 
     try {
       const adminInfoFromAdmins = admins[username];
       const adminInitials = (adminInfoFromAdmins?.initials || username.substring(0, 3).toUpperCase()).substring(0,3);
 
+      // Append initials to the text sent to WhatsApp ONLY if text exists OR if sending media with *no* caption
       const textForSendingToWA = sentTextContentForHistory.length > 0
         ? `${sentTextContentForHistory}\n\n-${adminInitials}`
-        : (media ? `-${adminInitials}` : '');
+        : (media && !sentTextContentForHistory ? `-${adminInitials}` : ''); // Only add initials if media but no caption
 
 
       let mediaBuffer = null;
@@ -1203,13 +1269,13 @@ io.on('connection', (socket) => {
 
                if (sentMediaType === 'unknown') {
                     console.warn(`[REPLY] Tipe media tidak didukung untuk dikirim: ${media.type}`);
-                    socket.emit('send_error', { to: chatId, text, media, message: 'Tipe media tidak didukung.' });
+                    socket.emit('send_error', { to: chatId, text: sentTextContentForHistory, media, message: 'Tipe media tidak didukung.' });
                     return;
                }
 
            } catch (bufferError) {
                console.error('[REPLY] Gagal membuat buffer dari Base64 media:', bufferError);
-               socket.emit('send_error', { to: chatId, text, media, message: 'Gagal memproses data media.' });
+               socket.emit('send_error', { to: chatId, text: sentTextContentForHistory, media, message: 'Gagal memproses data media.' });
                return;
            }
       }
@@ -1219,6 +1285,7 @@ io.on('connection', (socket) => {
         const mediaOptions = {
           mimetype: sentMimeType,
           fileName: sentFileName,
+          // Caption is added to the textForSendingToWA variable, include it if not empty
           caption: textForSendingToWA.length > 0 ? textForSendingToWA : undefined
         };
 
@@ -1229,41 +1296,54 @@ io.on('connection', (socket) => {
         } else if (sentMediaType === 'videoMessage') {
              sentMsgResult = await sock.sendMessage(chatId, { video: mediaBuffer, ...mediaOptions });
         } else if (sentMediaType === 'audioMessage') {
-           const isVoiceNote = media.isVoiceNote || mediaOptions.mimetype === 'audio/ogg; codecs=opus' || mediaOptions.mimetype === 'audio/mpeg' || mediaOptions.mimetype === 'audio/wav'; // Assume isVoiceNote prop from frontend for VN intent
+           // Check if it's intended as a voice note based on client hint or mime type
+           const isVoiceNote = media.isVoiceNote || mediaOptions.mimetype === 'audio/ogg; codecs=opus'; // Common VN MIME
 
             if (isVoiceNote) {
+                 // For Voice Notes, typically no caption attached. Send PTT audio.
                  sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: true });
-                 sentFileName = 'Voice Note'; // Override filename for VN
-                 // Jika ada caption untuk VN, kirim terpisah
-                 if (sentTextContentForHistory.length > 0) { // Use original text content for separate message
-                     console.log(`[WA] Mengirim teks caption VN terpisah ke ${chatId}`);
-                     // Optional: Kirim teksnya tanpa inisial atau dengan inisial tergantung preferensi
+                 sentFileName = 'Voice Note'; // Override filename for VN display
+                 // If there was original text content, send it as a separate message
+                 if (sentTextContentForHistory && sentTextContentForHistory.length > 0) {
+                      console.log(`[WA] Mengirim teks caption VN terpisah ke ${chatId}`);
+                     // Send original text + initials as a separate text message
                      await sock.sendMessage(chatId, { text: `${sentTextContentForHistory}\n\n-${adminInitials}` });
-                     // Set sentTextContentForHistory to null for the media message history entry
-                     sentTextContentForHistory = null;
+                     // Note: This separate text message is currently NOT added to history here.
+                     // It will be added to history if Baileys upserts it later.
                  }
+                 sentTextContentForHistory = null; // Clear text for the media message history entry
+
             } else {
+                 // For normal audio files, send with caption if available
                  sentMsgResult = await sock.sendMessage(chatId, { audio: mediaBuffer, mimetype: mediaOptions.mimetype, ptt: false, caption: mediaOptions.caption });
             }
 
         } else if (sentMediaType === 'documentMessage') {
              sentMsgResult = await sock.sendMessage(chatId, { document: mediaBuffer, ...mediaOptions });
+        } else if (sentMediaType === 'stickerMessage') {
+             // Stickers usually have no caption. Send without text.
+             sentMsgResult = await sock.sendMessage(chatId, { sticker: mediaBuffer });
+              sentFileName = 'Stiker'; // Override filename for display
+              sentTextContentForHistory = null; // Stickers don't have text content in history often
         }
          // Tidak perlu case default lagi karena sudah dicek di atas
-      } else {
-        // Kirim hanya teks jika tidak ada media atau mediaBuffer gagal dibuat
-        if (textForSendingToWA.trim().length > 0) {
+      } else if (textForSendingToWA.trim().length > 0) {
+        // If no mediaBuffer or mediaBuffer processing failed, send only text
+        // Use textForSendingToWA which includes initials
            console.log(`[WA] Mengirim teks ke ${chatId} oleh ${username}...`);
            sentMsgResult = await sock.sendMessage(chatId, { text: textForSendingToWA });
             sentMediaType = 'conversation';
             sentMimeType = 'text/plain';
             sentFileName = null;
-        } else {
-            console.warn(`[REPLY] Admin ${username} mencoba kirim pesan kosong (hanya spasi atau media invalid?).`);
-            socket.emit('send_error', { to: chatId, text: sentTextContentForHistory, media, message: 'Tidak ada konten valid untuk dikirim.' });
-            return;
-        }
+            // sentTextContentForHistory remains the original text
+      } else {
+          // This case should be caught by the initial check (!text?.trim() && (!media || !media.data)),
+          // but as a fallback:
+           console.warn(`[REPLY] Admin ${username} mencoba kirim pesan kosong (catch-all).`);
+           socket.emit('send_error', { to: chatId, text: sentTextContentForHistory, media, message: 'Tidak ada konten valid untuk dikirim.' });
+           return;
       }
+
 
       const sentMsg = Array.isArray(sentMsgResult) ? sentMsgResult[0] : sentMsgResult;
 
@@ -1273,7 +1353,9 @@ io.on('connection', (socket) => {
           return;
       }
 
-      // Jika pesan adalah media dan buffer berhasil dibuat/didapat
+      // If the message sent was media AND buffer was successfully created/obtained
+      // we need to save the buffer to a file on the server for history display later.
+      // This happens *after* successful sending via sock.sendMessage to get the Baileys message ID.
       if (mediaBuffer && sentMediaType !== 'unknown') {
            try {
                // Dapatkan ekstensi dari mimeType atau tebak jika tidak ada
@@ -1292,9 +1374,15 @@ io.on('connection', (socket) => {
                // File gagal disimpan, tapi pesan sudah terkirim di WA.
                // Lanjutkan, tapi log error dan set filePath ke null.
                sentFilePath = null;
-               // Ini akan menyebabkan media tidak muncul di history UI, tapi pesan teks/captionnya tetap ada.
+               // Ini akan menyebabkan media tidak muncul di history UI jika dimuat dari DB.
+               // Media yang baru dikirim juga tidak bisa dibuka di modal karena tidak ada path.
+               // Frontend logic might need adjustment to handle this case (e.g., show error placeholder for media).
            }
+      } else if (sentMediaType === 'conversation' || sentMediaType === 'text') {
+           // If it was a text message, ensure filePath is explicitly null
+           sentFilePath = null;
       }
+
 
       // Objek pesan untuk disimpan ke state memory dan database
       const outgoingMessageData = {
@@ -1304,10 +1392,10 @@ io.on('connection', (socket) => {
         text: sentTextContentForHistory || null, // Teks asli dari frontend, bukan yang ditambah inisial
         mediaType: sentMediaType,
         mimeType: sentMimeType,
-        // mediaData: null, // Tidak lagi menyimpan base64
-        filePath: sentFilePath, // Simpan path file jika ada
+        // mediaData: null, // Tidak lagi menyimpan base64 di state/DB
+        filePath: sentFilePath, // Simpan path file jika ada dan berhasil disimpan
         fileName: sentFileName, // Original filename for display
-        initials: adminInitials,
+        initials: adminInitials, // Simpan inisial admin
         timestamp: sentMsg.messageTimestamp
           ? new Date(parseInt(sentMsg.messageTimestamp) * 1000).toISOString()
           : new Date().toISOString(),
@@ -1315,7 +1403,8 @@ io.on('connection', (socket) => {
         unread: false, // Pesan keluar tidak perlu unread
         snippet: sentTextContentForHistory?.substring(0, 100) + (sentTextContentForHistory?.length > 100 ? '...' : '')
                  || sentFileName
-                 || `[${sentMediaType?.replace('Message', '') || 'Media'}]`
+                 || (sentMediaType && sentMediaType !== 'text' ? `[${sentMediaType?.replace('Message', '') || 'Media'}]` : '')
+                 || '[Pesan Keluar]', // Fallback snippet
       };
 
       const dbChatId = chatId;
@@ -1334,16 +1423,15 @@ io.on('connection', (socket) => {
             chatHistory[dbChatId].messages.push(outgoingMessageData); // Simpan ke state memory (dan database)
             saveChatHistoryToDatabase(); // Simpan ke DB (juga tanpa base64 mediaData)
        } else {
-           // Pesan keluar sudah ada, mungkin diupdate dengan info tambahan jika diperlukan
-           // Untuk saat ini, kita asumsikan objek awal sudah cukup lengkap
-           // console.warn(`[HISTORY] Pesan keluar duplikat terdeteksi (ID: ${outgoingMessageData.id}), diabaikan penambahannya ke history state.`);
-           // Atau update jika timestamp/info lain berubah?
+           // Pesan keluar sudah ada (misal dari upsert Baileys setelah kita kirim), update info yang mungkin baru didapat (misal timestamp, status)
+           console.log(`[HISTORY] Mengupdate pesan keluar (ID: ${outgoingMessageData.id}) di chat ${chatId}.`);
+           // Perbarui objek yang sudah ada di state dengan data terbaru
            chatHistory[dbChatId].messages[existingMessageIndex] = {
-               ...chatHistory[dbChatId].messages[existingMessageIndex], // Keep existing properties
-               ...outgoingMessageData // Overwrite with new data (like final timestamp, etc)
+               ...chatHistory[dbChatId].messages[existingMessageIndex], // Pertahankan properti yang mungkin belum ada di outgoingMessageData
+               ...outgoingMessageData // Timpa dengan data terbaru
+               // Mungkin perlu logika lebih canggih jika status pesan perlu diupdate (delivered, read)
            };
-            console.log(`[HISTORY] Mengupdate pesan keluar (ID: ${outgoingMessageData.id}) di chat ${chatId}.`);
-            saveChatHistoryToDatabase(); // Simpan update ke DB
+           saveChatHistoryToDatabase(); // Simpan update ke DB
        }
 
 
@@ -1362,7 +1450,7 @@ io.on('connection', (socket) => {
           chatId: outgoingMessageData.chatId
       });
 
-      // Reset timer auto-release jika diaktifkan
+      // Reset timer auto-release jika diaktifkan dan admin yang mengirim adalah picker
       if (pickedChats[chatId] === username && config.chatAutoReleaseTimeoutMinutes > 0) {
            startAutoReleaseTimer(chatId, username);
       }
@@ -1373,8 +1461,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ... (kode mark_as_read, delete_chat, delete_all_chats, add_admin, delete_admin,
-  //      close_chat, open_chat, template handlers dari backend.js asli) ...
+  // ... (kode mark_as_read, add_admin, delete_admin,
+  //      close_chat, open_chat, template handlers) ...
 
   socket.on('mark_as_read', ({ chatId }) => {
      const adminInfo = getAdminInfoBySocketId(socket.id);
@@ -1392,6 +1480,7 @@ io.on('connection', (socket) => {
      const dbChatId = normalizedChatId;
 
      const pickedBy = pickedChats[normalizedChatId];
+     // Allow marking as read if picked by current user OR Super Admin
      if (isSuperAdmin(adminInfo.username) || pickedBy === adminInfo.username) {
          const chatEntry = chatHistory[dbChatId];
          if (chatEntry?.messages) {
@@ -1400,16 +1489,20 @@ io.on('connection', (socket) => {
                    if (!chatEntry.messages[i] || typeof chatEntry.messages[i] !== 'object') continue;
 
                    if (chatEntry.messages[i].type === 'incoming' && chatEntry.messages[i].unread) {
-                       chatEntry.messages[i].unread = false;
-                       changed = true;
+                       chatEntry.messages[i].unread = false; // Mark as read in state
+                       changed = true; // Mark that changes occurred
                    } else if (chatEntry.messages[i].type === 'outgoing') {
-                        break; // Stop marking unread once we hit an outgoing message
+                        // Optimization: Stop marking unread once we hit an outgoing message
+                        break;
                    }
               }
+              // Only save to DB and emit update if there were actual changes
               if (changed) {
                   console.log(`[MARK] Menandai pesan masuk sebagai dibaca untuk chat ${normalizedChatId} oleh ${adminInfo.username}.`);
-                  saveChatHistoryToDatabase();
-                  io.emit('update_chat_read_status', { chatId: normalizedChatId });
+                  saveChatHistoryToDatabase(); // Save updated state to DB (async)
+                  io.emit('update_chat_read_status', { chatId: normalizedChatId }); // Notify frontend(s)
+              } else {
+                  console.log(`[MARK] Tidak ada pesan masuk yang belum dibaca untuk ditandai di chat ${normalizedChatId}.`);
               }
          } else {
              console.warn(`[MARK] Chat ${normalizedChatId} not found in state or has no messages to mark as read.`);
@@ -1419,6 +1512,7 @@ io.on('connection', (socket) => {
      }
    });
 
+    // --- START: MODIFIED delete_chat HANDLER ---
     socket.on('delete_chat', async ({ chatId }) => {
         const adminInfo = getAdminInfoBySocketId(socket.id);
         if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
@@ -1434,31 +1528,68 @@ io.on('connection', (socket) => {
 
         console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menghapus chat history untuk ${normalizedChatId}`);
 
-        // NOTE: Penghapusan chat history dari DB TIDAK menghapus file media terkait di folder media/.
-        // Jika ingin menghapus file, Anda perlu query dulu semua file paths dari chat_id ini di tabel messages
-        // SEBELUM menghapus dari chat_history, lalu hapus file-file tersebut secara manual.
-        // Ini menambahkan kompleksitas yang cukup besar dan risiko kehilangan data jika gagal.
-        // Untuk saat ini, file media akan tetap ada di disk meskipun chat history dihapus.
+        // --- START: Delete associated media files ---
+        try {
+            // 1. Ambil daftar file paths dari database sebelum menghapus catatan pesan
+            const filePathsToDelete = await getMediaFilePathsForChat(normalizedChatId);
+            console.log(`[SUPERADMIN] Menemukan ${filePathsToDelete.length} file media untuk dihapus untuk chat ${normalizedChatId}.`);
 
+            // 2. Hapus file-file tersebut dari sistem file
+            for (const filename of filePathsToDelete) {
+                // Tambahkan validasi dasar untuk nama file
+                if (!filename || typeof filename !== 'string' || filename.includes('..')) {
+                    console.warn(`[SUPERADMIN] Melewati penghapusan file media dengan nama invalid: ${filename}`);
+                    continue;
+                }
+                const fullPath = path.join(mediaDir, filename);
+                try {
+                    // Gunakan fs.promises.unlink untuk menghapus file
+                    await fs.promises.unlink(fullPath);
+                    console.log(`[SUPERADMIN] File media berhasil dihapus: ${filename}`);
+                } catch (fileError) {
+                    // Tangani jika file tidak ditemukan atau error lainnya
+                    if (fileError.code === 'ENOENT') {
+                        console.warn(`[SUPERADMIN] File media tidak ditemukan saat mencoba menghapus: ${fullPath} (mungkin sudah terhapus?)`);
+                    } else {
+                        console.error(`[SUPERADMIN] Gagal menghapus file media ${fullPath}:`, fileError);
+                    }
+                    // Lanjutkan meskipun satu file gagal dihapus
+                }
+            }
+            console.log(`[SUPERADMIN] Proses penghapusan file media untuk chat ${normalizedChatId} selesai.`);
+        } catch (queryError) {
+            console.error(`[SUPERADMIN] Gagal mengambil filePaths untuk dihapus untuk chat ${normalizedChatId}:`, queryError);
+            // Log error saat query, tetapi tetap lanjutkan dengan penghapusan database
+            // karena record database tetap perlu dihapus.
+        }
+        // --- END: Delete associated media files ---
+
+
+        // Lanjutkan dengan penghapusan dari state memory dan database
         if (chatHistory[normalizedChatId]) {
+            // Hapus dari state memory frontend
             delete chatHistory[normalizedChatId];
+            // Hapus pick status jika chat ini diambil
             if (pickedChats[normalizedChatId]) {
                 clearAutoReleaseTimer(normalizedChatId);
                 delete pickedChats[normalizedChatId];
             }
 
             try {
+                // 3. Hapus record dari database (ini juga akan menghapus messages terkait karena ON DELETE CASCADE)
                 const success = await deleteChatHistory(normalizedChatId);
 
                 if (success) {
+                    // Beri tahu klien bahwa chat dihapus
                     io.emit('chat_history_deleted', { chatId: normalizedChatId });
-                    io.emit('initial_pick_status', pickedChats);
-                    socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dihapus (metadata).` });
+                    io.emit('initial_pick_status', pickedChats); // Update status pick di semua klien
+                    socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dihapus (termasuk media file).` }); // Update success message
                 } else {
-                     console.warn(`[SUPERADMIN] Chat ${normalizedChatId} not found in DB for deletion, but removed from state.`);
-                     io.emit('chat_history_deleted', { chatId: normalizedChatId });
-                     io.emit('initial_pick_status', pickedChats);
-                     socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dihapus (dari state).` });
+                     console.warn(`[SUPERADMIN] Chat ${normalizedChatId} not found in DB for deletion, but removed from state. Media files were processed.`);
+                     io.emit('chat_history_deleted', { chatId: normalizedChatId }); // Tetap beri tahu klien jika dihapus dari state
+                     io.emit('initial_pick_status', pickedChats); // Update status pick
+                     // It's okay to report success if state and files are gone, database might have been inconsistent anyway.
+                     socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dihapus (dari state & media file). DB mungkin tidak konsisten.` }); // Update success message
                 }
             } catch (error) {
                  console.error(`[SUPERADMIN] Gagal menghapus chat ${normalizedChatId} dari database:`, error);
@@ -1469,47 +1600,89 @@ io.on('connection', (socket) => {
              socket.emit('superadmin_error', { message: 'Chat tidak ditemukan dalam history state.' });
         }
     });
+    // --- END: MODIFIED delete_chat HANDLER ---
 
+    // --- START: MODIFIED delete_all_chats HANDLER ---
      socket.on('delete_all_chats', async () => {
-        const adminInfo = getAdminInfoBySocketId(socket.id);
-        if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
-             console.warn(`[SUPERADMIN] Akses ditolak: Admin ${adminInfo?.username} mencoba menghapus semua chat.`);
-            return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa menghapus semua chat.' });
-        }
+      const adminInfo = getAdminInfoBySocketId(socket.id);
+      if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
+           console.warn(`[SUPERADMIN] Akses ditolak: Admin ${adminInfo?.username} mencoba menghapus semua chat.`);
+          return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa menghapus semua chat.' });
+      }
 
-         console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menghapus SEMUA chat history.`);
+       console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} menghapus SEMUA chat history.`);
 
-         // NOTE: Penghapusan ini TIDAK menghapus file media di folder media/.
-         // Menghapus semua file di folder media/ secara otomatis saat deleteAllChats
-         // memiliki risiko tinggi. Pertimbangkan menghapus file secara manual jika perlu.
+       // --- START: Delete ALL media files ---
+       try {
+          // 1. Ambil daftar SEMUA file paths dari database sebelum menghapus semua catatan pesan
+          const allFilePathsToDelete = await getAllMediaFilePaths();
+          console.log(`[SUPERADMIN] Menemukan ${allFilePathsToDelete.length} file media untuk dihapus (SEMUA).`);
 
-         const chatIdsWithTimers = Object.keys(chatReleaseTimers);
-         if (chatIdsWithTimers.length > 0) {
-              console.log(`[TIMER] Membersihkan ${chatIdsWithTimers.length} timer auto-release tersisa sebelum menghapus semua chat history...`);
-              for (const chatId of [...chatIdsWithTimers]) {
-                   clearAutoReleaseTimer(chatId);
+          // 2. Hapus file-file tersebut dari sistem file
+          for (const filename of allFilePathsToDelete) {
+               // Tambahkan validasi dasar untuk nama file
+               if (!filename || typeof filename !== 'string' || filename.includes('..')) {
+                   console.warn(`[SUPERADMIN] Melewati penghapusan file media dengan nama invalid: ${filename}`);
+                   continue;
+               }
+              const fullPath = path.join(mediaDir, filename);
+              try {
+                  // Gunakan fs.promises.unlink untuk menghapus file
+                   // Periksa dulu apakah file ada untuk menghindari error jika sudah terhapus
+                   await fs.promises.access(fullPath, fs.constants.F_OK);
+                  await fs.promises.unlink(fullPath);
+                  console.log(`[SUPERADMIN] File media berhasil dihapus: ${filename}`);
+              } catch (fileError) {
+                   if (fileError.code === 'ENOENT') {
+                       console.warn(`[SUPERADMIN] File media tidak ditemukan saat mencoba menghapus: ${fullPath} (mungkin sudah terhapus?)`);
+                   } else {
+                       console.error(`[SUPERADMIN] Gagal menghapus file media ${fullPath}:`, fileError);
+                   }
+                   // Lanjutkan meskipun satu file gagal dihapus
               }
-         }
-         Object.keys(pickedChats).forEach(key => delete pickedChats[key]);
+          }
+          console.log(`[SUPERADMIN] Proses penghapusan SEMUA file media selesai.`);
+       } catch (queryError) {
+           console.error(`[SUPERADMIN] Gagal mengambil SEMUA filePaths untuk dihapus:`, queryError);
+           // Log error saat query, tetapi tetap lanjutkan dengan penghapusan database
+       }
+       // --- END: Delete ALL media files ---
 
-         chatHistory = {}; // Reset state
-
-         try {
-            const success = await deleteAllChatHistory();
-
-            if (success) {
-                io.emit('all_chat_history_deleted');
-                io.emit('initial_pick_status', pickedChats);
-                socket.emit('superadmin_success', { message: 'Semua chat history berhasil dihapus (metadata).' });
-            } else {
-                 console.error(`[SUPERADMIN] Gagal menghapus semua chat dari database.`);
-                 socket.emit('superadmin_error', { message: 'Gagal menghapus semua chat dari database.' });
+       // Bersihkan state memory (picked chats, chat history, timers)
+       const chatIdsWithTimers = Object.keys(chatReleaseTimers);
+       if (chatIdsWithTimers.length > 0) {
+            console.log(`[TIMER] Membersihkan ${chatIdsWithTimers.length} timer auto-release tersisa sebelum menghapus semua chat history...`);
+            for (const chatId of [...chatIdsWithTimers]) {
+                 clearAutoReleaseTimer(chatId);
             }
-         } catch (error) {
-             console.error(`[SUPERADMIN] Error saat menghapus semua chat dari database:`, error);
-             socket.emit('superadmin_error', { message: 'Error saat menghapus semua chat dari database.' });
-         }
-     });
+       }
+       Object.keys(pickedChats).forEach(key => delete pickedChats[key]);
+       chatHistory = {}; // Reset entire chat history state
+
+
+       try {
+          // 3. Hapus semua record dari database (ini juga akan menghapus messages terkait karena ON DELETE CASCADE)
+          const success = await deleteAllChatHistory();
+
+          if (success) {
+              // Beri tahu klien bahwa semua chat dihapus
+              io.emit('all_chat_history_deleted');
+              io.emit('initial_pick_status', pickedChats); // Update status pick
+              socket.emit('superadmin_success', { message: 'Semua chat history berhasil dihapus (metadata & media file).' }); // Update success message
+          } else {
+               console.error(`[SUPERADMIN] Gagal menghapus semua chat dari database.`);
+               // It's okay to report success if state and files are gone, database might have been inconsistent anyway.
+               io.emit('all_chat_history_deleted'); // Still signal frontend to clear UI
+               io.emit('initial_pick_status', pickedChats); // Update status pick
+               socket.emit('superadmin_success', { message: 'Semua chat history berhasil dihapus (dari state & media file). DB mungkin tidak konsisten.' }); // Update success message
+          }
+       } catch (error) {
+           console.error(`[SUPERADMIN] Error saat menghapus semua chat dari database:`, error);
+           socket.emit('superadmin_error', { message: 'Error saat menghapus semua chat dari database.' });
+       }
+   });
+   // --- END: MODIFIED delete_all_chats HANDLER ---
+
 
      socket.on('add_admin', async ({ username, password, initials, role }) => {
         console.log(`[SUPERADMIN] Menerima permintaan tambah admin: ${username}`);
@@ -1548,7 +1721,7 @@ io.on('connection', (socket) => {
          const updatedAdmins = {
             ...admins,
              [username]: {
-                 password: password,
+                 password: password, // PERTIMBANGKAN HASHING PASSWORD DI PRODUKSI!
                  initials: cleanedInitials,
                  role: role
              }
@@ -1598,9 +1771,14 @@ io.on('connection', (socket) => {
            const targetSocketId = usernameToSocketId[usernameToDelete];
            if(targetSocketId && io.sockets.sockets.get(targetSocketId)) {
                 console.log(`[SUPERADMIN] Admin ${usernameToDelete} online, membersihkan state dan memutuskan koneksi socket ${targetSocketId}.`);
-                cleanupAdminState(targetSocketId);
+                cleanupAdminState(targetSocketId, io.sockets.sockets.get(targetSocketId)); // Pass socket object
                  try {
-                     io.sockets.sockets.get(targetSocketId).disconnect(true);
+                     // Give frontend a moment to receive cleanup state before disconnecting
+                     setTimeout(() => {
+                         const oldSocket = io.sockets.sockets.get(targetSocketId);
+                         if(oldSocket) oldSocket.disconnect(true);
+                         console.log(`[SUPERADMIN] Socket lama ${targetSocketId} disconnected.`);
+                     }, 100); // Short delay
                  } catch (e) {
                      console.error(`[SUPERADMIN] Error disconnecting socket ${targetSocketId} for deleted admin ${usernameToDelete}:`, e);
                  }
@@ -1619,7 +1797,7 @@ io.on('connection', (socket) => {
                 io.emit('update_online_admins', getOnlineAdminUsernames());
                 io.emit('initial_pick_status', pickedChats);
            } else {
-               console.log(`[SUPERADMIN] Admin ${usernameToDelete} tidak online. Melanjutkan penghapusan.`);
+               console.log(`[SUPERADMIN] Admin ${usernameToDelete} tidak online dan tidak ada state aktif. Melanjutkan penghapusan.`);
            }
 
            const updatedAdmins = { ...admins };
@@ -1659,6 +1837,7 @@ io.on('connection', (socket) => {
         }
 
         const pickedBy = pickedChats[normalizedChatId];
+        // Allow close if picked by current user OR Super Admin
         if (isSuperAdmin(username) || pickedBy === username) {
             if (chatEntry.status === 'closed') {
                  console.warn(`[CHAT STATUS] Admin ${username} mencoba tutup chat ${normalizedChatId} yang sudah tertutup.`);
@@ -1666,13 +1845,13 @@ io.on('connection', (socket) => {
             }
 
             console.log(`[CHAT STATUS] Admin ${username} menutup chat ${normalizedChatId}`);
-            chatEntry.status = 'closed'; // Update state
+            chatEntry.status = 'closed'; // Update state in memory
 
-            if (pickedBy) {
+            if (pickedBy) { // If the chat was picked, release it and update pick status
                  clearAutoReleaseTimer(normalizedChatId);
                  delete pickedChats[normalizedChatId];
                  io.emit('update_pick_status', { chatId: normalizedChatId, pickedBy: null });
-                 io.emit('initial_pick_status', pickedChats);
+                 io.emit('initial_pick_status', pickedChats); // Broadcast the full pick status state
             }
 
              try {
@@ -1681,11 +1860,14 @@ io.on('connection', (socket) => {
 
                 if (result.changes > 0) {
                     console.log(`[DATABASE] Status chat ${normalizedChatId} berhasil diupdate ke 'closed' di database.`);
-                    io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'closed' });
+                    io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'closed' }); // Notify clients of status change
                     socket.emit('chat_status_success', { chatId: normalizedChatId, status: 'closed', message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil ditutup.` });
                 } else {
                      console.warn(`[DATABASE] Tidak ada baris yang terupdate saat mencoba set status 'closed' untuk ${normalizedChatId}. Mungkin chat_id tidak ada di chat_history.`);
-                     io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'closed' });
+                     // If DB record wasn't updated, it might be a new chat not yet saved?
+                     // But the chatEntry check above should prevent this.
+                     // Still emit update and report success based on memory state change.
+                     io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'closed' }); // Notify clients anyway
                      socket.emit('chat_status_success', { chatId: normalizedChatId, status: 'closed', message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil ditutup (state memory). DB mungkin tidak konsisten.` });
                 }
 
@@ -1704,6 +1886,7 @@ io.on('connection', (socket) => {
       socket.on('open_chat', async ({ chatId }) => {
         console.log(`[CHAT STATUS] Permintaan buka chat: ${chatId}`);
         const adminInfo = getAdminInfoBySocketId(socket.id);
+        // Only Super Admin can reopen a closed chat
         if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
              console.warn(`[CHAT STATUS] Akses ditolak: Admin ${adminInfo?.username} mencoba membuka kembali chat.`);
             return socket.emit('superadmin_error', { message: 'Akses ditolak. Hanya Super Admin yang bisa membuka kembali chat.' });
@@ -1728,7 +1911,7 @@ io.on('connection', (socket) => {
          }
 
         console.log(`[SUPERADMIN] Super Admin ${adminInfo.username} membuka kembali chat ${normalizedChatId}`);
-        chatEntry.status = 'open'; // Update state
+        chatEntry.status = 'open'; // Update state in memory
 
          try {
              const db = await getDb();
@@ -1736,11 +1919,11 @@ io.on('connection', (socket) => {
 
              if (result.changes > 0) {
                 console.log(`[DATABASE] Status chat ${normalizedChatId} berhasil diupdate ke 'open' di database.`);
-                io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'open' });
+                io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'open' }); // Notify clients
                 socket.emit('superadmin_success', { chatId: normalizedChatId, status: 'open', message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dibuka kembali.` });
             } else {
                  console.warn(`[DATABASE] Tidak ada baris yang terupdate saat mencoba set status 'open' untuk ${normalizedChatId}. Mungkin chat_id tidak ada di chat_history.`);
-                 io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'open' });
+                 io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'open' }); // Notify clients anyway
                  socket.emit('superadmin_success', { chatId: normalizedChatId, status: 'open', message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dibuka kembali (state memory). DB mungkin tidak konsisten.` });
             }
 
@@ -1789,12 +1972,15 @@ io.on('connection', (socket) => {
          };
 
         try {
-             await saveAndEmitQuickReplyTemplates(updatedTemplates);
-             quickReplyTemplates = updatedTemplates; // Update state HANYA jika save DB berhasil
+             quickReplyTemplates = updatedTemplates; // Update state immediately
+             await saveAndEmitQuickReplyTemplates(quickReplyTemplates); // Save to DB and emit update
              console.log('[TEMPLATES] State quickReplyTemplates backend updated after add.');
              socket.emit('superadmin_success', { message: `Template '${cleanedShortcut}' berhasil ditambahkan.` });
         } catch (error) {
              console.error('[TEMPLATES] Gagal menyimpan template setelah menambah:', error);
+             // Revert state if DB save failed? Or let next loadDataFromDatabase handle it?
+             // Reverting state is safer but requires fetching the list again or careful state management.
+             // For now, rely on next load to correct state if DB failed.
              socket.emit('superadmin_error', { message: `Gagal menyimpan template '${cleanedShortcut}' ke database.` });
         }
     });
@@ -1848,10 +2034,10 @@ io.on('connection', (socket) => {
         }
 
          try {
-             await saveAndEmitQuickReplyTemplates(updatedTemplates);
-              quickReplyTemplates = updatedTemplates; // Update state HANYA jika save DB berhasil
+             quickReplyTemplates = updatedTemplates; // Update state immediately
+             await saveAndEmitQuickReplyTemplates(quickReplyTemplates); // Save to DB and emit update
               console.log('[TEMPLATES] State quickReplyTemplates backend updated after update.');
-              socket.emit('superadmin_success', { message: `Template '${cleanedShortcut}' berhasil diupdate.` });
+              socket.emit('superadmin_success', { message: `Template '${oldShortcut}' berhasil diupdate menjadi '${cleanedShortcut}'.` }); // More specific success message
          } catch (error) {
               console.error('[TEMPLATES] Gagal menyimpan template setelah update:', error);
              socket.emit('superadmin_error', { message: `Gagal menyimpan template '${cleanedShortcut}' ke database.` });
@@ -1880,24 +2066,25 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: `Template tidak ditemukan.` });
         }
 
+        const deletedShortcut = quickReplyTemplates[shortcutToDelete].shortcut; // Get shortcut before deleting from state
         const updatedTemplates = { ...quickReplyTemplates };
-        delete updatedTemplates[shortcutToDelete];
+        delete updatedTemplates[shortcutToDelete]; // Delete from state immediately
 
          try {
-             await saveAndEmitQuickReplyTemplates(updatedTemplates);
-              quickReplyTemplates = updatedTemplates; // Update state HANYA jika save DB berhasil
+             quickReplyTemplates = updatedTemplates; // Update state
+             await saveAndEmitQuickReplyTemplates(quickReplyTemplates); // Save to DB and emit update
               console.log('[TEMPLATES] State quickReplyTemplates backend updated after delete.');
-              socket.emit('superadmin_success', { message: `Template '${shortcutToDelete}' berhasil dihapus.` });
+              socket.emit('superadmin_success', { message: `Template '${deletedShortcut}' berhasil dihapus.` }); // Use deleted shortcut in message
          } catch (error) {
               console.error('[TEMPLATES] Gagal menyimpan template setelah menghapus:', error);
-              socket.emit('superadmin_error', { message: `Gagal menghapus template '${shortcutToDelete}' dari database.` });
+              socket.emit('superadmin_error', { message: `Gagal menghapus template '${deletedShortcut}' dari database.` });
          }
     });
 
 
   socket.on('disconnect', (reason) => {
     console.log(`[SOCKET] Socket ${socket.id} terputus. Alasan: ${reason}`);
-    const username = cleanupAdminState(socket.id);
+    const username = cleanupAdminState(socket.id, socket); // Pass socket object to cleanup
     if (username) {
         console.log(`[ADMIN] Admin ${username} state dibersihkan.`);
     }
@@ -1915,10 +2102,12 @@ const shutdownHandler = async (signal) => {
          const adminInfo = getAdminInfoBySocketId(socketId);
          if (adminInfo) {
              console.log(`[ADMIN] Membersihkan state untuk admin ${adminInfo.username} (Socket ID: ${socketId}) selama shutdown.`);
-             cleanupAdminState(socketId);
+             // Pass the actual socket object if available, otherwise null
+             cleanupAdminState(socketId, io.sockets.sockets.get(socketId));
              const currentSocket = io.sockets.sockets.get(socketId);
              if (currentSocket) {
                   try {
+                      // Force close socket, ignore errors
                       currentSocket.disconnect(true);
                       console.log(`[SOCKET] Forced disconnect for ${socketId}`);
                   } catch (e) {
@@ -1995,23 +2184,50 @@ server.on('close', () => {
     console.log('[SERVER] Event Server HTTP close terpicu.');
 });
 
-process.on('SIGINT', () => shutdownHandler('SIGINT').catch(console.error));
-process.on('SIGTERM', () => shutdownHandler('SIGTERM').catch(console.error));
+// Added safety checks to ensure process.exit doesn't happen multiple times
+let shuttingDown = false;
+const initiateShutdown = async (signal) => {
+    if (shuttingDown) {
+        console.warn(`[SERVER] Shutdown already in progress. Ignoring signal ${signal}.`);
+        return;
+    }
+    shuttingDown = true;
+    try {
+        await shutdownHandler(signal);
+    } catch (err) {
+        console.error(`[SERVER] Error during shutdown handler for ${signal}:`, err);
+        process.exit(1); // Exit with error code if handler fails
+    }
+};
+
+
+process.on('SIGINT', () => initiateShutdown('SIGINT').catch(console.error));
+process.on('SIGTERM', () => initiateShutdown('SIGTERM').catch(console.error));
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[ERROR] Unhandled Rejection at:', promise, 'reason:', reason);
    // Give it a moment before attempting shutdown to log the error fully
-   setTimeout(() => {
-      console.error('[SERVER] Mencoba shutdown karena unhandled rejection...');
-      shutdownHandler('unhandledRejection').catch(console.error);
-  }, 1000); // 1 second delay
+   // Don't initiate shutdown immediately if already shutting down
+   if (!shuttingDown) {
+        setTimeout(() => {
+            console.error('[SERVER] Mencoba shutdown karena unhandled rejection...');
+            initiateShutdown('unhandledRejection').catch(console.error);
+        }, 1000); // 1 second delay
+   } else {
+       console.warn('[SERVER] Unhandled Rejection occurred during shutdown process.');
+   }
 });
 
 process.on('uncaughtException', (err) => {
   console.error('[ERROR] Uncaught Exception:', err);
    // Give it a moment before attempting shutdown
-   setTimeout(() => {
-       console.error('[SERVER] Mencoba shutdown karena uncaught exception...');
-       shutdownHandler('uncaughtException').catch(console.error);
-  }, 1000); // 1 second delay
+    // Don't initiate shutdown immediately if already shutting down
+   if (!shuttingDown) {
+        setTimeout(() => {
+           console.error('[SERVER] Mencoba shutdown karena uncaught exception...');
+           initiateShutdown('uncaughtException').catch(console.error);
+        }, 1000); // 1 second delay
+   } else {
+       console.warn('[SERVER] Uncaught Exception occurred during shutdown process.');
+   }
 });

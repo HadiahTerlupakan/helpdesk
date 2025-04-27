@@ -2,8 +2,8 @@
 
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
-import fs from 'fs';
-import path from 'path';
+import fs from 'fs'; // <-- Pastikan modul fs diimpor
+import path from 'path'; // <-- Pastikan modul path diimpor
 import { fileURLToPath } from 'url';
 
 // Mendapatkan __dirname yang setara di ES Modules
@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 
 // Pastikan direktori data dan media ada
 const dbDir = path.join(__dirname, 'data');
-const mediaDir = path.join(__dirname, 'media'); // <-- Tambahkan direktori media
+const mediaDir = path.join(__dirname, 'media'); // <-- Direktori media
 const dbPath = path.join(dbDir, 'helpdesk.db');
 
 // Fungsi untuk memastikan direktori ada
@@ -169,7 +169,11 @@ async function saveChatHistory(chatHistory) {
         await db.run('BEGIN TRANSACTION');
 
         // Hapus semua data yang ada
+        // NOTE: Karena FOREIGN KEY ON DELETE CASCADE, menghapus dari chat_history
+        // akan menghapus pesan terkait dari tabel messages SECARA OTOMATIS.
+        // Kita tidak perlu menghapus dari messages secara terpisah di sini.
         await db.run('DELETE FROM chat_history');
+
 
         // Sesuaikan INSERT query untuk kolom filePath (dan hilangkan mediaData)
         const insertChatStmt = await db.prepare('INSERT INTO chat_history (chat_id, status, created_at) VALUES (?, ?, ?)');
@@ -293,7 +297,7 @@ async function loadChatHistory() {
         return chatHistory;
     } catch (error) {
         console.error('[DATABASE] Gagal memuat chat history dari database:', error);
-        throw error;
+        throw error; // Lempar error agar penanganan di backend tahu bahwa pemuatan gagal
     }
 }
 
@@ -303,7 +307,7 @@ async function loadChatHistory() {
  * @async
  * @function deleteChatHistory
  * @param {string} chatId - ID chat yang akan dihapus
- * @returns {Promise<boolean>} - True jika berhasil, false jika gagal.
+ * @returns {Promise<boolean>} - True jika berhasil menghapus setidaknya satu baris chat_history, false jika tidak.
  * @throws {Error} Jika transaksi database gagal.
  */
 async function deleteChatHistory(chatId) {
@@ -319,7 +323,6 @@ async function deleteChatHistory(chatId) {
 
         // Hapus chat history. Karena FOREIGN KEY ON DELETE CASCADE di tabel 'messages',
         // pesan-pesan terkait akan otomatis terhapus.
-        // PERHATIAN: Ini TIDAK menghapus file media di folder media/. Itu perlu dilakukan terpisah jika diinginkan.
         const result = await db.run('DELETE FROM chat_history WHERE chat_id = ?', [chatId]);
 
         await db.run('COMMIT');
@@ -335,7 +338,7 @@ async function deleteChatHistory(chatId) {
  * Menghapus semua chat history dan pesan dari database.
  * @async
  * @function deleteAllChatHistory
- * @returns {Promise<boolean>} - True jika berhasil, false jika gagal.
+ * @returns {Promise<boolean>} - True jika berhasil menghapus setidaknya satu baris chat_history, false jika tidak ada baris chat_history sebelumnya.
  * @throws {Error} Jika transaksi database gagal.
  */
 async function deleteAllChatHistory() {
@@ -344,14 +347,18 @@ async function deleteAllChatHistory() {
     try {
         await db.run('BEGIN TRANSACTION');
 
-        // Hapus semua pesan (tidak menghapus file media di disk)
+        // Hapus semua pesan dari tabel messages.
+        // Tidak perlu khawatir FOREIGN KEY di sini karena kita menghapus semua pesan.
         await db.run('DELETE FROM messages');
 
-        // Hapus semua chat history
-        await db.run('DELETE FROM chat_history');
+        // Hapus semua chat history.
+        const result = await db.run('DELETE FROM chat_history');
+
 
         await db.run('COMMIT');
         console.log('[DATABASE] Semua chat history berhasil dihapus dari database');
+        // Return true regardless of changes because the intent (clear tables) was successful
+        // if no errors occurred. Checking result.changes might be misleading if tables were already empty.
         return true;
     } catch (error) {
         await db.run('ROLLBACK');
@@ -360,9 +367,58 @@ async function deleteAllChatHistory() {
     }
 }
 
+// --- NEW FUNCTIONS TO GET FILE PATHS BEFORE DELETION ---
+
+/**
+ * Mengambil daftar filePath media dari pesan untuk chat ID tertentu.
+ * Digunakan sebelum menghapus chat untuk membersihkan file di disk.
+ * @async
+ * @function getMediaFilePathsForChat
+ * @param {string} chatId - ID chat.
+ * @returns {Promise<string[]>} - Array string filePath. Mengembalikan array kosong jika tidak ada file atau error.
+ */
+async function getMediaFilePathsForChat(chatId) {
+    const db = await getDb().catch(() => null);
+    if (!db) {
+        console.error('[DATABASE] getMediaFilePathsForChat: Gagal mendapatkan koneksi DB.');
+        return [];
+    }
+    try {
+        // Select filePath for messages in this chat that have a filePath stored AND is not an empty string
+        // Using `AND filePath IS NOT NULL` is good, adding `AND filePath != ''` is extra safe.
+        const rows = await db.all('SELECT filePath FROM messages WHERE chat_id = ? AND filePath IS NOT NULL AND filePath != ""', [chatId]);
+        return rows.map(row => row.filePath).filter(Boolean); // Ensure only valid, non-empty paths are returned
+    } catch (error) {
+        console.error(`[DATABASE] Gagal mengambil filePaths untuk chat ${chatId}:`, error);
+        return []; // Return empty array on error
+    }
+}
+
+/**
+ * Mengambil daftar semua filePath media dari semua pesan.
+ * Digunakan sebelum menghapus semua chat untuk membersihkan semua file di disk.
+ * @async
+ * @function getAllMediaFilePaths
+ * @returns {Promise<string[]>} - Array string filePath. Mengembalikan array kosong jika tidak ada file atau error.
+ */
+async function getAllMediaFilePaths() {
+    const db = await getDb().catch(() => null);
+    if (!db) {
+        console.error('[DATABASE] getAllMediaFilePaths: Gagal mendapatkan koneksi DB.');
+        return [];
+    }
+    try {
+        // Select all filePath values that are not NULL or empty string
+        const rows = await db.all('SELECT filePath FROM messages WHERE filePath IS NOT NULL AND filePath != ""');
+        return rows.map(row => row.filePath).filter(Boolean); // Ensure only valid, non-empty paths are returned
+    } catch (error) {
+        console.error('[DATABASE] Gagal mengambil semua filePaths:', error);
+        return []; // Return empty array on error
+    }
+}
+
 // --- Fungsi-fungsi Admin & Quick Reply (Tidak Berubah Sehubungan Perubahan Media) ---
-// (Sertakan kembali kode admin dan quick reply dari database.js asli Anda di sini)
-// ... Kode saveAdmins, loadAdmins, saveQuickReplyTemplates, loadQuickReplyTemplates ...
+// (Sertakan kembali kode saveAdmins, loadAdmins, saveQuickReplyTemplates, loadQuickReplyTemplates dari database.js asli Anda di sini)
 /**
  * Menyimpan data admin ke database.
  * Menghapus semua admin yang ada di tabel admins, lalu menulis ulang dari objek state memory.
@@ -550,5 +606,7 @@ export {
     loadAdmins,
     saveQuickReplyTemplates,
     loadQuickReplyTemplates,
-    getDb // Ini tetap diekspor karena digunakan di backend.js untuk endpoint media
+    getDb, // Ini tetap diekspor karena digunakan di backend.js
+    getMediaFilePathsForChat, // <-- Export fungsi baru
+    getAllMediaFilePaths // <-- Export fungsi baru
 };

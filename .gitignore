@@ -4,6 +4,9 @@ auth_info_baileys/
 # File history chat
 chat_history.json
 
+# File database SQLite
+helpdesk.db
+
 # Dependencies
 node_modules/
 
