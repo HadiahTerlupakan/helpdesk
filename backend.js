@@ -27,7 +27,7 @@ import { fileURLToPath } from 'url';
 import { initDatabase, loadChatHistory, saveChatHistory, deleteChatHistory, deleteAllChatHistory, saveAdmins, loadAdmins, saveQuickReplyTemplates, loadQuickReplyTemplates } from './database.js';
 
 // --- Konfigurasi & State ---
-let admins = {}; // { username: { password, initials, role } } - Akan dimuat dari Firebase
+let admins = {}; // { username: { password, initials, role } } - Akan dimuat dari database SQLite
 const adminSockets = {}; // socket ID -> { username: '...', role: '...' } // Menyimpan info admin login
 const usernameToSocketId = {}; // username -> socket ID
 const pickedChats = {}; // chatId (normalized) -> username // State di backend untuk chat yang diambil
@@ -53,11 +53,11 @@ let quickReplyTemplates = {};
 
 const logger = pino({ level: config.baileysOptions?.logLevel ?? 'warn' });
 
-// Memuat Data dari Firebase (History, Admins, Templates)
+// Memuat Data dari Database (History, Admins, Templates)
 /**
- * Memuat data dari Firebase termasuk chat history, daftar admin, dan template quick reply.
+ * Memuat data dari database SQLite termasuk chat history, daftar admin, dan template quick reply.
  * @async
- * @function loadDataFromFirebase
+ * @function loadDataFromDatabase
  * @returns {Promise<void>}
  */
 async function loadDataFromDatabase() {
@@ -123,9 +123,9 @@ async function loadDataFromDatabase() {
     }
 }
 
-// Menyimpan Chat History ke Firebase
+// Menyimpan Chat History ke Database
 /**
- * Menyimpan chat history ke Firebase.
+ * Menyimpan chat history ke database SQLite.
  * @function saveChatHistoryToDatabase
  * @returns {void}
  */
@@ -141,9 +141,9 @@ async function saveChatHistoryToDatabase() {
     }
 }
 
-// Menyimpan Data Admin ke Firebase
+// Menyimpan Data Admin ke Database
 /**
- * Menyimpan daftar admin ke Firebase.
+ * Menyimpan daftar admin ke database SQLite.
  * @function saveAdminsToDatabase
  * @returns {void}
  */
@@ -161,9 +161,9 @@ async function saveAdminsToDatabase() {
 }
 
 // --- QUICK REPLY TEMPLATES ---
-// Menyimpan Quick Reply Templates ke Firebase
+// Menyimpan Quick Reply Templates ke Database
 /**
- * Menyimpan template quick reply ke Firebase.
+ * Menyimpan template quick reply ke database SQLite.
  * @async
  * @function saveQuickReplyTemplatesToDatabase
  * @returns {Promise<void>}
@@ -185,13 +185,13 @@ async function saveQuickReplyTemplatesToDatabase() {
 // --- END QUICK REPLY TEMPLATES ---
 
 
-// Menghapus Chat History dari Firebase
+// Menghapus Chat History dari Database
 /**
- * Menghapus chat history dari Firebase berdasarkan encoded chat ID.
+ * Menghapus chat history dari database berdasarkan chat ID.
  * @async
  * @function deleteChatHistoryFromDatabase
- * @param {string} encodedChatId - Encoded chat ID yang akan dihapus
- * @returns {Promise<void>}
+ * @param {string} chatId - Chat ID yang akan dihapus
+ * @returns {Promise<boolean>}
  */
 async function deleteChatHistoryFromDatabase(chatId) {
     try {
@@ -206,12 +206,12 @@ async function deleteChatHistoryFromDatabase(chatId) {
     }
 }
 
-// Menghapus Semua Chat History dari Firebase
+// Menghapus Semua Chat History dari Database
 /**
- * Menghapus semua chat history dari Firebase.
+ * Menghapus semua chat history dari database SQLite.
  * @async
  * @function deleteAllChatHistoryFromDatabase
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>}
  */
 async function deleteAllChatHistoryFromDatabase() {
     try {
@@ -359,43 +359,8 @@ function normalizeChatId(chatId) {
   return chatId; // Return as is if already in a recognized format
 }
 
-// Fungsi untuk decode kunci dari Firebase (membalikkan encodeFirebaseKey)
-/**
- * Mendekode key Firebase yang telah diencode.
- * @function decodeFirebaseKey
- * @param {string} encodedKey - Key Firebase yang telah diencode
- * @returns {string} - Key yang sudah didecode
- */
-function decodeFirebaseKey(encodedKey) {
-   if (!encodedKey || typeof encodedKey !== 'string') return null;
-   return encodedKey
-    .replace(/_dot_/g, '.')
-    .replace(/_at_/g, '@')
-    .replace(/_dollar_/g, '$')
-    .replace(/_slash_/g, '/')
-    .replace(/_openbracket_/g, '[')
-    .replace(/_closebracket_/g, ']')
-    .replace(/_hash_/g, '#');
-}
-
-// Fungsi untuk meng-encode kunci agar valid di Firebase
-/**
- * Mengencode key untuk Firebase dengan mengganti karakter khusus.
- * @function encodeFirebaseKey
- * @param {string} key - Key yang akan diencode
- * @returns {string} - Key yang sudah diencode
- */
-function encodeFirebaseKey(key) {
-   if (!key || typeof key !== 'string') return null;
-   return key
-    .replace(/\./g, '_dot_')
-    .replace(/@/g, '_at_')
-    .replace(/\$/g, '_dollar_')
-    .replace(/\//g, '_slash_')
-    .replace(/\[/g, '_openbracket_')
-    .replace(/\]/g, '_closebracket_')
-    .replace(/#/g, '_hash_');
-}
+// Fungsi normalizeChatId sudah cukup untuk menangani format ID chat
+// SQLite tidak memerlukan encoding khusus untuk key seperti di database lain
 
 // Fungsi untuk mengecek apakah admin adalah Super Admin
 /**
@@ -554,9 +519,10 @@ async function connectToWhatsApp() {
            continue;
        }
 
-      const encodedChatId = encodeFirebaseKey(chatId);
-       if (!encodedChatId) {
-           console.error(`[FIREBASE] Gagal meng-encode chatId: ${chatId}. Mengabaikan pesan masuk.`);
+      // SQLite tidak memerlukan encoding khusus
+const encodedChatId = chatId;
+if (!encodedChatId) {
+    console.error(`[DATABASE] ID chat tidak valid: ${chatId}. Mengabaikan pesan masuk.`);
            continue;
        }
 
@@ -764,14 +730,15 @@ io.on('connection', (socket) => {
          // Add hasOwnProperty check
          if (!Object.prototype.hasOwnProperty.call(chatHistory, encodedKey)) continue;
 
-        const decodedKey = decodeFirebaseKey(encodedKey);
-        // Ensure decodedKey is valid and chat entry exists and has messages array
+        // SQLite tidak memerlukan decoding khusus
+const decodedKey = encodedKey;
+        // Pastikan decodedKey valid dan chat entry ada dan memiliki array messages
          if (decodedKey && chatHistory[encodedKey] && Array.isArray(chatHistory[encodedKey].messages)) {
             decodedChatHistory[decodedKey] = {
-                status: chatHistory[encodedKey].status || 'open', // Ensure status default
+                status: chatHistory[encodedKey].status || 'open', // Pastikan status default
                 messages: chatHistory[encodedKey].messages.map((message) => ({
                     ...message,
-                    chatId: decodedKey // Add decoded chatId to each message
+                    chatId: decodedKey // Tambahkan decoded chatId ke setiap pesan
                 }))
             };
          } else if (decodedKey && chatHistory[encodedKey]) {
@@ -805,9 +772,10 @@ io.on('connection', (socket) => {
          return socket.emit('chat_history_error', { chatId, message: 'Chat ID tidak valid.' });
     }
 
-    const encodedChatId = encodeFirebaseKey(normalizedChatId);
+    // SQLite tidak memerlukan encoding khusus
+const encodedChatId = normalizedChatId;
     if (!encodedChatId) {
-        console.error(`[SOCKET] Gagal meng-encode chatId untuk get_chat_history: ${normalizedChatId}`);
+        console.error(`[DATABASE] ID chat tidak valid untuk get_chat_history: ${normalizedChatId}`);
         return socket.emit('chat_history_error', { chatId: normalizedChatId, message: 'Kesalahan internal: ID chat tidak valid.' });
     }
 
@@ -901,7 +869,7 @@ io.on('connection', (socket) => {
     const normalizedChatId = normalizeChatId(chatId);
     if (!normalizedChatId) return socket.emit('pick_error', { chatId, message: 'Chat ID tidak valid.' });
 
-     const encodedChatId = encodeFirebaseKey(normalizedChatId);
+     const encodedChatId = normalizedChatId; // SQLite tidak memerlukan encoding khusus
      // Check if chat exists in history and is closed
      if (chatHistory[encodedChatId]?.status === 'closed') {
          console.warn(`[PICK] Admin ${username} mencoba mengambil chat tertutup ${normalizedChatId}`);
@@ -1028,7 +996,8 @@ io.on('connection', (socket) => {
           return socket.emit('delegate_error', { chatId: normalizedChatId, message: `Admin target '${targetAdminUsername}' tidak ditemukan.` });
       }
 
-      const encodedChatId = encodeFirebaseKey(normalizedChatId);
+      // SQLite tidak memerlukan encoding khusus
+const encodedChatId = normalizedChatId;
       // Check if chat exists and is closed
       if (chatHistory[encodedChatId]?.status === 'closed') {
           console.warn(`[DELEGATE] Admin ${senderAdminUsername} mencoba mendelegasikan chat tertutup ${normalizedChatId}`);
@@ -1102,7 +1071,8 @@ io.on('connection', (socket) => {
         return socket.emit('send_error', { to: chatId, text, message: errorMsg });
     }
 
-     const encodedChatId = encodeFirebaseKey(chatId);
+     // SQLite tidak memerlukan encoding khusus
+const encodedChatId = chatId;
      // Check if chat exists in history and is closed
      if (chatHistory[encodedChatId]?.status === 'closed') {
         console.warn(`[REPLY] Admin ${username} mencoba kirim pesan ke chat tertutup ${chatId}.`);
@@ -1229,7 +1199,7 @@ io.on('connection', (socket) => {
 
       // Ensure encodedChatId is valid before accessing chatHistory
       if (!encodedChatId) {
-           console.error('[FIREBASE] Gagal meng-encode chatId untuk menyimpan pesan keluar:', chatId);
+           console.error('[DATABASE] ID chat tidak valid untuk menyimpan pesan keluar:', chatId);
            // Even if we can't save, notify client that send was attempted
            socket.emit('send_error', { to: chatId, text: textContent, media, message: 'Kesalahan internal saat menyimpan history. Pesan mungkin terkirim tetapi tidak tersimpan.' });
            // Continue processing to emit to other clients, but log error
@@ -1289,9 +1259,10 @@ io.on('connection', (socket) => {
           console.warn(`[SOCKET] Admin ${adminInfo?.username} mencoba mark_as_read dengan ID chat tidak valid: ${chatId}`);
           return;
      }
-     const encodedChatId = encodeFirebaseKey(normalizedChatId);
+     // SQLite tidak memerlukan encoding khusus
+const encodedChatId = normalizedChatId;
      if (!encodedChatId) {
-         console.error(`[FIREBASE] Gagal meng-encode chatId untuk mark_as_read: ${normalizedChatId}`);
+         console.error(`[DATABASE] ID chat tidak valid untuk mark_as_read: ${normalizedChatId}`);
          return;
      }
 
@@ -1339,9 +1310,10 @@ io.on('connection', (socket) => {
             console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba menghapus chat dengan ID tidak valid.`);
             return socket.emit('superadmin_error', { message: 'Chat ID tidak valid.' });
         }
-        const encodedChatId = encodeFirebaseKey(normalizedChatId);
-        if (!encodedChatId) {
-             console.error(`[SUPERADMIN] Gagal meng-encode chatId untuk delete_chat: ${normalizedChatId}`);
+        // SQLite tidak memerlukan encoding khusus
+const encodedChatId = normalizedChatId;
+if (!encodedChatId) {
+    console.error(`[DATABASE] ID chat tidak valid untuk delete_chat: ${normalizedChatId}`);
              return socket.emit('superadmin_error', { message: 'Kesalahan internal: ID chat tidak valid.' });
         }
 
@@ -1358,8 +1330,8 @@ io.on('connection', (socket) => {
                 delete pickedChats[normalizedChatId];
             }
 
-            // Delete from Firebase
-            const success = await deleteChatHistoryFromFirebase(encodedChatId);
+            // Hapus dari database
+            const success = await deleteChatHistoryFromDatabase(encodedChatId);
 
             if (success) {
                 // Emit updates to all clients
@@ -1368,9 +1340,9 @@ io.on('connection', (socket) => {
                  io.emit('initial_pick_status', pickedChats);
                 socket.emit('superadmin_success', { message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dihapus.` }); // Use chatId as fallback
             } else {
-                 console.error(`[SUPERADMIN] Gagal menghapus chat ${normalizedChatId} dari Firebase.`);
+                 console.error(`[SUPERADMIN] Gagal menghapus chat ${normalizedChatId} dari database.`);
                  socket.emit('superadmin_error', { message: 'Gagal menghapus chat dari database.' });
-                 // Note: If Firebase delete failed, the chat is gone from backend state but not DB.
+                 // Note: Jika penghapusan dari database gagal, chat hilang dari state backend tapi tidak dari database.
                  // A reload/reconnect would bring it back from DB. This is a potential inconsistency edge case.
             }
         } else {
@@ -1397,8 +1369,8 @@ io.on('connection', (socket) => {
          }
          pickedChats = {};
 
-         // Delete from Firebase
-         const success = await deleteAllChatHistoryFromFirebase();
+         // Hapus dari database
+         const success = await deleteAllChatHistoryFromDatabase();
 
          if (success) {
              // Emit updates to all clients
@@ -1406,10 +1378,10 @@ io.on('connection', (socket) => {
              io.emit('initial_pick_status', pickedChats); // Send empty picked state
              socket.emit('superadmin_success', { message: 'Semua chat history berhasil dihapus.' });
          } else {
-              console.error(`[SUPERADMIN] Gagal menghapus semua chat dari Firebase.`);
+              console.error(`[SUPERADMIN] Gagal menghapus semua chat dari database.`);
              socket.emit('superadmin_error', { message: 'Gagal menghapus semua chat dari database.' });
-             // Note: If Firebase delete failed, backend state is empty, but DB might not be.
-             // A reload/reconnect would bring back data from DB.
+             // Note: Jika penghapusan dari database gagal, state backend kosong, tapi database mungkin tidak.
+             // Reload/reconnect akan memuat kembali data dari database.
          }
      });
 
@@ -1461,7 +1433,7 @@ io.on('connection', (socket) => {
             role: role
         };
 
-        // Save to Firebase and emit updates
+        // Simpan ke database dan kirim pembaruan
         saveAdminsToDatabase();
 
         socket.emit('superadmin_success', { message: `Admin '${username}' berhasil ditambahkan.` });
@@ -1526,7 +1498,7 @@ io.on('connection', (socket) => {
            // Remove from backend state
           delete admins[usernameToDelete];
 
-          // Save to Firebase and emit updates
+          // Simpan ke database dan kirim pembaruan
           saveAdminsToDatabase();
 
           socket.emit('superadmin_success', { message: `Admin '${usernameToDelete}' berhasil dihapus.` });
@@ -1547,9 +1519,10 @@ io.on('connection', (socket) => {
             return socket.emit('chat_status_error', { chatId, message: 'Chat ID tidak valid.' });
         }
 
-        const encodedChatId = encodeFirebaseKey(normalizedChatId);
-         if (!encodedChatId) {
-             console.error(`[CHAT STATUS] Gagal meng-encode chatId untuk close_chat: ${normalizedChatId}`);
+        // SQLite tidak memerlukan encoding khusus
+const encodedChatId = normalizedChatId;
+if (!encodedChatId) {
+    console.error(`[DATABASE] ID chat tidak valid untuk close_chat: ${normalizedChatId}`);
              return socket.emit('chat_status_error', { chatId: normalizedChatId, message: 'Kesalahan internal: ID chat tidak valid.' });
          }
         const chatEntry = chatHistory[encodedChatId];
@@ -1580,8 +1553,8 @@ io.on('connection', (socket) => {
                  io.emit('initial_pick_status', pickedChats); // Send full state update
             }
 
-            // Save to Firebase and emit updates
-            saveChatHistoryToFirebase();
+            // Simpan ke database dan kirim pembaruan
+            saveChatHistoryToDatabase();
 
             io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'closed' }); // Notify all clients
             socket.emit('chat_status_success', { chatId: normalizedChatId, status: 'closed', message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil ditutup.` }); // Confirm to sender
@@ -1607,7 +1580,7 @@ io.on('connection', (socket) => {
              console.warn(`[SUPERADMIN] Admin ${adminInfo.username} mencoba membuka chat dengan ID tidak valid.`);
             return socket.emit('superadmin_error', { message: 'Chat ID tidak valid.' });
         }
-        const encodedChatId = encodeFirebaseKey(normalizedChatId);
+        const encodedChatId = normalizedChatId; // SQLite tidak memerlukan encoding khusus
          if (!encodedChatId) {
              console.error(`[SUPERADMIN] Gagal meng-encode chatId untuk open_chat: ${normalizedChatId}`);
              return socket.emit('superadmin_error', { message: 'Kesalahan internal: ID chat tidak valid.' });
@@ -1630,8 +1603,8 @@ io.on('connection', (socket) => {
         // Update backend state
         chatEntry.status = 'open';
 
-        // Save to Firebase and emit updates
-        saveChatHistoryToFirebase();
+        // Simpan ke database dan kirim pembaruan
+        saveChatHistoryToDatabase();
 
         io.emit('chat_status_updated', { chatId: normalizedChatId, status: 'open' }); // Notify all clients
         socket.emit('superadmin_success', { chatId: normalizedChatId, status: 'open', message: `Chat ${normalizedChatId.split('@')[0] || normalizedChatId} berhasil dibuka kembali.` }); // Confirm to sender
@@ -1676,9 +1649,10 @@ io.on('connection', (socket) => {
         }
 
         // Generate a stable ID from the encoded shortcut
-        const templateId = encodeFirebaseKey(cleanedShortcut);
-        if (!templateId) {
-             console.error(`[TEMPLATES] Gagal meng-encode shortcut '${cleanedShortcut}' untuk ID template.`);
+        // SQLite tidak memerlukan encoding khusus
+const templateId = cleanedShortcut;
+if (!templateId) {
+    console.error(`[DATABASE] Shortcut tidak valid '${cleanedShortcut}' untuk ID template.`);
              return socket.emit('superadmin_error', { message: 'Kesalahan internal saat membuat ID template.' });
         }
 
@@ -1690,7 +1664,7 @@ io.on('connection', (socket) => {
             text: text.trim() // Store the trimmed text
         };
 
-        // Save to Firebase and emit updates
+        // Simpan ke database dan kirim pembaruan
         try {
              await saveQuickReplyTemplatesToDatabase();
              socket.emit('superadmin_success', { message: `Template '${cleanedShortcut}' berhasil ditambahkan.` });
@@ -1718,7 +1692,8 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: 'Data template tidak lengkap atau format salah.' });
         }
         const cleanedShortcut = shortcut.trim().toLowerCase(); // Normalize new shortcut
-         const oldShortcut = decodeFirebaseKey(id); // Decode ID back to old shortcut
+         // SQLite tidak memerlukan decoding khusus
+const oldShortcut = id; // ID sama dengan shortcut
 
         // --- PERBAIKAN: Validasi shortcut baru ---
         const shortcutValidationRegex = /^\/[a-z0-9_-]+$/;
@@ -1752,9 +1727,10 @@ io.on('connection', (socket) => {
              console.log(`[TEMPLATES] Shortcut template ID ${id} berubah dari '${oldShortcut}' menjadi '${cleanedShortcut}'. Menghapus lama dan menambah baru.`);
              delete quickReplyTemplates[oldShortcut];
              // New ID will be based on the new shortcut
-             const newTemplateId = encodeFirebaseKey(cleanedShortcut);
+             // SQLite tidak memerlukan encoding khusus
+const newTemplateId = cleanedShortcut;
               if (!newTemplateId) {
-                   console.error(`[TEMPLATES] Gagal meng-encode shortcut baru '${cleanedShortcut}' untuk ID template.`);
+                   console.error(`[DATABASE] Shortcut baru tidak valid '${cleanedShortcut}' untuk ID template.`);
                    return socket.emit('superadmin_error', { message: 'Kesalahan internal saat membuat ID template baru.' });
               }
              quickReplyTemplates[cleanedShortcut] = {
@@ -1770,7 +1746,7 @@ io.on('connection', (socket) => {
         }
 
 
-        // Save to Firebase and emit updates
+        // Simpan ke database dan kirim pembaruan
         try {
              await saveQuickReplyTemplatesToDatabase();
              socket.emit('superadmin_success', { message: `Template '${cleanedShortcut}' berhasil diupdate.` });
@@ -1799,7 +1775,8 @@ io.on('connection', (socket) => {
             return socket.emit('superadmin_error', { message: 'Template ID tidak valid.' });
         }
 
-        const shortcutToDelete = decodeFirebaseKey(id); // Decode ID back to shortcut
+        // SQLite tidak memerlukan decoding khusus
+const shortcutToDelete = id; // ID sama dengan shortcut
 
         if (!shortcutToDelete || !quickReplyTemplates[shortcutToDelete]) { // Check against backend state using decoded shortcut
             console.warn(`[TEMPLATES] Template dengan ID ${id} (shortcut ${shortcutToDelete}) tidak ditemukan untuk dihapus oleh ${adminInfo.username}.`);
@@ -1809,7 +1786,7 @@ io.on('connection', (socket) => {
         // Update backend state
         delete quickReplyTemplates[shortcutToDelete];
 
-         // Save to Firebase and emit updates
+         // Simpan ke database dan kirim pembaruan
          try {
              await saveQuickReplyTemplatesToDatabase();
              socket.emit('superadmin_success', { message: `Template '${shortcutToDelete}' berhasil dihapus.` });
