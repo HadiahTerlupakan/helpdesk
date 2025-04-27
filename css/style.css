@@ -40,7 +40,6 @@ body {
     background-color: var(--background-grey);
     font-family: 'Segoe UI', Arial, sans-serif;
     overflow: hidden; /* Mencegah scroll body */
-    overflow-x: hidden; /* Menghilangkan scroll bar horizontal */
      /* Hapus padding-bottom, footer akan di dalam chat-area flex */
     padding-bottom: 0;
 }
@@ -240,7 +239,6 @@ body {
         padding: 10px;
     }
     #reply-input {
-    overflow: hidden; /* Menghilangkan scroll bar */
         font-size: 0.9em;
     }
 }
@@ -683,7 +681,6 @@ body {
     position: relative;
     flex-shrink: 0; /* Tidak menyusut */
     z-index: 5; /* Lebih rendah dari tombol sidebar (z-index: 1000) */
-    overflow: hidden; /* Menghilangkan scroll bar */
 }
  #reply-box.disabled {
      opacity: 0.7;
@@ -746,7 +743,6 @@ body {
 }
 
 #reply-input {
-    overflow: hidden; /* Menghilangkan scroll bar */
     flex: 1;
     padding: 10px 15px;
     border: 1px solid var(--border-color);
@@ -1016,4 +1012,3 @@ footer {
     flex-shrink: 0; /* Prevent shrinking in flex column */
     /* Remove fixed positioning */
 }
-

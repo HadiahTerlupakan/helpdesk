@@ -1365,8 +1365,39 @@ io.on('connection', (socket) => {
       // we need to save the buffer to a file on the server for history display later.
       // This happens *after* successful sending via sock.sendMessage to get the Baileys message ID.
       // Validasi ekstensi dan mime type sebelum memproses file
-      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 'text/plain'];
-      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.txt'];
+      const allowedMimeTypes = [
+        'image/jpeg', 
+        'image/png', 
+        'image/gif', 
+        'application/pdf', 
+        'text/plain',
+        'audio/mpeg', // MP3
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // Excel (.xlsx)
+        'application/vnd.ms-excel', // Excel (.xls lama)
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // Word (.docx)
+        'application/msword', // Word (.doc lama)
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation', // PowerPoint (.pptx)
+        'application/vnd.ms-powerpoint', // PowerPoint (.ppt lama)
+        'video/mp4' // MP4
+      ];
+      
+      const allowedExtensions = [
+        '.jpg', 
+        '.jpeg', 
+        '.png', 
+        '.gif', 
+        '.pdf', 
+        '.txt',
+        '.mp3', 
+        '.xlsx', 
+        '.xls', 
+        '.docx', 
+        '.doc', 
+        '.pptx', 
+        '.ppt',
+        '.mp4' // MP4
+      ];
+      // Fungsi untuk mendapatkan ekstensi file dari mime typ      
       
       if (mediaBuffer && sentMediaType !== 'unknown') {
           // Validasi mime type
