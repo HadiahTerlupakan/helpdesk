@@ -240,19 +240,22 @@
             <div class="qr-form-container">
                 <h4>Tambah/Edit Template</h4>
                 <input type="hidden" id="qr-edit-id">
+              
                 <label for="qr-shortcut-input">Shortcut:</label>
-                <input type="text" id="qr-shortcut-input" placeholder="Contoh: /sapaan" pattern="^/[a-zA-Z0-9_-]+$">
+                <input type="text" id="qr-shortcut-input" placeholder="Contoh: /sapaan" pattern="^\/[a-zA-Z0-9_-]+$">
+              
                 <label for="qr-text-input">Teks Template:</label>
                 <textarea id="qr-text-input" placeholder="Masukkan teks balasan cepat di sini..." rows="3"></textarea>
-
+              
                 <div class="form-buttons">
-                    <button id="submit-qr-button"><i class="fas fa-save"></i> Simpan Template</button>
-                    <button id="cancel-edit-qr-button" style="display: none;"><i class="fas fa-times"></i> Batal</button>
-                    
-                    <button class="close-modal-button" data-target-modal="quickReplyManagementModal"><i class="fas fa-times"></i> Tutup</button>
+                  <button id="submit-qr-button"><i class="fas fa-save"></i> Simpan Template</button>
+                  <button id="cancel-edit-qr-button" style="display: none;"><i class="fas fa-times"></i> Batal</button>
+                  <button class="close-modal-button" data-target-modal="quickReplyManagementModal"><i class="fas fa-times"></i> Tutup</button>
                 </div>
+              
                 <div class="qr-form-status"></div>
-            </div>
+              </div>
+              
         </div>
     </div>
 
