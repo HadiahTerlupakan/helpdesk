@@ -1322,10 +1322,11 @@ function sanitizeHTML(str) {
 
          // Gulir ke bawah jika:
          // 1. Pesan yang baru saja ditambahkan adalah pesan *keluar* (outgoing).
-         // 2. ATAU Pesan yang baru saja ditambahkan adalah pesan *masuk* (incoming), tetapi pengguna sudah berada di dekat bagian bawah.
+         // 2. ATAU Pesan yang baru saja ditambahkan adalah pesan *masuk* (incoming).
          // Menggunakan setTimeout memberikan browser waktu untuk merender elemen baru (terutama jika berisi gambar/media)
          // sebelum menghitung scrollHeight yang benar dan melakukan scroll.
-         if (type === 'outgoing' || isNearBottom) {
+         // Selalu scroll ke bawah jika pesan ditambahkan ke chat yang sedang aktif.
+         if (true) { // Always scroll if message is for the current chat
              setTimeout(() => {
                  messagesDiv.scrollTop = messagesDiv.scrollHeight;
              }, 50); // Delay 50 milidetik
