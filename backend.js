@@ -6,7 +6,12 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet'; // <-- Tambahkan impor helmet
 const expressApp = express({});
 import http from 'http';
-const server = http.createServer(expressApp);
+const https = require('https');
+const fs = require('fs');
+const server = https.createServer({
+  key: fs.readFileSync('/etc/letsencrypt/live/wa.sblnet.id/privkey.pem'),
+  cert: fs.readFileSync('/etc/letsencrypt/live/wa.sblnet.id/fullchain.pem')
+}, expressApp);
 import { Server } from 'socket.io';
 const io = new Server(server, {
     cors: {
