@@ -5,6 +5,7 @@ import { open } from 'sqlite';
 import fs from 'fs'; // <-- Pastikan modul fs diimpor
 import path from 'path'; // <-- Pastikan modul path diimpor
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcrypt'; // <-- Tambahkan impor bcrypt
 
 // Mendapatkan __dirname yang setara di ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -428,11 +429,9 @@ async function getAllMediaFilePaths() {
  * @returns {Promise<void>}
  * @throws {Error} Jika transaksi database gagal.
  */
-import bcrypt from 'bcrypt';
-
 async function saveAdmins(admins) {
     const db = await getDb();
-    const saltRounds = 10;
+    const saltRounds = 10; // <-- Jumlah putaran salt untuk bcrypt
 
     try {
         await db.run('BEGIN TRANSACTION');
@@ -453,12 +452,12 @@ async function saveAdmins(admins) {
                  continue; // Lewati admin yang tidak valid
             }
 
-            // Hash password menggunakan bcrypt
+            // Hash password menggunakan bcrypt sebelum menyimpan
             const hashedPassword = await bcrypt.hash(admin.password, saltRounds);
 
             await insertStmt.run(
                 username,
-                hashedPassword,
+                hashedPassword, // <-- Simpan password yang sudah di-hash
                 admin.initials,
                 admin.role
             );

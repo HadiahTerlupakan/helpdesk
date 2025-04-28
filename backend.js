@@ -3,6 +3,7 @@
 import { makeWASocket, useMultiFileAuthState, downloadMediaMessage, Browsers } from 'baileys';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet'; // <-- Tambahkan impor helmet
 const expressApp = express({});
 import http from 'http';
 const server = http.createServer(expressApp);
@@ -25,6 +26,7 @@ import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto'; // Untuk nama file sementara jika perlu
 import mime from 'mime-types'; // Untuk mendapatkan ekstensi dari mime type
 import { Buffer } from 'buffer'; // Import Buffer
+import bcrypt from 'bcrypt'; // <-- Tambahkan impor bcrypt
 
 // Eksplisitkan Buffer ke global scope untuk kompatibilitas library
 globalThis.Buffer = Buffer;
@@ -54,6 +56,19 @@ let quickReplyTemplates = {};
 
 // Konfigurasi rate limiting
 const apiLimiter = rateLimit(config.rateLimitConfig);
+
+// Tambahkan middleware helmet
+expressApp.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "script-src": ["'self'", "https://cdnjs.cloudflare.com", "'unsafe-inline'"], // Izinkan self, cdnjs, dan inline script
+        "img-src": ["'self'", "data:", "https://upload.wikimedia.org", "https://web.whatsapp.com"], // Izinkan self, data URI, wikimedia, dan whatsapp web
+      },
+    },
+  })
+); // <-- Konfigurasi helmet dengan CSP
 
 const adminSockets = {};
 const usernameToSocketId = {};
@@ -914,10 +929,11 @@ io.on('connection', (socket) => {
   });
 
   // ... (kode admin_login, admin_reconnect, admin_logout, pick_chat, unpick_chat, delegate_chat dari backend.js asli) ...
-  socket.on('admin_login', ({ username, password }) => {
+  socket.on('admin_login', async ({ username, password }) => { // <-- Tambahkan async
       console.log(`[ADMIN] Menerima percobaan login untuk: ${username}`);
     const adminUser = admins[username];
-    if (adminUser && adminUser.password === password) { // (CONSIDER HASHING PASSWORDS)
+    // Gunakan bcrypt.compare untuk membandingkan password yang dimasukkan dengan hash di database
+    if (adminUser && await bcrypt.compare(password, adminUser.password)) { // <-- Gunakan bcrypt.compare
       const existingSocketId = usernameToSocketId[username];
       if (existingSocketId && io.sockets.sockets.get(existingSocketId)) {
          console.warn(`[ADMIN] Login gagal: Admin ${username} sudah login dari socket ${existingSocketId}.`);
@@ -936,7 +952,8 @@ io.on('connection', (socket) => {
 
       socket.emit('login_success', { username: username, initials: adminUser.initials, role: adminUser.role || 'admin', currentPicks: pickedChats });
       io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates)); // Emit templates
-      io.emit('update_online_admins', getOnlineAdminUsernames());
+      io.emit('admin_online', { username, role: adminUser.role }); // Beri tahu klien lain
+      io.emit('update_online_admins', getOnlineAdminUsernames()); // Update daftar admin online untuk semua
 
     } else {
       console.log(`[ADMIN] Login gagal untuk username: ${username}. Username atau password salah.`);
@@ -978,7 +995,8 @@ io.on('connection', (socket) => {
 
         socket.emit('reconnect_success', { username: username, currentPicks: pickedChats, role: adminUser.role || 'admin' });
         io.emit('quick_reply_templates_updated', Object.values(quickReplyTemplates)); // Emit templates
-        io.emit('update_online_admins', getOnlineAdminUsernames());
+        io.emit('admin_online', { username, role: adminUser.role }); // Beri tahu klien lain
+      io.emit('update_online_admins', getOnlineAdminUsernames()); // Update daftar admin online untuk semua
 
     } else {
         console.warn(`[ADMIN] Reconnect failed: Admin ${username} not found in registered admins.`);
@@ -1738,7 +1756,7 @@ io.on('connection', (socket) => {
    // --- END: MODIFIED delete_all_chats HANDLER ---
 
 
-     socket.on('add_admin', async ({ username, password, initials, role }) => {
+     socket.on('add_admin', async ({ username, password, initials, role }) => { // Pastikan async sudah ada atau tambahkan
         console.log(`[SUPERADMIN] Menerima permintaan tambah admin: ${username}`);
         const adminInfo = getAdminInfoBySocketId(socket.id);
         if (!adminInfo || !isSuperAdmin(adminInfo.username)) {
@@ -1775,7 +1793,7 @@ io.on('connection', (socket) => {
          const updatedAdmins = {
             ...admins,
              [username]: {
-                 password: password, // PERTIMBANGKAN HASHING PASSWORD DI PRODUKSI!
+                 password: await bcrypt.hash(password, 10), // <-- Hash password sebelum menyimpan
                  initials: cleanedInitials,
                  role: role
              }

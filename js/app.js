@@ -1080,12 +1080,18 @@ const socket = io({
      socket.emit('get_chat_history', chatId);
  }
 
- function sanitizeHTML(str) {
-     if (str === null || str === undefined) return '';
-     const temp = document.createElement('div');
-     temp.textContent = str; // Use textContent to escape HTML
-     return temp.innerHTML.replace(/\n/g, '<br>'); // Convert newlines to <br>
- }
+ /**
+ * Membersihkan string HTML menggunakan DOMPurify untuk mencegah XSS.
+ * Juga mengubah newline menjadi tag <br> untuk tampilan.
+ * @param {string | null | undefined} str - String HTML yang akan dibersihkan.
+ * @returns {string} String HTML yang sudah dibersihkan.
+ */
+function sanitizeHTML(str) {
+    if (str === null || str === undefined) return '';
+    // Bersihkan input menggunakan DOMPurify
+    // Konversi newline menjadi <br> SETELAH pembersihan untuk tujuan tampilan
+    return DOMPurify.sanitize(str).replace(/\n/g, '<br>');
+}
 
  // Helper to determine the MIME type for data URL/blob based on original type or filename
  function getMimeTypeForDisplay(mediaType, mimeType, fileName) {
