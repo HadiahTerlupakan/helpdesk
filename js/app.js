@@ -1282,6 +1282,18 @@ function sanitizeHTML(str) {
          const timestampSpan = createElementWithClasses('span', 'message-timestamp');
          timestampSpan.textContent = msgTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
          messageDiv.appendChild(timestampSpan);
+         
+         // Add date separator if message is from a different day than previous
+         const messages = Array.from(messagesDiv.children);
+         if (messages.length > 0) {
+             const lastMsg = messages[messages.length - 1];
+             const lastMsgTime = new Date(lastMsg.dataset.timestamp);
+             if (lastMsgTime.toDateString() !== msgTime.toDateString()) {
+                 const dateSeparator = createElementWithClasses('div', 'date-separator');
+                 dateSeparator.textContent = msgTime.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                 messagesDiv.insertBefore(dateSeparator, messageDiv);
+             }
+         }
      }
 
 
