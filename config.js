@@ -71,7 +71,7 @@ const config = {
   // Konfigurasi lain bisa ditambahkan di sini
   
   // Daftar domain yang diizinkan untuk CORS
-  corsAllowedOrigins: ["http://localhost:3000", "https://domain-anda.com", "https://wa.sblnet.id"]
+  corsAllowedOrigins: ["http://localhost:3000"]
 };
 
 export default config;

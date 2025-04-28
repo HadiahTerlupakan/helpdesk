@@ -6,12 +6,9 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet'; // <-- Tambahkan impor helmet
 const expressApp = express({});
 import http from 'http';
-const https = require('https');
-const fs = require('fs');
-const server = https.createServer({
-  key: fs.readFileSync('/etc/letsencrypt/live/wa.sblnet.id/privkey.pem'),
-  cert: fs.readFileSync('/etc/letsencrypt/live/wa.sblnet.id/fullchain.pem')
-}, expressApp);
+
+import fs from 'fs';
+const server = http.createServer(expressApp);
 import { Server } from 'socket.io';
 const io = new Server(server, {
     cors: {
@@ -23,7 +20,6 @@ const io = new Server(server, {
 });
 import qrcode from 'qrcode-terminal';
 import session from 'express-session';
-import fs from 'fs'; // <-- Impor modul file system
 import path from 'path'; // <-- Impor modul path
 import pino from 'pino';
 import config from './config.js';
